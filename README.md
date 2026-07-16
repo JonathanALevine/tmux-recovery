@@ -13,8 +13,10 @@ then adds the lifecycle controls needed for unattended operation:
 - systemd user units and macOS LaunchAgents;
 - installation, diagnostics, and migration tooling.
 
-The initial repository contains the architecture and implementation plan. It
-does not modify or enable any live service.
+The repository is currently specification-only. It contains the architecture,
+product requirements, language evaluation, implementation strategy, and fleet
+migration plan. It does not contain an application implementation and does not
+modify or enable any live service.
 
 Open [architecture.html](architecture.html) in a browser for the complete
 design notebook.
@@ -36,7 +38,8 @@ tmux-steward migrate
 
 Versioned here:
 
-- lifecycle code;
+- product and architecture specifications;
+- future CLI and lifecycle code;
 - service templates;
 - tmux integration;
 - process strategies;
@@ -50,4 +53,3 @@ Never versioned here:
 - runtime locks;
 - service logs;
 - SSH routing or credentials.
-
