@@ -1,0 +1,1655 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Architecture and implementation notebook for tmux-steward.">
+  <title>tmux-steward — Architecture Notebook</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0f14;
+      --surface: #111821;
+      --surface-2: #17212c;
+      --surface-3: #1d2a37;
+      --line: #2b3b4c;
+      --text: #e7edf4;
+      --muted: #a8b5c3;
+      --faint: #748292;
+      --cyan: #72d5e8;
+      --green: #8bd49c;
+      --amber: #f2c879;
+      --red: #f08b8b;
+      --violet: #b9a3f5;
+      --max: 1180px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 15% -10%, rgba(114, 213, 232, 0.12), transparent 34rem),
+        radial-gradient(circle at 95% 12%, rgba(185, 163, 245, 0.09), transparent 30rem),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.65;
+    }
+
+    a {
+      color: var(--cyan);
+    }
+
+    a:hover {
+      color: #a5ecf6;
+    }
+
+    .skip-link {
+      position: fixed;
+      left: 1rem;
+      top: -5rem;
+      z-index: 100;
+      padding: 0.7rem 1rem;
+      border-radius: 0.5rem;
+      background: var(--text);
+      color: var(--bg);
+      font-weight: 700;
+    }
+
+    .skip-link:focus {
+      top: 1rem;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      background: rgba(11, 15, 20, 0.82);
+      backdrop-filter: blur(14px);
+    }
+
+    .hero {
+      width: min(var(--max), calc(100% - 2rem));
+      margin: 0 auto;
+      padding: 5.5rem 0 4rem;
+    }
+
+    .eyebrow {
+      margin: 0 0 0.9rem;
+      color: var(--cyan);
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3 {
+      line-height: 1.2;
+      text-wrap: balance;
+    }
+
+    h1 {
+      max-width: 900px;
+      margin: 0;
+      font-size: clamp(2.65rem, 7vw, 5.8rem);
+      letter-spacing: -0.055em;
+    }
+
+    h2 {
+      margin: 0 0 1.25rem;
+      font-size: clamp(1.8rem, 4vw, 2.9rem);
+      letter-spacing: -0.035em;
+    }
+
+    h3 {
+      margin: 2rem 0 0.75rem;
+      font-size: 1.2rem;
+    }
+
+    .lede {
+      max-width: 800px;
+      margin: 1.5rem 0 0;
+      color: var(--muted);
+      font-size: clamp(1.05rem, 2.5vw, 1.35rem);
+    }
+
+    .status-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      margin-top: 2rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.38rem 0.7rem;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 0.78rem;
+    }
+
+    .badge::before {
+      width: 0.52rem;
+      height: 0.52rem;
+      border-radius: 50%;
+      background: var(--green);
+      content: "";
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+      gap: 3rem;
+      width: min(var(--max), calc(100% - 2rem));
+      margin: 0 auto;
+      padding: 3rem 0 8rem;
+    }
+
+    nav {
+      position: sticky;
+      top: 1.25rem;
+      align-self: start;
+      max-height: calc(100vh - 2.5rem);
+      overflow: auto;
+      padding: 1.15rem;
+      border: 1px solid var(--line);
+      border-radius: 0.85rem;
+      background: rgba(17, 24, 33, 0.86);
+    }
+
+    nav strong {
+      display: block;
+      margin-bottom: 0.7rem;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    nav ol {
+      display: grid;
+      gap: 0.24rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    nav a {
+      display: block;
+      padding: 0.34rem 0.5rem;
+      border-radius: 0.38rem;
+      color: var(--muted);
+      font-size: 0.91rem;
+      text-decoration: none;
+    }
+
+    nav a:hover,
+    nav a:focus-visible {
+      background: var(--surface-3);
+      color: var(--text);
+    }
+
+    main {
+      min-width: 0;
+    }
+
+    section {
+      padding: 1.5rem 0 4.5rem;
+      border-bottom: 1px solid var(--line);
+      scroll-margin-top: 1.5rem;
+    }
+
+    section:last-child {
+      border-bottom: 0;
+    }
+
+    p {
+      max-width: 78ch;
+    }
+
+    .callout {
+      margin: 1.5rem 0;
+      padding: 1rem 1.15rem;
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--cyan);
+      border-radius: 0.5rem;
+      background: var(--surface);
+    }
+
+    .callout.warning {
+      border-left-color: var(--amber);
+    }
+
+    .callout.decision {
+      border-left-color: var(--violet);
+    }
+
+    .callout strong {
+      color: var(--text);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+
+    .grid.three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .card {
+      padding: 1.1rem;
+      border: 1px solid var(--line);
+      border-radius: 0.7rem;
+      background: var(--surface);
+    }
+
+    .card h3 {
+      margin-top: 0;
+    }
+
+    .card p:last-child,
+    .card ul:last-child {
+      margin-bottom: 0;
+    }
+
+    .kicker {
+      margin: 0 0 0.35rem;
+      color: var(--cyan);
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    ul,
+    ol {
+      padding-left: 1.3rem;
+    }
+
+    li + li {
+      margin-top: 0.4rem;
+    }
+
+    code,
+    pre {
+      font-family: var(--mono);
+    }
+
+    code {
+      padding: 0.12rem 0.32rem;
+      border: 1px solid rgba(114, 213, 232, 0.14);
+      border-radius: 0.28rem;
+      background: rgba(114, 213, 232, 0.07);
+      color: #c9f3f8;
+      font-size: 0.9em;
+    }
+
+    pre {
+      overflow-x: auto;
+      margin: 1.2rem 0;
+      padding: 1rem 1.1rem;
+      border: 1px solid var(--line);
+      border-radius: 0.6rem;
+      background: #080c11;
+      color: #d5e4ef;
+      font-size: 0.86rem;
+      line-height: 1.55;
+    }
+
+    pre code {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(110px, 1fr));
+      align-items: stretch;
+      gap: 0.75rem;
+      margin: 1.5rem 0;
+    }
+
+    .flow-step {
+      position: relative;
+      display: grid;
+      align-content: center;
+      min-height: 118px;
+      padding: 0.9rem;
+      border: 1px solid var(--line);
+      border-radius: 0.65rem;
+      background: var(--surface);
+      text-align: center;
+    }
+
+    .flow-step:not(:last-child)::after {
+      position: absolute;
+      top: 50%;
+      right: -0.67rem;
+      width: 0.58rem;
+      height: 0.58rem;
+      border-top: 2px solid var(--faint);
+      border-right: 2px solid var(--faint);
+      content: "";
+      transform: translateY(-50%) rotate(45deg);
+    }
+
+    .flow-step strong {
+      display: block;
+      margin-bottom: 0.25rem;
+      color: var(--text);
+    }
+
+    .flow-step span {
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+
+    .stack {
+      display: grid;
+      gap: 0.75rem;
+      margin: 1.5rem 0;
+    }
+
+    .layer {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 1rem;
+      align-items: start;
+      padding: 1rem;
+      border: 1px solid var(--line);
+      border-radius: 0.65rem;
+      background: var(--surface);
+    }
+
+    .layer strong {
+      color: var(--cyan);
+      font-family: var(--mono);
+      font-size: 0.9rem;
+    }
+
+    .layer p {
+      margin: 0;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1.4rem 0;
+      border: 1px solid var(--line);
+      border-radius: 0.7rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--surface);
+      font-size: 0.92rem;
+    }
+
+    th,
+    td {
+      padding: 0.8rem 0.9rem;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--surface-2);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    td:first-child {
+      color: var(--text);
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .yes {
+      color: var(--green);
+    }
+
+    .partial {
+      color: var(--amber);
+    }
+
+    .no {
+      color: var(--red);
+    }
+
+    .phase {
+      display: grid;
+      grid-template-columns: 64px 1fr;
+      gap: 1rem;
+      margin: 1.1rem 0;
+    }
+
+    .phase-number {
+      display: grid;
+      place-items: center;
+      width: 54px;
+      height: 54px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: var(--surface-2);
+      color: var(--cyan);
+      font-family: var(--mono);
+      font-weight: 800;
+    }
+
+    .phase h3 {
+      margin: 0 0 0.35rem;
+    }
+
+    .phase p {
+      margin: 0;
+    }
+
+    .decision-list {
+      display: grid;
+      gap: 0.8rem;
+      padding: 0;
+      list-style: none;
+    }
+
+    .decision-list li {
+      padding: 0.9rem 1rem;
+      border: 1px solid var(--line);
+      border-radius: 0.55rem;
+      background: var(--surface);
+    }
+
+    .decision-list strong {
+      display: block;
+      color: var(--green);
+    }
+
+    footer {
+      padding: 2rem 1rem 4rem;
+      border-top: 1px solid var(--line);
+      color: var(--faint);
+      text-align: center;
+      font-size: 0.86rem;
+    }
+
+    @media (max-width: 940px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      nav {
+        position: static;
+        max-height: none;
+      }
+
+      nav ol {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .flow-step:not(:last-child)::after {
+        top: auto;
+        right: 50%;
+        bottom: -0.67rem;
+        transform: translateX(50%) rotate(135deg);
+      }
+    }
+
+    @media (max-width: 700px) {
+      .hero {
+        padding-top: 3.5rem;
+      }
+
+      .grid,
+      .grid.three {
+        grid-template-columns: 1fr;
+      }
+
+      .layer {
+        grid-template-columns: 1fr;
+        gap: 0.35rem;
+      }
+
+      nav ol {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media print {
+      :root {
+        color-scheme: light;
+        --bg: #ffffff;
+        --surface: #ffffff;
+        --surface-2: #f5f7f9;
+        --surface-3: #eef2f5;
+        --line: #cbd3da;
+        --text: #111820;
+        --muted: #35414d;
+        --faint: #5d6873;
+        --cyan: #006f80;
+        --green: #19763c;
+        --amber: #8a5b00;
+        --red: #a52b2b;
+        --violet: #5f43a4;
+      }
+
+      body {
+        background: #fff;
+      }
+
+      header {
+        background: #fff;
+      }
+
+      nav {
+        display: none;
+      }
+
+      .layout {
+        display: block;
+        width: 100%;
+      }
+
+      section {
+        break-inside: avoid;
+      }
+
+      pre {
+        background: #f7f7f7;
+        color: #111;
+        white-space: pre-wrap;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#content">Skip to content</a>
+
+  <header>
+    <div class="hero">
+      <p class="eyebrow">Architecture notebook · v0.1 · 2026-07-16</p>
+      <h1>tmux-steward</h1>
+      <p class="lede">
+        A versioned, service-managed orchestration layer for dependable tmux
+        persistence across macOS and Linux—using tmux-resurrect as the engine
+        and adding the lifecycle controls it intentionally leaves to the user.
+      </p>
+      <div class="status-line" aria-label="Project status">
+        <span class="badge">Architecture approved in principle</span>
+        <span class="badge">No live services changed</span>
+        <span class="badge">Shell-first implementation proposed</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav aria-label="Architecture sections">
+      <strong>Contents</strong>
+      <ol>
+        <li><a href="#thesis">1. Thesis</a></li>
+        <li><a href="#problem">2. Why it exists</a></li>
+        <li><a href="#goals">3. Goals and boundaries</a></li>
+        <li><a href="#architecture">4. System architecture</a></li>
+        <li><a href="#components">5. Components</a></li>
+        <li><a href="#save">6. Save lifecycle</a></li>
+        <li><a href="#restore">7. Restore lifecycle</a></li>
+        <li><a href="#codex">8. Codex strategy</a></li>
+        <li><a href="#platforms">9. Platform services</a></li>
+        <li><a href="#configuration">10. Configuration</a></li>
+        <li><a href="#filesystem">11. Filesystem model</a></li>
+        <li><a href="#cli">12. CLI contract</a></li>
+        <li><a href="#reliability">13. Reliability</a></li>
+        <li><a href="#security">14. Security</a></li>
+        <li><a href="#testing">15. Testing</a></li>
+        <li><a href="#repository">16. Repository layout</a></li>
+        <li><a href="#migration">17. Fleet migration</a></li>
+        <li><a href="#roadmap">18. Implementation phases</a></li>
+        <li><a href="#decisions">19. Decisions</a></li>
+        <li><a href="#done">20. Definition of done</a></li>
+      </ol>
+    </nav>
+
+    <main id="content">
+      <section id="thesis">
+        <p class="kicker">The central idea</p>
+        <h2>Resurrect owns snapshots. Steward owns policy.</h2>
+        <p>
+          <strong>tmux-steward is not a tmux replacement and not a fork of
+          tmux-resurrect.</strong> It is the operational layer that decides
+          when saving is safe, how restoration is sequenced, which processes
+          may be relaunched, and how the behavior is installed and observed on
+          each operating system.
+        </p>
+
+        <div class="stack" aria-label="Layered architecture">
+          <div class="layer">
+            <strong>Service manager</strong>
+            <p>Schedules saves and invokes startup or shutdown actions through systemd user units or macOS LaunchAgents.</p>
+          </div>
+          <div class="layer">
+            <strong>tmux-steward</strong>
+            <p>Applies locks, validates state, chooses a restore driver, exposes diagnostics, and dispatches process strategies.</p>
+          </div>
+          <div class="layer">
+            <strong>tmux-resurrect</strong>
+            <p>Serializes tmux metadata and pane contents, then reconstructs sessions, windows, panes, layouts, and selected commands.</p>
+          </div>
+          <div class="layer">
+            <strong>tmux</strong>
+            <p>Owns the live server, sessions, clients, windows, panes, environment, and process terminals.</p>
+          </div>
+        </div>
+
+        <div class="callout decision">
+          <strong>Architectural rule:</strong> native service managers provide
+          scheduling and lifecycle ownership. tmux-steward does not need a
+          forever-running daemon for its core save and restore responsibilities.
+        </div>
+      </section>
+
+      <section id="problem">
+        <p class="kicker">Problem statement</p>
+        <h2>Why tmux-resurrect alone was not enough</h2>
+
+        <div class="grid">
+          <article class="card">
+            <h3>Lifecycle is external</h3>
+            <p>
+              Resurrect supplies save and restore operations, but it does not
+              guarantee periodic saves, shutdown saves, login startup, or
+              service-manager integration.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Generic process replay is risky</h3>
+            <p>
+              Broad restoration can restart SSH sessions, monitoring tools,
+              servers, and unrelated Node processes. The fleet needs an
+              explicit allowlist and application-specific strategies.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Boot is a different environment</h3>
+            <p>
+              A detached service has no normal tmux client, may have a minimal
+              environment, and on macOS may not inherit the terminal
+              permissions needed to reopen protected working directories.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Concurrent automation can damage state</h3>
+            <p>
+              Resurrect snapshot names have second-level resolution. Timer,
+              manual, and shutdown saves need serialization so the
+              <code>last</code> link cannot point to a removed file.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Codex needs conversation identity</h3>
+            <p>
+              Reopening a pane is insufficient. The correct working directory
+              and Codex thread identifier must be recovered and converted into
+              an exact <code>codex resume</code> command.
+            </p>
+          </article>
+          <article class="card">
+            <h3>The fleet has multiple restore modes</h3>
+            <p>
+              macOS, ordinary Linux hosts, and Arch's palette-sensitive boot
+              path require different drivers behind the same public command.
+            </p>
+          </article>
+        </div>
+
+        <div class="callout warning">
+          <strong>Continuum is not the foundation.</strong> It remains useful
+          for many installations, but its status-line-driven scheduling and
+          tmux-server-start restore hook do not provide enough control for this
+          fleet's startup ordering, safety checks, and Codex behavior.
+        </div>
+      </section>
+
+      <section id="goals">
+        <p class="kicker">Scope</p>
+        <h2>Goals and deliberate non-goals</h2>
+
+        <div class="grid">
+          <article class="card">
+            <h3>Goals</h3>
+            <ul>
+              <li>One repository and one CLI for macOS and Linux.</li>
+              <li>Safe, serialized, unattended saves.</li>
+              <li>Deterministic restore after login, reboot, or tmux failure.</li>
+              <li>Codex-aware restoration without broad process replay.</li>
+              <li>Capability-based restore drivers instead of hostname branches.</li>
+              <li>Idempotent install, upgrade, repair, and uninstall operations.</li>
+              <li>Useful status and doctor output before touching live state.</li>
+              <li>Tests that reproduce the races and detached-client problems already encountered.</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Non-goals</h3>
+            <ul>
+              <li>Replacing tmux-resurrect's snapshot format.</li>
+              <li>Keeping processes alive through a machine reboot.</li>
+              <li>Synchronizing snapshots between hosts.</li>
+              <li>Versioning terminal output, Codex databases, or conversation state.</li>
+              <li>Managing general tmux appearance or keybindings.</li>
+              <li>Becoming a declarative workspace launcher like tmuxp or tmuxinator.</li>
+              <li>Starting arbitrary saved commands without an explicit process policy.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="architecture">
+        <p class="kicker">System view</p>
+        <h2>End-to-end architecture</h2>
+
+        <div class="flow" aria-label="End-to-end system flow">
+          <div class="flow-step">
+            <strong>Trigger</strong>
+            <span>timer, login, shutdown, or manual CLI</span>
+          </div>
+          <div class="flow-step">
+            <strong>Steward policy</strong>
+            <span>lock, inspect, validate, choose driver</span>
+          </div>
+          <div class="flow-step">
+            <strong>Resurrect engine</strong>
+            <span>save or reconstruct tmux state</span>
+          </div>
+          <div class="flow-step">
+            <strong>Process strategy</strong>
+            <span>resume approved applications such as Codex</span>
+          </div>
+          <div class="flow-step">
+            <strong>Observation</strong>
+            <span>status, logs, health, and last-good state</span>
+          </div>
+        </div>
+
+        <h3>Control plane versus data plane</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Plane</th>
+                <th>Contents</th>
+                <th>Versioned?</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Control</td>
+                <td>CLI, lifecycle modules, service templates, profiles, process strategies, tests</td>
+                <td class="yes">Yes</td>
+              </tr>
+              <tr>
+                <td>Snapshot data</td>
+                <td>Resurrect text files, <code>last</code> link, pane-content archive</td>
+                <td class="no">Never</td>
+              </tr>
+              <tr>
+                <td>Application state</td>
+                <td>Codex SQLite databases and session JSONL files</td>
+                <td class="no">Never</td>
+              </tr>
+              <tr>
+                <td>Runtime</td>
+                <td>Locks, phase markers, PIDs, temporary restore material</td>
+                <td class="no">Never</td>
+              </tr>
+              <tr>
+                <td>Operations</td>
+                <td>Journald entries or local service logs</td>
+                <td class="no">Never</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="components">
+        <p class="kicker">Component model</p>
+        <h2>Small modules with explicit responsibilities</h2>
+
+        <div class="grid three">
+          <article class="card">
+            <p class="kicker">CLI</p>
+            <h3>Command router</h3>
+            <p>Parses commands, loads strict configuration, selects the platform adapter, and returns stable exit codes.</p>
+          </article>
+          <article class="card">
+            <p class="kicker">Core</p>
+            <h3>Save controller</h3>
+            <p>Acquires the lock, rejects unsafe intermediate states, waits out filename collisions, and invokes resurrect quietly.</p>
+          </article>
+          <article class="card">
+            <p class="kicker">Core</p>
+            <h3>Restore controller</h3>
+            <p>Validates the last snapshot, creates bootstrap context when necessary, executes a driver, and records completion.</p>
+          </article>
+          <article class="card">
+            <p class="kicker">Adapter</p>
+            <h3>Platform service</h3>
+            <p>Renders and manages systemd user units or generated launchd plists without leaking platform details into core logic.</p>
+          </article>
+          <article class="card">
+            <p class="kicker">Adapter</p>
+            <h3>Restore driver</h3>
+            <p>Implements direct, staged-palette, or terminal-bootstrap restoration behind one interface.</p>
+          </article>
+          <article class="card">
+            <p class="kicker">Extension</p>
+            <h3>Process strategy</h3>
+            <p>Translates a live or saved application process into a safe restart command. Codex is the first supported extension.</p>
+          </article>
+          <article class="card">
+            <p class="kicker">Installer</p>
+            <h3>Integration manager</h3>
+            <p>Installs command links, tmux snippets, strategy links, profiles, and service definitions idempotently.</p>
+          </article>
+          <article class="card">
+            <p class="kicker">Diagnostics</p>
+            <h3>Doctor</h3>
+            <p>Checks dependencies, permissions, plugin revisions, configuration, service state, snapshot validity, and repair actions.</p>
+          </article>
+          <article class="card">
+            <p class="kicker">Migration</p>
+            <h3>Legacy importer</h3>
+            <p>Detects the current loose scripts and service definitions, compares behavior, and performs a reversible cutover.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="save">
+        <p class="kicker">Lifecycle A</p>
+        <h2>Safe save sequence</h2>
+
+        <div class="phase">
+          <div class="phase-number">1</div>
+          <div>
+            <h3>Normalize the environment</h3>
+            <p>Resolve tmux, the resurrect plugin, state paths, runtime paths, and the active configuration without relying on an interactive shell profile.</p>
+          </div>
+        </div>
+        <div class="phase">
+          <div class="phase-number">2</div>
+          <div>
+            <h3>Acquire the cross-platform save lock</h3>
+            <p>Use <code>flock</code> on Linux and <code>lockf</code> on macOS through one lock abstraction. All manual, timer, and shutdown saves share it.</p>
+          </div>
+        </div>
+        <div class="phase">
+          <div class="phase-number">3</div>
+          <div>
+            <h3>Apply safety gates</h3>
+            <p>Exit successfully if no tmux server exists, only the bootstrap session exists, or restoration is in a deliberately incomplete phase.</p>
+          </div>
+        </div>
+        <div class="phase">
+          <div class="phase-number">4</div>
+          <div>
+            <h3>Avoid timestamp collisions</h3>
+            <p>Wait until the wall-clock second differs from the previous locked save rather than sleeping unconditionally. This preserves resurrect's <code>last</code> symlink invariant.</p>
+          </div>
+        </div>
+        <div class="phase">
+          <div class="phase-number">5</div>
+          <div>
+            <h3>Invoke tmux-resurrect</h3>
+            <p>Run its save script in quiet mode, allowing resurrect to produce tab-separated metadata, rotate old snapshots, and create pane-content archives.</p>
+          </div>
+        </div>
+        <div class="phase">
+          <div class="phase-number">6</div>
+          <div>
+            <h3>Validate and report</h3>
+            <p>Confirm that <code>last</code> resolves to a readable snapshot containing at least one real pane, then emit a concise structured log entry.</p>
+          </div>
+        </div>
+
+        <div class="callout">
+          <strong>Important:</strong> a timer save that finds nothing safe to
+          save is a successful no-op, not an operational failure.
+        </div>
+      </section>
+
+      <section id="restore">
+        <p class="kicker">Lifecycle B</p>
+        <h2>Deterministic restore sequence</h2>
+
+        <div class="phase">
+          <div class="phase-number">1</div>
+          <div>
+            <h3>Validate the candidate</h3>
+            <p>Resolve <code>last</code>, reject missing or dangling snapshots, and ensure the file contains a pane outside <code>restore-bootstrap</code>.</p>
+          </div>
+        </div>
+        <div class="phase">
+          <div class="phase-number">2</div>
+          <div>
+            <h3>Create bootstrap context if needed</h3>
+            <p>Start one detached <code>restore-bootstrap</code> session only when no tmux server is running. This gives resurrect the server context it expects.</p>
+          </div>
+        </div>
+        <div class="phase">
+          <div class="phase-number">3</div>
+          <div>
+            <h3>Arm the incomplete-state guard</h3>
+            <p>Mark restoration as active before reconstructing anything. Scheduled and shutdown saves must refuse to overwrite the last-good snapshot during this interval.</p>
+          </div>
+        </div>
+        <div class="phase">
+          <div class="phase-number">4</div>
+          <div>
+            <h3>Execute the selected restore driver</h3>
+            <p>The direct driver restores once. The staged driver restores layouts with process replay disabled, then launches approved processes after terminal capabilities are ready.</p>
+          </div>
+        </div>
+        <div class="phase">
+          <div class="phase-number">5</div>
+          <div>
+            <h3>Remove bootstrap state</h3>
+            <p>Kill the temporary session only after at least one real restored session exists. Never let it become a saved workspace.</p>
+          </div>
+        </div>
+        <div class="phase">
+          <div class="phase-number">6</div>
+          <div>
+            <h3>Commit restoration</h3>
+            <p>Clear the guard, record the driver and snapshot used, and leave the tmux server detached and attachable.</p>
+          </div>
+        </div>
+
+        <h3>Restore drivers</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Driver</th>
+                <th>Use</th>
+                <th>Behavior</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>direct</td>
+                <td>Ordinary Linux and macOS environments</td>
+                <td>One resurrect restore with approved process strategies enabled.</td>
+              </tr>
+              <tr>
+                <td>staged-palette</td>
+                <td>Arch graphical startup</td>
+                <td>Restore layouts first, then start Codex through a deterministic terminal-control environment.</td>
+              </tr>
+              <tr>
+                <td>terminal-bootstrap</td>
+                <td>macOS when Terminal permissions are required</td>
+                <td>Invoke the restore through Terminal.app so protected directories inherit the expected user-granted access.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="codex">
+        <p class="kicker">Process extension</p>
+        <h2>Codex-aware restoration</h2>
+
+        <p>
+          Codex is treated as an application adapter, not baked into the
+          generic lifecycle controller. The adapter has two jobs: identify the
+          correct conversation while saving and render a deterministic resume
+          command while restoring.
+        </p>
+
+        <div class="flow" aria-label="Codex process restoration flow">
+          <div class="flow-step">
+            <strong>Inspect pane</strong>
+            <span>find the child process and working directory</span>
+          </div>
+          <div class="flow-step">
+            <strong>Resolve thread</strong>
+            <span>query Codex state or parse an existing resume command</span>
+          </div>
+          <div class="flow-step">
+            <strong>Validate session</strong>
+            <span>confirm the thread still has persisted session material</span>
+          </div>
+          <div class="flow-step">
+            <strong>Save command</strong>
+            <span>serialize exact cwd and thread ID into resurrect</span>
+          </div>
+          <div class="flow-step">
+            <strong>Resume</strong>
+            <span>launch Codex only under the explicit process policy</span>
+          </div>
+        </div>
+
+        <h3>Where SQLite fits</h3>
+        <p>
+          SQLite is an implementation detail of the Codex adapter—not the
+          tmux-steward or tmux-resurrect storage format. The current stack reads
+          Codex's <code>logs_2.sqlite</code> to associate a process with a
+          thread and may read <code>state_5.sqlite</code> to find the latest
+          unarchived thread for a working directory.
+        </p>
+
+        <div class="callout warning">
+          <strong>Policy decision required during implementation:</strong>
+          the current resume command includes
+          <code>--dangerously-bypass-approvals-and-sandbox</code>. Steward must
+          never add that implicitly. It should require an explicit,
+          prominently documented configuration value and surface the setting
+          in <code>doctor</code> output.
+        </div>
+
+        <h3>Plugin integration seam</h3>
+        <p>
+          The Codex save-command and restore strategy files currently live
+          inside the tmux-resurrect checkout. Versioned copies will instead
+          live in tmux-steward. The installer will create and verify small
+          symlinks inside the plugin's strategy directories. A plugin update
+          that removes them is repairable with <code>tmux-steward doctor
+          --repair</code>.
+        </p>
+      </section>
+
+      <section id="platforms">
+        <p class="kicker">Native lifecycle</p>
+        <h2>systemd and launchd integration</h2>
+
+        <div class="grid">
+          <article class="card">
+            <h3>Linux: systemd user units</h3>
+            <ul>
+              <li>A oneshot restore service ordered with the user session.</li>
+              <li>A oneshot save service invoked by a user timer.</li>
+              <li>A ten-minute timer with explicit jitter and no dependence on tmux's status line.</li>
+              <li>A best-effort shutdown save before terminating the tmux server.</li>
+              <li>Logs available through the user journal.</li>
+              <li>Paths use systemd specifiers such as <code>%h</code> wherever possible.</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>macOS: LaunchAgents</h3>
+            <ul>
+              <li>A login restore agent using the selected restore driver.</li>
+              <li>A periodic save agent with a 600-second interval.</li>
+              <li>Generated absolute paths because launchd does not expand shell shortcuts.</li>
+              <li>Logs stored under the user's state or Library log directory.</li>
+              <li>An optional Terminal-bootstrap driver for macOS privacy permissions.</li>
+              <li>No daemon is kept alive merely to sleep between saves.</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="callout decision">
+          <strong>Same commands, different adapters:</strong>
+          both platforms ultimately invoke <code>tmux-steward save</code> and
+          <code>tmux-steward restore</code>. Platform files contain no duplicate
+          lifecycle logic.
+        </div>
+      </section>
+
+      <section id="configuration">
+        <p class="kicker">Configuration model</p>
+        <h2>Strict data, not executable configuration</h2>
+
+        <p>
+          Configuration should use a strict <code>KEY=VALUE</code> format
+          parsed by steward rather than sourced by the shell. This keeps the
+          first implementation dependency-free while avoiding arbitrary code
+          execution during service startup.
+        </p>
+
+        <pre><code># ~/.config/tmux-steward/config
+SAVE_INTERVAL_SECONDS=600
+RESTORE_DRIVER=direct
+PROCESS_PROFILE=codex
+CAPTURE_PANE_CONTENTS=1
+CODEX_RESUME_MODE=thread
+CODEX_BYPASS_APPROVALS=0
+LOG_LEVEL=info</code></pre>
+
+        <h3>Precedence</h3>
+        <ol>
+          <li>Built-in conservative defaults.</li>
+          <li>Repository-shipped platform profile.</li>
+          <li>Installed machine profile.</li>
+          <li>User configuration.</li>
+          <li>Explicit CLI flags for the current invocation.</li>
+        </ol>
+
+        <p>
+          Restore behavior is selected by capability profile, not inferred from
+          a hostname inside the code. A host may choose
+          <code>staged-palette</code> or <code>terminal-bootstrap</code>
+          explicitly while retaining the same common core.
+        </p>
+      </section>
+
+      <section id="filesystem">
+        <p class="kicker">Filesystem contract</p>
+        <h2>Versioned code and local state remain separate</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Purpose</th>
+                <th>Linux</th>
+                <th>macOS</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Repository</td>
+                <td><code>~/dev/tmux-steward</code></td>
+                <td><code>~/dev/tmux-steward</code></td>
+              </tr>
+              <tr>
+                <td>User configuration</td>
+                <td><code>~/.config/tmux-steward/</code></td>
+                <td><code>~/.config/tmux-steward/</code></td>
+              </tr>
+              <tr>
+                <td>Resurrect snapshots</td>
+                <td><code>~/.local/share/tmux/resurrect/</code></td>
+                <td><code>~/.local/share/tmux/resurrect/</code></td>
+              </tr>
+              <tr>
+                <td>Runtime locks</td>
+                <td><code>${XDG_RUNTIME_DIR}/tmux-steward/</code></td>
+                <td><code>${TMPDIR}/tmux-steward/</code></td>
+              </tr>
+              <tr>
+                <td>Durable operation state</td>
+                <td><code>~/.local/state/tmux-steward/</code></td>
+                <td><code>~/.local/state/tmux-steward/</code></td>
+              </tr>
+              <tr>
+                <td>Services</td>
+                <td><code>~/.config/systemd/user/</code></td>
+                <td><code>~/Library/LaunchAgents/</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          The repository must never follow or import live snapshots. Tests use
+          synthetic fixtures that resemble the resurrect text format without
+          containing real paths, terminal output, or thread identifiers.
+        </p>
+      </section>
+
+      <section id="cli">
+        <p class="kicker">Operator interface</p>
+        <h2>A small, predictable CLI</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Command</th>
+                <th>Contract</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>save</code></td>
+                <td>Perform a guarded snapshot. Accept a reason such as manual, timer, or shutdown for logging.</td>
+              </tr>
+              <tr>
+                <td><code>restore</code></td>
+                <td>Restore the latest validated snapshot through the configured driver.</td>
+              </tr>
+              <tr>
+                <td><code>status</code></td>
+                <td>Show tmux state, last snapshot, restore phase, service state, driver, and process profile.</td>
+              </tr>
+              <tr>
+                <td><code>doctor</code></td>
+                <td>Run read-only checks by default; optionally repair repository-owned links and generated files.</td>
+              </tr>
+              <tr>
+                <td><code>service install</code></td>
+                <td>Render platform definitions and tmux integration without enabling them.</td>
+              </tr>
+              <tr>
+                <td><code>service enable</code></td>
+                <td>Enable the installed user services after validation.</td>
+              </tr>
+              <tr>
+                <td><code>service disable</code></td>
+                <td>Stop and disable steward automation without deleting snapshots.</td>
+              </tr>
+              <tr>
+                <td><code>migrate</code></td>
+                <td>Inventory the existing loose stack, save a rollback bundle, install steward, and cut over in ordered steps.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Stable exit behavior</h3>
+        <ul>
+          <li><code>0</code>: completed or safe no-op.</li>
+          <li><code>2</code>: invalid command or configuration.</li>
+          <li><code>3</code>: dependency or integration problem.</li>
+          <li><code>4</code>: no valid snapshot available.</li>
+          <li><code>5</code>: tmux or resurrect operation failed.</li>
+          <li><code>6</code>: safety gate rejected a forced operation.</li>
+        </ul>
+      </section>
+
+      <section id="reliability">
+        <p class="kicker">Correctness</p>
+        <h2>Reliability invariants</h2>
+
+        <ol class="decision-list">
+          <li>
+            <strong>One lifecycle mutation at a time.</strong>
+            Save and restore share a machine-local lock namespace.
+          </li>
+          <li>
+            <strong>Never replace last-good with bootstrap-only state.</strong>
+            A valid snapshot must contain a real pane outside the temporary session.
+          </li>
+          <li>
+            <strong>Never save a half-restored workspace.</strong>
+            An armed restore marker blocks timer and shutdown saves until completion or explicit recovery.
+          </li>
+          <li>
+            <strong>Service operations are idempotent.</strong>
+            Reinstalling or enabling twice produces the same files and service state.
+          </li>
+          <li>
+            <strong>Uninstall does not delete user data.</strong>
+            Snapshots, logs, and configuration are retained unless separately requested.
+          </li>
+          <li>
+            <strong>Process relaunch is allowlisted.</strong>
+            Shells and pane layouts may be reconstructed broadly; application commands require a named strategy.
+          </li>
+          <li>
+            <strong>Failure remains attachable.</strong>
+            A failed process-restore stage must leave restored tmux layouts available for inspection.
+          </li>
+          <li>
+            <strong>No hidden cross-host authority.</strong>
+            Each machine owns its own tmux state and can recover independently.
+          </li>
+        </ol>
+      </section>
+
+      <section id="security">
+        <p class="kicker">Safety model</p>
+        <h2>Snapshots are sensitive operational data</h2>
+
+        <ul>
+          <li>State directories should be user-only, normally mode <code>0700</code>.</li>
+          <li>Snapshots may reveal paths, commands, pane titles, thread IDs, and captured terminal output.</li>
+          <li>Pane-content capture remains configurable and visible in doctor output.</li>
+          <li>Logs must not copy full saved command lines unless debug logging is explicitly enabled.</li>
+          <li>SSH configuration, addresses, usernames, keys, and routing never enter this repository.</li>
+          <li>Generated service definitions use the current user's paths but contain no credentials.</li>
+          <li>Repair mode only changes files owned by tmux-steward's installation contract.</li>
+          <li>Dangerous Codex launch flags require explicit opt-in and a warning in status output.</li>
+        </ul>
+
+        <div class="callout warning">
+          tmux-resurrect captures state; it is not an encrypted backup system.
+          Cross-machine backup, encryption, retention, and redaction would be a
+          separate future project boundary.
+        </div>
+      </section>
+
+      <section id="testing">
+        <p class="kicker">Verification strategy</p>
+        <h2>Test policy before fleet deployment</h2>
+
+        <div class="grid">
+          <article class="card">
+            <h3>Static checks</h3>
+            <ul>
+              <li>ShellCheck for every shell entry point.</li>
+              <li>Formatting and executable-bit checks.</li>
+              <li>Generated systemd unit verification.</li>
+              <li>Generated plist syntax validation.</li>
+              <li>HTML and documentation link checks.</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Unit tests</h3>
+            <ul>
+              <li>Strict configuration parsing.</li>
+              <li>Snapshot validation with synthetic fixtures.</li>
+              <li>Lock selection and timeout behavior.</li>
+              <li>Codex command parsing and SQL fallback logic.</li>
+              <li>Restore-driver selection and guard transitions.</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Integration tests</h3>
+            <ul>
+              <li>Temporary isolated tmux sockets.</li>
+              <li>Save and restore of sessions, layouts, and pane paths.</li>
+              <li>Manual and timer save collision.</li>
+              <li>Detached save without a current client.</li>
+              <li>Bootstrap cleanup and incomplete-restore blocking.</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Fleet acceptance</h3>
+            <ul>
+              <li>One canary host at a time.</li>
+              <li>Reboot and login verification.</li>
+              <li>Shutdown-save verification.</li>
+              <li>Codex thread-resume verification.</li>
+              <li>Rollback using the preserved legacy bundle.</li>
+            </ul>
+          </article>
+        </div>
+
+        <p>
+          CI should run on current Ubuntu and macOS. Older tmux compatibility,
+          especially Alma's tmux 2.7 behavior, remains an explicit acceptance
+          target even if hosted CI uses a newer package.
+        </p>
+      </section>
+
+      <section id="repository">
+        <p class="kicker">Proposed source tree</p>
+        <h2>Repository layout</h2>
+
+        <pre><code>tmux-steward/
+├── bin/
+│   └── tmux-steward
+├── lib/
+│   ├── config.sh
+│   ├── lock.sh
+│   ├── paths.sh
+│   ├── save.sh
+│   ├── restore.sh
+│   ├── snapshot.sh
+│   └── log.sh
+├── drivers/
+│   ├── direct.sh
+│   ├── staged-palette.sh
+│   └── terminal-bootstrap.sh
+├── strategies/
+│   └── codex/
+│       ├── save-command.sh
+│       ├── restore-command.sh
+│       └── resume-last-for-cwd.sh
+├── platform/
+│   ├── systemd/
+│   │   ├── tmux-steward.service.in
+│   │   ├── tmux-steward-save.service.in
+│   │   └── tmux-steward-save.timer.in
+│   └── launchd/
+│       ├── org.tmux-steward.restore.plist.in
+│       └── org.tmux-steward.save.plist.in
+├── profiles/
+│   ├── default.conf
+│   ├── linux.conf
+│   ├── macos.conf
+│   ├── staged-palette.conf
+│   └── terminal-bootstrap.conf
+├── tmux/
+│   └── tmux-steward.conf
+├── tests/
+│   ├── fixtures/
+│   ├── unit/
+│   └── integration/
+├── tools/
+│   ├── install
+│   └── uninstall
+├── architecture.html
+└── README.md</code></pre>
+
+        <div class="callout decision">
+          <strong>Implementation language:</strong> begin with modular,
+          Bash 3.2-compatible shell because the existing behavior is already
+          proven, tmux-resurrect itself requires Bash, and macOS and Linux both
+          provide it. The rewrite should improve ownership, contracts, and
+          testing before considering a compiled CLI.
+        </div>
+      </section>
+
+      <section id="migration">
+        <p class="kicker">Fleet rollout</p>
+        <h2>Migration without a flag day</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Host</th>
+                <th>Current baseline</th>
+                <th>Proposed profile</th>
+                <th>Rollout note</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>mac</td>
+                <td class="yes">LaunchAgents, periodic saves, Terminal bootstrap</td>
+                <td><code>macos + terminal-bootstrap</code></td>
+                <td>First canary after local dry-run; preserve current plists for rollback.</td>
+              </tr>
+              <tr>
+                <td>arch</td>
+                <td class="yes">systemd timer, guarded saves, staged palette restore</td>
+                <td><code>linux + staged-palette</code></td>
+                <td>Most complete reference behavior; migrate after common core passes locally.</td>
+              </tr>
+              <tr>
+                <td>alma</td>
+                <td class="yes">systemd timer and direct restore</td>
+                <td><code>linux + direct</code></td>
+                <td>Verify compatibility with tmux 2.7 and older platform tooling.</td>
+              </tr>
+              <tr>
+                <td>scott</td>
+                <td class="partial">Resurrect and one snapshot; no active timer/service</td>
+                <td><code>linux + direct</code></td>
+                <td>Install only after service ownership and login semantics are confirmed.</td>
+              </tr>
+              <tr>
+                <td>c3p0</td>
+                <td class="no">Plain tmux configuration; no resurrect stack</td>
+                <td><code>linux + direct</code></td>
+                <td>Treat as a fresh install, not a migration.</td>
+              </tr>
+              <tr>
+                <td>linap2 / jump / kintex</td>
+                <td class="partial">Unknown; unreachable during audit</td>
+                <td>Undecided</td>
+                <td>Run read-only inventory before assigning a profile.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Cutover protocol per host</h3>
+        <ol>
+          <li>Run inventory and save a rollback bundle of existing scripts, configs, and unit definitions.</li>
+          <li>Install steward without enabling it.</li>
+          <li>Run <code>doctor</code> and a dry-run render of services and integration links.</li>
+          <li>Trigger a manual steward save and validate the new snapshot without deleting old snapshots.</li>
+          <li>Disable the legacy timer or LaunchAgent.</li>
+          <li>Enable steward services and verify one scheduled save.</li>
+          <li>Perform a controlled tmux-server restart and restore test.</li>
+          <li>Perform a reboot test only after the controlled test passes.</li>
+        </ol>
+      </section>
+
+      <section id="roadmap">
+        <p class="kicker">Implementation plan</p>
+        <h2>Build in narrow, reversible phases</h2>
+
+        <div class="phase">
+          <div class="phase-number">0</div>
+          <div>
+            <h3>Capture contracts</h3>
+            <p>Commit this architecture, add fixtures from sanitized snapshot shapes, and record expected current behavior on mac, arch, and alma.</p>
+          </div>
+        </div>
+        <div class="phase">
+          <div class="phase-number">1</div>
+          <div>
+            <h3>Extract the common core</h3>
+            <p>Move current save guards, path resolution, locking, snapshot validation, and bootstrap restoration into tested repository modules.</p>
+          </div>
+        </div>
+        <div class="phase">
+          <div class="phase-number">2</div>
+          <div>
+            <h3>Externalize Codex integration</h3>
+            <p>Version the strategy files here, add deterministic tests, and make dangerous resume flags explicit configuration.</p>
+          </div>
+        </div>
+        <div class="phase">
+          <div class="phase-number">3</div>
+          <div>
+            <h3>Add service adapters</h3>
+            <p>Render systemd and launchd definitions from the same command contract; add syntax checks and status inspection.</p>
+          </div>
+        </div>
+        <div class="phase">
+          <div class="phase-number">4</div>
+          <div>
+            <h3>Implement restore drivers</h3>
+            <p>Begin with direct restore, then port terminal-bootstrap and staged-palette behavior without mixing them into core logic.</p>
+          </div>
+        </div>
+        <div class="phase">
+          <div class="phase-number">5</div>
+          <div>
+            <h3>Installer, doctor, and migration</h3>
+            <p>Add idempotent deployment, repair, rollback bundles, and machine-readable diagnostics.</p>
+          </div>
+        </div>
+        <div class="phase">
+          <div class="phase-number">6</div>
+          <div>
+            <h3>Canary rollout</h3>
+            <p>Migrate the local Mac first, then arch, alma, and the less-complete hosts one at a time with controlled restart and reboot tests.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="decisions">
+        <p class="kicker">Resolved design choices</p>
+        <h2>Architecture decisions</h2>
+
+        <ol class="decision-list">
+          <li>
+            <strong>Keep tmux-resurrect as an external engine.</strong>
+            Do not fork its snapshot format or duplicate reconstruction logic.
+          </li>
+          <li>
+            <strong>Replace continuum with native service scheduling.</strong>
+            Avoid status-line coupling and gain explicit lifecycle observability.
+          </li>
+          <li>
+            <strong>Use a shell-first modular implementation.</strong>
+            Preserve proven behavior and broad host compatibility before considering a language rewrite.
+          </li>
+          <li>
+            <strong>Model special startup behavior as drivers.</strong>
+            No hardcoded <code>if hostname = arch</code> branches in common logic.
+          </li>
+          <li>
+            <strong>Make process replay opt-in.</strong>
+            Codex is supported through a named adapter; arbitrary saved applications are not automatically trusted.
+          </li>
+          <li>
+            <strong>Keep state local to each machine.</strong>
+            Fleet deployment shares code and policy, not live tmux snapshots.
+          </li>
+          <li>
+            <strong>Install first, enable separately.</strong>
+            Rendering files is reversible; activating background behavior is an explicit later action.
+          </li>
+        </ol>
+
+        <h3>Open implementation questions</h3>
+        <ul>
+          <li>Whether macOS can eventually use direct LaunchAgent restore without Terminal.app permissions.</li>
+          <li>Whether to upstream support for external tmux-resurrect strategy directories.</li>
+          <li>Whether the project should pin tested plugin commits or only enforce minimum compatible revisions.</li>
+          <li>Whether a future compiled CLI would materially improve installation enough to justify replacing shell modules.</li>
+        </ul>
+      </section>
+
+      <section id="done">
+        <p class="kicker">Acceptance criteria</p>
+        <h2>What “a coherent system” means</h2>
+
+        <ul>
+          <li>Every host invokes the same public CLI and shares the same common lifecycle code.</li>
+          <li>Platform and terminal differences are isolated behind adapters and profiles.</li>
+          <li>No production logic remains as an untracked, hand-edited file in <code>~/bin</code>.</li>
+          <li>No custom strategy is maintained only inside a third-party plugin checkout.</li>
+          <li>A timer save, manual save, and shutdown save cannot corrupt one another.</li>
+          <li>A half-completed restore cannot overwrite the last known-good snapshot.</li>
+          <li>Codex resumes the intended thread and working directory under explicit policy.</li>
+          <li>Install, enable, disable, repair, upgrade, migrate, and uninstall paths are documented and tested.</li>
+          <li>The Mac, arch, and alma pass controlled restart and reboot acceptance tests.</li>
+          <li>Failures leave enough logs and status information to diagnose without reading implementation code.</li>
+        </ul>
+
+        <div class="callout">
+          <strong>First implementation milestone:</strong> reproduce the
+          current local Mac save and restore behavior entirely from this
+          repository, with tests and a rollback path, before changing any other
+          fleet host.
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer>
+    tmux-steward architecture notebook · local repository documentation · no live service changes
+  </footer>
+</body>
+</html>
