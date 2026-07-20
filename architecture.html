@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Product, architecture, language, distribution, and implementation specification for tmux-steward.">
-  <title>tmux-steward — Product and Architecture Specification</title>
+  <meta name="description" content="Product, architecture, language, distribution, and implementation specification for tmux-recovery.">
+  <title>tmux-recovery — Product and Architecture Specification</title>
   <style>
     :root {
       color-scheme: dark;
@@ -657,8 +657,8 @@
 
   <header>
     <div class="hero">
-      <p class="eyebrow">Product and architecture specification · draft 0.2 · 2026-07-16</p>
-      <h1>tmux-steward</h1>
+      <p class="eyebrow">Product and architecture specification · draft 0.3 · 2026-07-19</p>
+      <h1>tmux-recovery</h1>
       <p class="lede">
         A standalone CLI utility that makes tmux persistence installable,
         automatic, safe, and understandable across macOS and Linux—without
@@ -667,7 +667,7 @@
       </p>
       <div class="status-line" aria-label="Specification status">
         <span class="badge">Specification phase</span>
-        <span class="badge">Language not yet ratified</span>
+        <span class="badge ready">Go architecture accepted</span>
         <span class="badge ready">No implementation in repository</span>
       </div>
     </div>
@@ -683,7 +683,7 @@
         <li><a href="#scope">4. Scope and non-goals</a></li>
         <li><a href="#requirements">5. Requirements</a></li>
         <li><a href="#constraints">6. Fleet constraints</a></li>
-        <li><a href="#language">7. Language decision</a></li>
+        <li><a href="#language">7. Go architecture decision</a></li>
         <li><a href="#distribution">8. Install and distribution</a></li>
         <li><a href="#first-run">9. First-run experience</a></li>
         <li><a href="#architecture">10. System architecture</a></li>
@@ -701,7 +701,7 @@
         <li><a href="#observability">22. Observability</a></li>
         <li><a href="#testing">23. Testing</a></li>
         <li><a href="#release">24. Release engineering</a></li>
-        <li><a href="#repository">25. Proposed repository</a></li>
+        <li><a href="#repository">25. Go repository layout</a></li>
         <li><a href="#migration">26. Fleet migration</a></li>
         <li><a href="#roadmap">27. Delivery phases</a></li>
         <li><a href="#decisions">28. Decisions and questions</a></li>
@@ -717,19 +717,23 @@
 
         <dl class="meta">
           <dt>Product</dt>
-          <dd>tmux-steward</dd>
+          <dd>tmux-recovery</dd>
           <dt>Status</dt>
-          <dd>Draft for architecture review; not approved for implementation</dd>
+          <dd>Architecture baseline in review; implementation has not started</dd>
           <dt>Primary artifact</dt>
           <dd>This self-contained HTML specification</dd>
+          <dt>Source repository</dt>
+          <dd><code>github.com/JonathanALevine/tmux-recovery</code></dd>
+          <dt>Repository visibility</dt>
+          <dd>Private during architecture and early implementation; any public release is a separate decision</dd>
           <dt>Target release</dt>
           <dd>Version 1.0 after local and fleet canary validation</dd>
           <dt>Primary platforms</dt>
           <dd>macOS and Linux; Windows excluded except possible future WSL support</dd>
           <dt>Current recommendation</dt>
-          <dd>Go native core distributed through npm platform packages; decision remains reviewable</dd>
+          <dd>Go native core distributed through npm platform packages; ADR-001 accepted 2026-07-19</dd>
           <dt>Implementation authorization</dt>
-          <dd>None. No application code should be added until this specification is accepted.</dd>
+          <dd>Architecture work only. Application scaffolding begins in the next explicitly approved phase.</dd>
         </dl>
 
         <div class="callout warning">
@@ -744,15 +748,15 @@
         <h2>Install a command; stop thinking about tmux recovery</h2>
 
         <p>
-          tmux-steward should feel like a normal developer CLI. A user installs
+          tmux-recovery should feel like a normal developer CLI. A user installs
           it globally, runs one setup command, and receives guarded automatic
           saves, boot or login restoration, health diagnostics, and safe
           process-aware recovery.
         </p>
 
-        <pre><code>npm install -g tmux-steward
-tmux-steward setup
-tmux-steward status</code></pre>
+        <pre><code>npm install -g tmux-recovery
+tmux-recovery setup
+tmux-recovery status</code></pre>
 
         <p>
           The user should not need to understand TPM, tmux-resurrect's internal
@@ -763,7 +767,7 @@ tmux-steward status</code></pre>
 
         <div class="callout decision">
           <strong>Core product boundary:</strong> tmux-resurrect remains the
-          snapshot and reconstruction engine. tmux-steward becomes the
+          snapshot and reconstruction engine. tmux-recovery becomes the
           installable application that owns dependency provisioning, lifecycle
           policy, service integration, safety, and user experience.
         </div>
@@ -932,14 +936,23 @@ tmux-steward status</code></pre>
 
       <section id="language">
         <p class="kicker">Architecture decision record ADR-001</p>
-        <h2>What language should the CLI use?</h2>
+        <h2>Go is the accepted implementation language</h2>
 
         <p>
           The implementation language and the install channel are separate
-          decisions. A CLI can be written in Go or Rust and still be installed
-          through npm by shipping native platform packages behind a small
-          JavaScript launcher.
+          decisions. The product core will be a Go executable. npm remains the
+          primary installer by placing that executable behind a small
+          JavaScript launcher and platform-specific packages.
         </p>
+
+        <div class="callout decision">
+          <strong>Decision:</strong> ADR-001 was accepted on 2026-07-19. Go is
+          selected for the native CLI because tmux-recovery is primarily an
+          orchestration, transaction, filesystem, and subprocess application.
+          Rust remains a respected alternative, but the project values a
+          smaller implementation burden and simpler release pipeline more than
+          Rust's additional compile-time control.
+        </div>
 
         <h3>Decision criteria</h3>
         <ul>
@@ -965,8 +978,8 @@ tmux-steward status</code></pre>
               <tr class="recommended">
                 <td>Go</td>
                 <td>Single native executable; straightforward cross-compilation; excellent subprocess, filesystem, embed, and testing support; low startup overhead; approachable maintenance.</td>
-                <td>Native SQLite bindings often involve CGO; a pure-Go SQLite implementation adds binary size and dependency weight. Some platform APIs still require command adapters.</td>
-                <td class="score-high">Recommended</td>
+                <td>A CGo-free SQLite driver adds binary and dependency weight. Platform service APIs still require explicit adapters.</td>
+                <td class="score-high">Accepted</td>
               </tr>
               <tr>
                 <td>Rust</td>
@@ -1002,35 +1015,89 @@ tmux-steward status</code></pre>
           </table>
         </div>
 
-        <div class="callout decision">
-          <strong>Provisional recommendation:</strong> implement the product
-          core in Go, distribute compiled binaries, use a tiny Node launcher
-          only for npm installation, and retain shell solely at the narrow
-          tmux-resurrect strategy boundary. Ratify this only after a short
-          technical spike proves static Linux compatibility, embedded assets,
-          signal forwarding, and read-only SQLite access.
-        </div>
-
-        <h3>Why Go currently leads Rust</h3>
+        <h3>Why Go fits this system</h3>
         <p>
-          tmux-steward is primarily an orchestration and policy application.
+          tmux-recovery is primarily an orchestration and policy application.
           It needs reliable process execution and filesystem transactions more
-          than advanced memory control. Go offers most of Rust's deployment
-          benefit with a smaller implementation burden. Rust should replace Go
-          as the recommendation only if the technical spike finds that
-          SQLite, terminal control, static Linux builds, or platform-specific
-          service APIs are materially safer or simpler in Rust.
+          than advanced memory control. Go provides the native artifact,
+          explicit error handling, concurrency primitives, standard-library
+          process control, embedded assets, and test tooling this product needs
+          without making ownership and lifetime mechanics part of every change.
         </p>
 
-        <h3>Language decision gate</h3>
+        <p>
+          The absence of Go on a target host is irrelevant to normal use.
+          Release artifacts are compiled in CI; target machines receive only
+          the native executable and managed assets. No host installs Go, Node,
+          npm, or a SQLite command in order for scheduled recovery to run.
+        </p>
+
+        <h3>Go toolchain policy</h3>
+        <ul>
+          <li>The module path is <code>github.com/JonathanALevine/tmux-recovery</code>.</li>
+          <li>The initial source language baseline is Go 1.25; CI builds with the latest patched Go 1.26 toolchain.</li>
+          <li>The module and CI configuration pin the intended toolchain; developers do not rely on whichever Go happens to be first on <code>PATH</code>.</li>
+          <li>Production artifacts build with <code>CGO_ENABLED=0</code> unless a later ADR records a tested exception.</li>
+          <li><code>go mod tidy</code> produces a clean module graph and <code>go mod verify</code> is part of release validation.</li>
+          <li>The race detector, fuzz tests, static analysis, and vulnerability scanning run in CI where supported.</li>
+        </ul>
+
+        <h3>Dependency policy</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Concern</th><th>Decision</th><th>Boundary</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>CLI tree</td><td><code>github.com/spf13/cobra</code></td><td>Command declaration and help only; business logic stays in application packages.</td></tr>
+              <tr><td>Configuration</td><td><code>github.com/pelletier/go-toml/v2</code></td><td>Strict decode into versioned structs; no Viper or implicit environment merging.</td></tr>
+              <tr><td>SQLite</td><td>CGo-free <code>database/sql</code> driver, initially <code>modernc.org/sqlite</code></td><td>Used only inside the read-only Codex adapter and replaceable behind a narrow interface.</td></tr>
+              <tr><td>Logging</td><td>Standard <code>log/slog</code></td><td>Human and JSON handlers share the same redaction policy.</td></tr>
+              <tr><td>Process execution</td><td>Standard <code>os/exec</code> plus small platform files</td><td>Every child receives a context, explicit argv, a timeout policy, and captured exit metadata.</td></tr>
+              <tr><td>Embedded assets</td><td>Standard <code>embed</code></td><td>Resurrect, service templates, tmux integration, and license notices are checksummed at extraction.</td></tr>
+              <tr><td>Platform calls</td><td><code>golang.org/x/sys</code> only where the standard library is insufficient</td><td>Unix locking and process-group behavior remain isolated from domain logic.</td></tr>
+              <tr><td>Testing</td><td>Standard <code>testing</code>, golden fixtures, and narrowly justified helpers</td><td>No assertion framework becomes part of product packages.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Versions will be pinned in <code>go.mod</code> when implementation
+          begins. New runtime dependencies require a short record covering
+          purpose, license, maintenance, transitive weight, and whether the
+          standard library was insufficient.
+        </p>
+
+        <h3>Concurrency and cancellation model</h3>
+        <ul>
+          <li>The program is synchronous by default; no background worker or resident goroutine owns durable state.</li>
+          <li>Each command receives one root <code>context.Context</code> cancelled by signals or its caller.</li>
+          <li>Save, restore, setup, migration, and repair acquire the same process-wide operation lock before mutation.</li>
+          <li>Read-only diagnostics may run independent probes concurrently through a bounded group.</li>
+          <li>Child processes run in controlled process groups so cancellation reaches tmux-resurrect and helper processes.</li>
+          <li>No goroutine may outlive command shutdown; shutdown waits for owned work or reports the timeout.</li>
+        </ul>
+
+        <h3>Error and transaction model</h3>
+        <ul>
+          <li>Packages wrap errors with operation and resource context using <code>%w</code>; callers classify them with <code>errors.Is</code> and <code>errors.As</code>.</li>
+          <li>Expected failures use typed categories such as configuration, unavailable dependency, lock contention, invalid snapshot, unsupported provider schema, and partial restore.</li>
+          <li>Panics are reserved for impossible programmer invariants and are recovered only at the CLI boundary to produce a crash diagnostic.</li>
+          <li>Mutating commands build a plan, validate preconditions, print or approve the plan, apply steps, verify postconditions, and roll back reversible steps in reverse order.</li>
+          <li>Atomic file replacement uses a same-directory temporary file, permission setting, flush, rename, and directory synchronization where supported.</li>
+          <li>Rollback failure is never hidden; the result reports both the original failure and residual state.</li>
+        </ul>
+
+        <h3>Go architecture proof before product scaffolding</h3>
         <ol>
-          <li>Build throwaway Go and Rust spikes outside the product tree.</li>
-          <li>Prove macOS arm64 and Linux amd64 artifacts in CI.</li>
+          <li>Build one throwaway Go vertical slice outside the product source tree.</li>
+          <li>Prove macOS arm64 and Linux amd64 CGo-free artifacts in CI.</li>
           <li>Run Linux artifact on AlmaLinux 8 and c3p0 without installing a toolchain.</li>
           <li>Prove read-only access to synthetic Codex-style SQLite data without the SQLite CLI.</li>
           <li>Prove signal propagation and lock behavior under timer/manual collision.</li>
-          <li>Record artifact size, startup time, maintenance complexity, and release workflow.</li>
-          <li>Amend this ADR and only then create application source.</li>
+          <li>Prove embedded resurrect extraction, checksum validation, and invocation by absolute path.</li>
+          <li>Record artifact size, startup time, dependency graph, and release workflow.</li>
+          <li>Amend technical details if evidence differs; Go itself remains the accepted language unless a new ADR supersedes this one.</li>
         </ol>
       </section>
 
@@ -1043,8 +1110,8 @@ tmux-steward status</code></pre>
           to other modern native CLIs:
         </p>
 
-        <pre><code>npm install -g tmux-steward
-tmux-steward setup</code></pre>
+        <pre><code>npm install -g tmux-recovery
+tmux-recovery setup</code></pre>
 
         <p>
           npm is the delivery channel, not necessarily the runtime. The
@@ -1053,16 +1120,16 @@ tmux-steward setup</code></pre>
         </p>
 
         <h3>Recommended npm package topology</h3>
-        <pre><code>tmux-steward
-├── bin/tmux-steward.js
+        <pre><code>tmux-recovery
+├── bin/tmux-recovery.js
 └── optionalDependencies
-    ├── @tmux-steward/cli-darwin-arm64
-    ├── @tmux-steward/cli-darwin-x64
-    ├── @tmux-steward/cli-linux-x64
-    └── @tmux-steward/cli-linux-arm64</code></pre>
+    ├── @tmux-recovery/cli-darwin-arm64
+    ├── @tmux-recovery/cli-darwin-x64
+    ├── @tmux-recovery/cli-linux-x64
+    └── @tmux-recovery/cli-linux-arm64</code></pre>
 
         <p>
-          The top-level package declares the <code>tmux-steward</code>
+          The top-level package declares the <code>tmux-recovery</code>
           executable. Its small launcher resolves the installed platform
           package, starts the native binary with inherited standard streams,
           forwards termination signals, and mirrors the native exit status.
@@ -1078,9 +1145,9 @@ tmux-steward setup</code></pre>
 
         <h3>Package naming</h3>
         <ul>
-          <li>Preferred public command: <code>tmux-steward</code>.</li>
-          <li>Preferred unscoped package: <code>tmux-steward</code>, subject to registry availability and ownership.</li>
-          <li>Fallback scoped package: <code>@tmux-steward/cli</code> or a maintainer-owned scope.</li>
+          <li>Preferred public command: <code>tmux-recovery</code>.</li>
+          <li>Preferred unscoped package: <code>tmux-recovery</code>, subject to registry availability and ownership.</li>
+          <li>Fallback scoped package: <code>@tmux-recovery/cli</code> or a maintainer-owned scope.</li>
           <li>Platform packages should be scoped even if the top-level package is unscoped.</li>
         </ul>
 
@@ -1110,7 +1177,7 @@ tmux-steward setup</code></pre>
           edit tmux configuration, start a timer, create a LaunchAgent, enable
           systemd units, or inspect personal snapshots during package
           installation. Those actions belong to an explicit
-          <code>tmux-steward setup</code> transaction.
+          <code>tmux-recovery setup</code> transaction.
         </p>
 
         <h3>Stable service binary</h3>
@@ -1120,14 +1187,14 @@ tmux-steward setup</code></pre>
           should install an atomic service copy under a stable user-owned path:
         </p>
 
-        <pre><code>~/.local/share/tmux-steward/
+        <pre><code>~/.local/share/tmux-recovery/
 └── bin/
-    ├── 1.0.0/tmux-steward
+    ├── 1.0.0/tmux-recovery
     └── current -> 1.0.0</code></pre>
 
         <p>
           systemd and launchd invoke the stable <code>current</code> binary,
-          never Node. Running <code>tmux-steward setup --sync</code> after an
+          never Node. Running <code>tmux-recovery setup --sync</code> after an
           npm upgrade installs the new service binary atomically and retains
           the prior version for rollback. <code>doctor</code> warns when the
           interactive CLI and service binary differ.
@@ -1135,11 +1202,11 @@ tmux-steward setup</code></pre>
 
         <h3>Upgrade and uninstall contract</h3>
         <ul>
-          <li><code>npm install -g tmux-steward@latest</code> upgrades the interactive CLI.</li>
-          <li><code>tmux-steward setup --sync</code> validates and advances the service binary.</li>
+          <li><code>npm install -g tmux-recovery@latest</code> upgrades the interactive CLI.</li>
+          <li><code>tmux-recovery setup --sync</code> validates and advances the service binary.</li>
           <li>Automatic background self-update is out of scope.</li>
-          <li><code>tmux-steward uninstall</code> disables services and removes managed integration but preserves snapshots.</li>
-          <li><code>tmux-steward uninstall --purge</code> may remove configuration and steward state after an explicit confirmation.</li>
+          <li><code>tmux-recovery uninstall</code> disables services and removes managed integration but preserves snapshots.</li>
+          <li><code>tmux-recovery uninstall --purge</code> may remove configuration and application state after an explicit confirmation.</li>
           <li>Removing the npm package alone should trigger a doctor warning if services remain, but the retained service binary prevents an immediate broken boot job.</li>
         </ul>
       </section>
@@ -1148,9 +1215,9 @@ tmux-steward setup</code></pre>
         <p class="kicker">Onboarding specification</p>
         <h2>First-run setup should be one safe transaction</h2>
 
-        <pre><code>$ tmux-steward setup
+        <pre><code>$ tmux-recovery setup
 
-tmux-steward 1.0.0
+tmux-recovery 1.0.0
 ✓ tmux 3.7b found
 ✓ macOS LaunchAgent support found
 ✓ Existing tmux config found at ~/.config/tmux/tmux.conf
@@ -1219,6 +1286,38 @@ Review changes, then apply?              Yes</code></pre>
           </div>
         </div>
 
+        <h3>Go dependency direction</h3>
+        <pre><code>cmd/tmux-recovery
+        │ composition root only
+        ▼
+internal/cli ─────► internal/app ─────► internal/domain
+                         │                    ▲
+                         │ uses ports         │ owns rules and types
+                         ▼                    │
+                 internal/platform ───────────┘
+                 internal/providers
+                 internal/engine</code></pre>
+
+        <ul>
+          <li><code>cmd/tmux-recovery</code> constructs dependencies, installs signal handling, executes the root command, and maps the result to one exit code.</li>
+          <li><code>internal/cli</code> owns parsing, help, prompts, and human or JSON rendering; it contains no tmux policy.</li>
+          <li><code>internal/app</code> owns use cases such as save, restore, setup, doctor, migrate, and service management.</li>
+          <li><code>internal/domain</code> owns plans, invariants, snapshot summaries, operation results, and provider-neutral recovery types.</li>
+          <li>Adapters implement small interfaces declared by the package that consumes them. A large global service container is prohibited.</li>
+          <li>Provider packages cannot import CLI, service-manager, or another provider package.</li>
+          <li>Platform-specific files use Go build constraints only at the platform boundary; common lifecycle logic has no operating-system build tags.</li>
+        </ul>
+
+        <h3>Composition roots</h3>
+        <p>
+          One production composition root wires real filesystems, command
+          execution, clocks, locks, tmux, managed resurrect, service managers,
+          and provider adapters. Tests construct application services directly
+          with narrow fakes. Dependencies are passed explicitly; there are no
+          mutable package globals, hidden singleton configuration, or service
+          locator.
+        </p>
+
         <h3>Control plane and data plane</h3>
         <div class="table-wrap">
           <table>
@@ -1263,23 +1362,23 @@ Review changes, then apply?              Yes</code></pre>
         <h3>Managed engine model</h3>
         <ol>
           <li>The native release embeds an exact upstream tmux-resurrect version and license notice.</li>
-          <li>Setup extracts it under <code>~/.local/share/tmux-steward/engines/resurrect/&lt;version&gt;</code>.</li>
+          <li>Setup extracts it under <code>~/.local/share/tmux-recovery/engines/resurrect/&lt;version&gt;</code>.</li>
           <li>The CLI calls the extracted save and restore scripts by absolute path.</li>
           <li>Snapshots remain in the standard XDG resurrect location for interoperability.</li>
-          <li>Engine upgrades ship with tmux-steward releases and pass compatibility tests.</li>
+          <li>Engine upgrades ship with tmux-recovery releases and pass compatibility tests.</li>
           <li>Advanced users may configure an external resurrect path, but managed mode is the supported default.</li>
         </ol>
 
         <h3>tmux integration</h3>
         <p>
-          Steward does not need TPM to call resurrect. Setup generates a small
-          tmux configuration containing steward options and keybindings, then
+          tmux-recovery does not need TPM to call resurrect. Setup generates a
+          small tmux configuration containing recovery options and keybindings, then
           adds one reversible managed source line to the active tmux config:
         </p>
 
-        <pre><code># >>> tmux-steward managed block >>>
-source-file ~/.config/tmux-steward/tmux.conf
-# &lt;&lt;&lt; tmux-steward managed block &lt;&lt;&lt;</code></pre>
+        <pre><code># >>> tmux-recovery managed block >>>
+source-file ~/.config/tmux-recovery/tmux.conf
+# &lt;&lt;&lt; tmux-recovery managed block &lt;&lt;&lt;</code></pre>
 
         <p>
           The generated file binds manual save and restore actions to the
@@ -1335,6 +1434,21 @@ source-file ~/.config/tmux-steward/tmux.conf
           <li><code>--socket</code> selects a non-default tmux socket for advanced users.</li>
           <li>No interactive prompt occurs when standard input is not a terminal unless explicitly requested.</li>
         </ul>
+
+        <h3>Machine-readable output contract</h3>
+        <pre><code>{
+  "schema_version": "1",
+  "command": "status",
+  "ok": true,
+  "data": {},
+  "warnings": [],
+  "error": null
+}</code></pre>
+        <p>
+          JSON is written only to standard output. Diagnostics and logs go to
+          standard error. Fields are additive within a schema version; removal,
+          reinterpretation, or type changes require a new output schema.
+        </p>
       </section>
 
       <section id="save">
@@ -1418,7 +1532,7 @@ source-file ~/.config/tmux-steward/tmux.conf
 
         <h3>SQLite boundary</h3>
         <p>
-          SQLite is not steward's snapshot store. It is a read-only provider
+          SQLite is not tmux-recovery's snapshot store. It is a read-only provider
           detail used to associate a running Codex process or working directory
           with a conversation thread. Because the SQLite command is absent on
           some observed hosts, the adapter should use an embedded read-only
@@ -1453,7 +1567,7 @@ source-file ~/.config/tmux-steward/tmux.conf
               <li>Restore oneshot service at user-session start.</li>
               <li>Save oneshot service called by a timer.</li>
               <li>Ten-minute default interval with small randomized delay.</li>
-              <li>Best-effort save before steward-managed tmux shutdown.</li>
+              <li>Best-effort save before tmux-recovery-managed tmux shutdown.</li>
               <li>User journal for logs.</li>
               <li>Optional documented lingering for boot-before-login servers; never enabled with sudo automatically.</li>
             </ul>
@@ -1509,9 +1623,10 @@ socket = "default"</code></pre>
         <ul>
           <li>Unknown keys are errors by default, preventing silent misspellings.</li>
           <li>Configuration has an explicit schema version and migrations.</li>
+          <li>Precedence is compiled defaults, configuration file, documented environment path overrides, then explicit CLI flags.</li>
           <li>Hostnames do not select behavior implicitly; profiles select capabilities.</li>
           <li>Secrets do not belong in the configuration.</li>
-          <li>Environment variables may override paths for testing, but normal policy lives in TOML.</li>
+          <li>Environment variables may override configuration and state paths for testing; lifecycle policy is never inferred implicitly from the environment.</li>
           <li><code>config validate</code> performs all checks without contacting the network.</li>
         </ul>
       </section>
@@ -1524,13 +1639,13 @@ socket = "default"</code></pre>
           <table>
             <thead><tr><th>Purpose</th><th>Default path</th><th>Notes</th></tr></thead>
             <tbody>
-              <tr><td>Configuration</td><td><code>~/.config/tmux-steward/</code></td><td>TOML and generated tmux integration.</td></tr>
+              <tr><td>Configuration</td><td><code>~/.config/tmux-recovery/</code></td><td>TOML and generated tmux integration.</td></tr>
               <tr><td>Snapshots</td><td><code>~/.local/share/tmux/resurrect/</code></td><td>Standard compatible resurrect directory.</td></tr>
-              <tr><td>Managed engines</td><td><code>~/.local/share/tmux-steward/engines/</code></td><td>Versioned upstream dependency extraction.</td></tr>
-              <tr><td>Stable binaries</td><td><code>~/.local/share/tmux-steward/bin/</code></td><td>Versioned service copies and current symlink.</td></tr>
-              <tr><td>Operation state</td><td><code>~/.local/state/tmux-steward/</code></td><td>Last-save metadata, restore markers, migrations.</td></tr>
+              <tr><td>Managed engines</td><td><code>~/.local/share/tmux-recovery/engines/</code></td><td>Versioned upstream dependency extraction.</td></tr>
+              <tr><td>Stable binaries</td><td><code>~/.local/share/tmux-recovery/bin/</code></td><td>Versioned service copies and current symlink.</td></tr>
+              <tr><td>Operation state</td><td><code>~/.local/state/tmux-recovery/</code></td><td>Last-save metadata, restore markers, migrations.</td></tr>
               <tr><td>Runtime locks</td><td><code>$XDG_RUNTIME_DIR</code> or <code>$TMPDIR</code></td><td>User-only and machine-local.</td></tr>
-              <tr><td>Cache</td><td><code>~/.cache/tmux-steward/</code></td><td>Regenerable package or inspection data.</td></tr>
+              <tr><td>Cache</td><td><code>~/.cache/tmux-recovery/</code></td><td>Regenerable package or inspection data.</td></tr>
               <tr><td>Services</td><td>systemd user dir or <code>~/Library/LaunchAgents/</code></td><td>Generated and checksummed.</td></tr>
             </tbody>
           </table>
@@ -1540,7 +1655,7 @@ socket = "default"</code></pre>
         <p>
           v1 intentionally retains tmux-resurrect's timestamped tab-separated
           text snapshots, <code>last</code> symlink, and optional
-          <code>pane_contents.tar.gz</code>. Steward may maintain a small
+          <code>pane_contents.tar.gz</code>. tmux-recovery may maintain a small
           sidecar metadata file for validation and trigger history, but it must
           not rewrite the upstream snapshot format.
         </p>
@@ -1599,7 +1714,7 @@ socket = "default"</code></pre>
         <p class="kicker">Operations</p>
         <h2>Status, logs, and diagnostics</h2>
 
-        <pre><code>$ tmux-steward status
+        <pre><code>$ tmux-recovery status
 CLI:             1.0.0
 Service binary:  1.0.0
 Engine:          tmux-resurrect 4.x (managed)
@@ -1644,6 +1759,7 @@ Health:          OK</code></pre>
               <li>Service template rendering.</li>
               <li>Process detection and command rendering.</li>
               <li>Codex schema probes with synthetic SQLite fixtures.</li>
+              <li>Fuzz targets for resurrect, tmux, configuration, and provider parsers.</li>
             </ul>
           </article>
           <article class="card">
@@ -1655,6 +1771,7 @@ Health:          OK</code></pre>
               <li>Manual/timer collision.</li>
               <li>Detached save with no current client.</li>
               <li>Partial provider restore and bootstrap cleanup.</li>
+              <li>Cancellation and child process-group termination.</li>
             </ul>
           </article>
           <article class="card">
@@ -1679,14 +1796,16 @@ Health:          OK</code></pre>
           </article>
         </div>
 
-        <h3>Language spike tests before implementation approval</h3>
+        <h3>Go foundation acceptance gates</h3>
         <ul>
-          <li>Equivalent Go and Rust proof artifacts, not production code.</li>
-          <li>Artifact size and startup benchmark.</li>
-          <li>Static Linux execution on Alma and c3p0.</li>
-          <li>Read-only SQLite query without external SQLite.</li>
+          <li><code>go test ./...</code>, <code>go vet ./...</code>, formatting, and module verification pass.</li>
+          <li>The race detector passes packages that exercise concurrency on supported CI runners.</li>
+          <li>Import-boundary checks prevent CLI and platform adapters from leaking into domain packages.</li>
+          <li>CGo-free Linux execution succeeds on Alma and c3p0.</li>
+          <li>Read-only SQLite access succeeds without external SQLite.</li>
           <li>Cross-platform file locking semantics.</li>
           <li>Subprocess signal forwarding under systemd and launchd.</li>
+          <li>Artifact size, startup time, dependency inventory, and vulnerability scan are recorded.</li>
         </ul>
       </section>
 
@@ -1696,16 +1815,25 @@ Health:          OK</code></pre>
 
         <h3>Target artifacts</h3>
         <ul>
-          <li>darwin-arm64</li>
-          <li>darwin-x64</li>
-          <li>linux-x64, built to run on the minimum supported Linux baseline</li>
-          <li>linux-arm64 when CI and hardware validation are available</li>
+          <li><code>darwin/arm64</code></li>
+          <li><code>darwin/amd64</code></li>
+          <li><code>linux/amd64</code>, CGo-free and tested on the minimum supported Linux baseline</li>
+          <li><code>linux/arm64</code> when CI and hardware validation are available</li>
+        </ul>
+
+        <h3>Go build invariants</h3>
+        <ul>
+          <li>Release builds use the pinned patched toolchain, <code>CGO_ENABLED=0</code>, <code>-trimpath</code>, and reproducible version metadata.</li>
+          <li>Version, commit, build date, dirty state, config schema, and engine version are exposed through <code>tmux-recovery version --json</code>.</li>
+          <li>No release binary dynamically depends on a system SQLite library.</li>
+          <li>Every platform artifact executes its version and doctor probes on a matching runner before publication.</li>
+          <li>Dependency licenses, <code>govulncheck</code> results, an SBOM, checksums, and build provenance accompany the release.</li>
         </ul>
 
         <h3>Release transaction</h3>
         <ol>
           <li>Tag one semantic version across core and npm packages.</li>
-          <li>Build and test native artifacts in platform CI jobs.</li>
+          <li>Verify modules, format, vet, test, fuzz smoke targets, scan, and build native artifacts in platform CI jobs.</li>
           <li>Generate checksums, SBOM, license bundle, and provenance.</li>
           <li>Publish GitHub release artifacts.</li>
           <li>Publish platform npm packages.</li>
@@ -1726,24 +1854,30 @@ Health:          OK</code></pre>
 
       <section id="repository">
         <p class="kicker">Source organization</p>
-        <h2>Proposed repository after language ratification</h2>
+        <h2>Approved Go source organization</h2>
 
-        <pre><code>tmux-steward/
+        <pre><code>tmux-recovery/
 ├── cmd/
-│   └── tmux-steward/           # native executable entry point
+│   └── tmux-recovery/
+│       └── main.go              # composition root and exit code only
 ├── internal/
-│   ├── app/                    # command routing and output contracts
-│   ├── config/                 # typed TOML and migrations
-│   ├── lifecycle/              # save/restore state machines
-│   ├── snapshot/               # resurrect format inspection
-│   ├── tmux/                   # tmux subprocess boundary
-│   ├── engine/                 # managed resurrect boundary
-│   ├── process/
-│   │   └── codex/              # built-in provider adapter
-│   ├── restore/                # direct and staged drivers
-│   ├── service/                # systemd and launchd adapters
-│   ├── install/                # setup transaction and rollback
-│   └── diagnose/               # status and doctor checks
+│   ├── cli/                     # Cobra tree, prompts, rendering
+│   ├── app/                     # save/restore/setup use cases
+│   ├── domain/                  # plans, results, invariants, errors
+│   ├── config/                  # strict TOML, defaults, migrations
+│   ├── snapshot/                # resurrect parsing and validation
+│   ├── tmux/                    # explicit tmux argv boundary
+│   ├── engine/
+│   │   └── resurrect/           # embedded engine lifecycle
+│   ├── providers/
+│   │   └── codex/               # isolated read-only SQLite adapter
+│   ├── restore/                 # direct and staged drivers
+│   ├── install/                 # transactional setup and rollback
+│   ├── diagnose/                # status and doctor probes
+│   └── platform/
+│       ├── lock/                # Darwin/Linux operation lock
+│       ├── launchd/             # LaunchAgent implementation
+│       └── systemd/             # user-unit implementation
 ├── assets/
 │   ├── resurrect/              # pinned upstream engine + licenses
 │   ├── systemd/                # embedded unit templates
@@ -1754,17 +1888,31 @@ Health:          OK</code></pre>
 │   ├── cli/                    # top-level launcher package
 │   └── platform/               # native platform package templates
 ├── tests/
-│   ├── fixtures/
-│   └── integration/
+│   └── integration/            # process and real-tmux acceptance
 ├── docs/
+│   └── adr/                    # subsequent architecture decisions
+├── go.mod
+├── go.sum
 ├── architecture.html
 └── README.md</code></pre>
 
         <div class="callout warning">
-          This structure is a specification, not an instruction to scaffold the
-          repository yet. The final names should follow the selected language's
-          conventions after ADR-001 is ratified.
+          This is the approved implementation shape, not application code.
+          Unit tests and fixtures live beside their Go packages in
+          <code>*_test.go</code> and <code>testdata/</code>; the top-level
+          <code>tests/integration</code> tree is reserved for black-box tests.
+          No public <code>pkg/</code> API is planned for v1.
         </div>
+
+        <h3>Package rules</h3>
+        <ul>
+          <li>Packages are organized around capabilities, not generic <code>util</code>, <code>common</code>, or <code>models</code> buckets.</li>
+          <li>Interfaces are declared where consumed and normally contain one to three methods.</li>
+          <li>Domain values cross package boundaries; Cobra commands, SQL rows, tmux output lines, and platform structs do not.</li>
+          <li>Provider and platform adapters translate external formats at their own boundary.</li>
+          <li>Only the composition root knows every concrete implementation.</li>
+          <li>Internal packages may later be split only when an actual dependency or test boundary requires it.</li>
+        </ul>
       </section>
 
       <section id="migration">
@@ -1790,9 +1938,9 @@ Health:          OK</code></pre>
           <li>Inventory existing configs, plugins, scripts, snapshots, and services.</li>
           <li>Create a timestamped rollback bundle excluding credentials and snapshot contents unless explicitly requested.</li>
           <li>Detect continuum and duplicate timers; plan their disablement.</li>
-          <li>Install steward in parallel without activating services.</li>
-          <li>Run a manual steward save and validate compatibility.</li>
-          <li>Disable legacy automation, enable steward, and verify one timer run.</li>
+          <li>Install tmux-recovery in parallel without activating services.</li>
+          <li>Run a manual tmux-recovery save and validate compatibility.</li>
+          <li>Disable legacy automation, enable tmux-recovery, and verify one timer run.</li>
           <li>Perform a controlled tmux server restart and restore.</li>
           <li>Reboot only after controlled restore passes.</li>
           <li>Retain legacy rollback definitions until the next successful reboot cycle.</li>
@@ -1803,9 +1951,9 @@ Health:          OK</code></pre>
         <p class="kicker">Delivery plan</p>
         <h2>Phased implementation strategy</h2>
 
-        <div class="phase"><div class="phase-number">0</div><div><h3>Ratify specification</h3><p>Review product scope, language decision criteria, install UX, dependency ownership, and security defaults. Make documentation-only revisions.</p></div></div>
-        <div class="phase"><div class="phase-number">1</div><div><h3>Language and packaging spike</h3><p>Compare Go and Rust throwaway prototypes and prove the npm platform-package model. Amend ADR-001 with measured evidence.</p></div></div>
-        <div class="phase"><div class="phase-number">2</div><div><h3>CLI skeleton and contracts</h3><p>Only after approval, create the native command framework, output schema, typed config, embedded assets, and test harness.</p></div></div>
+        <div class="phase"><div class="phase-number">0</div><div><h3>Architecture baseline</h3><p>Confirm the Go decision, product name, install UX, package boundaries, dependency ownership, and security defaults. Keep revisions documentation-only.</p></div></div>
+        <div class="phase"><div class="phase-number">1</div><div><h3>Go foundation proof</h3><p>Prove the CGo-free SQLite choice, locks, process cancellation, embedded engine, Linux compatibility, and npm platform-package model with a disposable vertical slice.</p></div></div>
+        <div class="phase"><div class="phase-number">2</div><div><h3>CLI foundation and contracts</h3><p>Create the Go module, composition root, command framework, versioned output schema, typed config, embedded assets, transaction primitives, and test harness.</p></div></div>
         <div class="phase"><div class="phase-number">3</div><div><h3>Snapshot core</h3><p>Implement engine provisioning, status, snapshot validation, locks, guarded save, and direct restore using isolated tmux sockets.</p></div></div>
         <div class="phase"><div class="phase-number">4</div><div><h3>Setup and services</h3><p>Implement transactional setup, tmux integration, stable service binary, systemd, launchd, doctor, and rollback.</p></div></div>
         <div class="phase"><div class="phase-number">5</div><div><h3>Process adapters</h3><p>Add the generic adapter contract and Codex adapter with synthetic SQLite fixtures and explicit unsafe-flag policy.</p></div></div>
@@ -1823,19 +1971,21 @@ Health:          OK</code></pre>
           <li><strong>The product is a standalone CLI.</strong> A personal script repository is not the intended user experience.</li>
           <li><strong>npm is the primary install channel.</strong> It may launch a native binary rather than define the core runtime.</li>
           <li><strong>Install and activation are separate.</strong> Package installation never edits config or starts services.</li>
-          <li><strong>tmux-resurrect remains the engine.</strong> Steward manages a pinned upstream copy instead of requiring TPM.</li>
+          <li><strong>tmux-resurrect remains the engine.</strong> tmux-recovery manages a pinned upstream copy instead of requiring TPM.</li>
           <li><strong>Native service managers own scheduling.</strong> v1 has no core resident daemon.</li>
           <li><strong>State remains local.</strong> Fleet machines share releases and policy, not snapshots.</li>
           <li><strong>Process replay is allowlisted.</strong> Arbitrary snapshot commands do not receive automatic trust.</li>
-          <li><strong>Go is the provisional core recommendation.</strong> It is not final until the language spike is reviewed.</li>
+          <li><strong>Go is the accepted core language.</strong> ADR-001 was accepted on 2026-07-19.</li>
+          <li><strong>The Go core is CGo-free by default.</strong> SQLite remains replaceable behind the Codex adapter boundary.</li>
+          <li><strong>The canonical product and command name is <code>tmux-recovery</code>.</strong></li>
         </ol>
 
         <h3>Open questions requiring review</h3>
         <ul>
-          <li>Final npm package name and organizational scope.</li>
+          <li>Whether the npm package remains unscoped or uses a maintainer-owned scope if registry acquisition changes.</li>
           <li>Minimum supported macOS release and Linux baseline.</li>
           <li>Whether Linux arm64 is part of v1 or the first minor release.</li>
-          <li>Which pure native or pure-Go SQLite implementation meets compatibility and supply-chain goals.</li>
+          <li>Whether the initial <code>modernc.org/sqlite</code> candidate passes compatibility, size, and supply-chain acceptance or is replaced behind the same interface.</li>
           <li>Whether the managed resurrect dependency tracks releases, commits, or a maintained compatibility patch set.</li>
           <li>Whether setup should enable recommended services under <code>--yes</code> or require a distinct <code>service enable</code>.</li>
           <li>Whether terminal-bootstrap remains necessary after a macOS permissions spike.</li>
@@ -1857,6 +2007,8 @@ Health:          OK</code></pre>
           <li>Platform differences are contained in tested adapters.</li>
           <li>Existing resurrect snapshots remain usable without conversion.</li>
           <li>Codex restoration works without requiring the external SQLite command.</li>
+          <li>Release binaries are CGo-free and require no target Go toolchain or system SQLite library.</li>
+          <li>Go package boundaries, cancellation behavior, race checks, parser fuzzing, and rollback paths are enforced in CI.</li>
           <li>Unsafe Codex flags are explicit, visible, and off by default.</li>
           <li>Setup, upgrade, repair, rollback, disable, and uninstall are documented and tested.</li>
           <li>npm artifacts, direct binaries, checksums, provenance, licenses, and an SBOM are published.</li>
@@ -1878,14 +2030,17 @@ Health:          OK</code></pre>
           <li><a href="https://github.com/tmuxinator/tmuxinator">tmuxinator</a> — declarative workspace and migration precedent.</li>
         </ul>
 
-        <h3>Language and packaging</h3>
+        <h3>Go implementation and packaging</h3>
         <ul>
           <li><a href="https://go.dev/doc/tutorial/compile-install">Go: compile and install an application</a>.</li>
           <li><a href="https://go.dev/doc/go1.16">Go embedded-file support</a>.</li>
-          <li><a href="https://doc.rust-lang.org/cargo/commands/cargo-build.html">Cargo build and target selection</a>.</li>
-          <li><a href="https://docs.python.org/3/library/distribution.html">Python packaging and zip applications</a>.</li>
-          <li><a href="https://www.pyinstaller.org/en/stable/operating-mode.html">PyInstaller runtime and platform bundle model</a>.</li>
-          <li><a href="https://bundler.io/guides/creating_gem.html">RubyGems and Bundler packaging</a>.</li>
+          <li><a href="https://go.dev/doc/devel/release">Go release history and patched toolchains</a>.</li>
+          <li><a href="https://go.dev/doc/modules/gomod-ref#toolchain">Go module toolchain directive</a>.</li>
+          <li><a href="https://pkg.go.dev/os/exec">Go process execution boundary</a>.</li>
+          <li><a href="https://pkg.go.dev/log/slog">Go structured logging</a>.</li>
+          <li><a href="https://github.com/spf13/cobra">Cobra command framework</a>.</li>
+          <li><a href="https://pkg.go.dev/modernc.org/sqlite">CGo-free SQLite driver candidate</a>.</li>
+          <li><a href="https://go.dev/security/vuln/">Go vulnerability management</a>.</li>
           <li><a href="https://docs.npmjs.com/downloading-and-installing-packages-globally/">npm global CLI installation</a>.</li>
           <li><a href="https://docs.npmjs.com/creating-and-publishing-scoped-public-packages/">npm scoped public package publication</a>.</li>
         </ul>
@@ -1895,7 +2050,7 @@ Health:          OK</code></pre>
           packaging precedent: its JavaScript entry point selects a
           platform-specific optional dependency containing the native
           executable, forwards signals, and mirrors the native exit result.
-          tmux-steward should adopt that architectural pattern without
+          tmux-recovery should adopt that architectural pattern without
           depending on Codex itself.
         </p>
       </section>
@@ -1903,7 +2058,7 @@ Health:          OK</code></pre>
   </div>
 
   <footer>
-    tmux-steward product and architecture specification · documentation only · no implementation or live service changes
+    tmux-recovery product and architecture specification · documentation only · no implementation or live service changes
   </footer>
 </body>
 </html>
