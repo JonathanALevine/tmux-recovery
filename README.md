@@ -29,6 +29,11 @@ application core, headless commands for automation, and a Bonsai_term TUI in
 the same native executable. Users receive precompiled macOS and Linux binaries
 and do not need OCaml, opam, Dune, OxCaml, Node, or npm.
 
+The canonical workspace model is a normalized graph of sessions, window links,
+windows, panes, and foreground applications. The TUI projects it into a
+tree-shaped navigator where every node opens a typed detail page; live state,
+snapshots, and recovery plans all use the same source-scoped identities.
+
 Canonical versioned release archives are the source for every install channel.
 The preferred managed installation is a Homebrew tap, with a checksum-verifying
 user-local installer for machines without Homebrew:

@@ -657,7 +657,7 @@
 
   <header>
     <div class="hero">
-      <p class="eyebrow">Product and architecture specification · draft 0.5 · 2026-07-20</p>
+      <p class="eyebrow">Product and architecture specification · draft 0.6 · 2026-07-20</p>
       <h1>tmux-recovery</h1>
       <p class="lede">
         A standalone native terminal application that makes tmux persistence installable,
@@ -668,6 +668,7 @@
       <div class="status-line" role="group" aria-label="Specification status">
         <span class="badge">Specification phase</span>
         <span class="badge ready">OCaml architecture accepted</span>
+        <span class="badge ready">Workspace graph + tree UI defined</span>
         <span class="badge ready">No implementation in repository</span>
       </div>
     </div>
@@ -877,6 +878,7 @@ tmux-recovery</code></pre>
               <tr><td>F-14</td><td>Support strict declarative rules for additional restartable applications without writing shell scripts.</td><td>Must</td></tr>
               <tr><td>F-15</td><td>Provide an interactive TUI for live state, snapshot comparison, recovery plans, service health, and deliberate operations.</td><td>Must</td></tr>
               <tr><td>F-16</td><td>Keep every service and automation workflow available through non-interactive commands without initializing the TUI.</td><td>Must</td></tr>
+              <tr><td>F-17</td><td>Present live workspaces, saved snapshots, and recovery plans through one tree-shaped navigation model with a detail page for every selectable node.</td><td>Must</td></tr>
             </tbody>
           </table>
         </div>
@@ -893,6 +895,8 @@ tmux-recovery</code></pre>
           <li><strong>NFR-08:</strong> supported service behavior must remain functional on tmux 2.7 through current tmux.</li>
           <li><strong>NFR-09:</strong> configuration must be declarative data, never sourced executable code.</li>
           <li><strong>NFR-10:</strong> failures must leave tmux attachable and the last-good snapshot intact.</li>
+          <li><strong>NFR-11:</strong> UI selection and expansion state must use stable typed resource identities, never labels, tree positions, or rendered paths.</li>
+          <li><strong>NFR-12:</strong> the TUI tree is a projection; presentation state must not become the canonical workspace or snapshot representation.</li>
         </ul>
       </section>
 
@@ -1267,6 +1271,73 @@ Review changes, then apply?              Yes</code></pre>
           <li>Adapters cannot import presentation modules or each other; platform selection is confined to the composition root and adapter implementations.</li>
         </ul>
 
+        <h3>Canonical workspace model: normalized graph</h3>
+        <p>
+          The user experiences tmux as a tree, but the canonical domain value is
+          a normalized graph. A tmux window may be linked into more than one
+          session, so copying complete windows beneath sessions would duplicate
+          identity and eventually allow contradictory state. Sessions therefore
+          own ordered window links; links reference canonical windows; windows
+          own panes; and each pane may identify one foreground application as
+          its recovery target.
+        </p>
+
+        <pre><code>type workspace_source =
+  | Live
+  | Snapshot of Snapshot_id.t
+
+type workspace = {
+  source : workspace_source;
+  server : Server.t;
+  sessions : Session.t Session_id.Map.t;
+  windows : Window.t Window_id.Map.t;
+  window_links : Window_link.t list;
+  panes : Pane.t Pane_id.Map.t;
+}
+
+type pane = {
+  id : Pane_id.t;
+  window_id : Window_id.t;
+  index : int;
+  cwd : Path.t;
+  tty : Tty.t option;
+  shell : Shell.t;
+  application : Application_instance.t option;
+}</code></pre>
+
+        <p>
+          <code>Application_instance</code> describes the foreground recovery
+          target—not every descendant process. It records normalized executable
+          identity, validated arguments, working directory, allowed environment
+          evidence, adapter identity, and recoverability metadata. A diagnostic
+          process tree may be retained separately, but it does not become the
+          default navigation hierarchy or imply that every subprocess can be
+          restored.
+        </p>
+
+        <h3>Workspace graph invariants</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Relationship</th><th>Invariant</th></tr></thead>
+            <tbody>
+              <tr><td>Workspace source</td><td>Every graph is explicitly live or belongs to exactly one immutable snapshot.</td></tr>
+              <tr><td>Session → window link</td><td>A session owns an ordered set of links; index and active state belong to the link, not the shared window.</td></tr>
+              <tr><td>Window link → window</td><td>Every link resolves to one canonical window. The same window may be linked from multiple sessions without copying it.</td></tr>
+              <tr><td>Window → pane</td><td>Every pane belongs to exactly one window and has a unique index within that window.</td></tr>
+              <tr><td>Pane → application</td><td>A pane has zero or one foreground recovery target. An absent target means a usable shell fallback, not a missing pane.</td></tr>
+              <tr><td>Identity</td><td>Typed IDs and workspace source define identity. Names, titles, indexes, and rendered tree paths are mutable presentation attributes.</td></tr>
+              <tr><td>Validation</td><td>Dangling links, duplicate indexes, impossible active selections, and cross-snapshot references are rejected before planning or rendering.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout decision">
+          <strong>Tree/graph boundary:</strong> application services return a
+          validated workspace graph. The TUI projects that graph into a tree of
+          selectable pages. CLI and JSON callers consume the graph and plans
+          directly and never depend on navigation nodes.
+        </div>
+
         <h3>Composition roots</h3>
         <p>
           One production composition root wires real filesystems, command
@@ -1423,6 +1494,112 @@ source-file ~/.config/tmux-recovery/tmux.conf
             </tbody>
           </table>
         </div>
+
+        <h3>Tree-shaped navigation and page routing</h3>
+        <p>
+          The primary TUI is a tree navigator paired with a selected detail
+          page. Every visible node carries a typed <code>Page_ref</code> and can
+          therefore become the current page. Nodes never embed mutable domain
+          records; they resolve their references against the current validated
+          workspace, snapshot, plan, or service model.
+        </p>
+
+        <pre><code>type workspace_ref =
+  | Live
+  | Snapshot of Snapshot_id.t
+
+type resource_ref =
+  | Workspace of workspace_ref
+  | Session of workspace_ref * Session_id.t
+  | Window_link of workspace_ref * Window_link_id.t
+  | Pane of workspace_ref * Pane_id.t
+  | Application of workspace_ref * Pane_id.t
+
+type page_ref =
+  | Overview
+  | Resource of resource_ref
+  | Snapshots
+  | Recovery_plan
+  | Services
+  | Doctor
+
+type navigation_node = {
+  page : page_ref;
+  label : string;
+  badges : Badge.t list;
+  children : navigation_node list;
+}
+
+type focus =
+  | Navigation
+  | Page
+
+type navigation_state = {
+  selected : page_ref;
+  expanded : Page_ref.Set.t;
+  focus : focus;
+  search : string option;
+}</code></pre>
+
+        <pre><code>Overview
+├── Live tmux
+│   ├── development
+│   │   ├── editor
+│   │   │   ├── pane 0
+│   │   │   │   └── nvim                 [restart]
+│   │   │   └── pane 1
+│   │   │       └── codex                [resume]
+│   │   └── monitoring
+│   │       └── pane 0
+│   │           └── btop                 [restart]
+│   └── research
+│       └── experiments
+│           └── pane 0
+│               └── python               [restart clean]
+├── Snapshots
+│   ├── latest · 2026-07-20 13:40
+│   └── 2026-07-20 13:30
+├── Recovery plan
+├── Services
+└── Doctor</code></pre>
+
+        <p>
+          Compact mode may render a pane and its application on one row, such
+          as <code>pane 1 · codex [resume]</code>, while retaining distinct pane
+          and application page references internally. A shell-only pane remains
+          selectable and simply has no application child.
+        </p>
+
+        <h3>Page responsibilities</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Selected node</th><th>Page contents</th></tr></thead>
+            <tbody>
+              <tr><td>Workspace</td><td>Source, server health, session/window/pane counts, snapshot freshness, and aggregate recovery readiness.</td></tr>
+              <tr><td>Session</td><td>Window links in session order, active window, shared-window indicators, and session-level recovery summary.</td></tr>
+              <tr><td>Window link</td><td>Canonical window identity, link index, linked sessions, layout, active pane, and ordered panes.</td></tr>
+              <tr><td>Pane</td><td>Geometry, title, working directory, shell, foreground process evidence, and recovery classification.</td></tr>
+              <tr><td>Application</td><td>Executable identity, redacted validated argv, adapter, fidelity, resume evidence, matched policy, and explanation.</td></tr>
+              <tr><td>Snapshot</td><td>Immutable saved workspace tree, validity, process manifest, comparison target, and restore entry point.</td></tr>
+              <tr><td>Recovery plan</td><td>Tree overlay of shell, restart, restart-clean, resume, and blocked actions plus plan-level warnings and approval.</td></tr>
+              <tr><td>Services / Doctor</td><td>Non-workspace operational pages that use the same navigator without pretending to be tmux resources.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Projection and interaction rules</h3>
+        <ul>
+          <li>The same projection function renders live state and any saved snapshot; the workspace source in each reference prevents accidental cross-source lookup.</li>
+          <li>A recovery plan is an overlay keyed by pane identity. It annotates the workspace tree rather than constructing a second contradictory topology.</li>
+          <li><code>Recovery_plan</code> is a stable page route; recomputing the current plan replaces page data without changing navigation identity or losing selection.</li>
+          <li>A window linked into multiple sessions appears beneath each session with a shared marker, but every occurrence resolves to the same canonical window.</li>
+          <li>Expansion state and selection are sets of stable page references. Refreshing labels, indexes, badges, or process observations does not move the user's selection.</li>
+          <li>If a live resource disappears, selection moves to its nearest surviving ancestor and the page explains that the resource ended.</li>
+          <li>Tree generation is deterministic: sessions, links, panes, snapshots, and badges have explicit stable sort orders so expect-test output cannot drift.</li>
+          <li>Large trees are incrementally rendered and may lazily construct closed descendants, while counts and warnings still come from one consistent workspace observation.</li>
+          <li>Wide terminals show navigation and page side by side. Narrow terminals show one surface at a time with an explicit back action; both modes preserve the same <code>Page_ref</code>.</li>
+          <li>Keyboard navigation supports next/previous visible node, parent/child, expand/collapse, page focus, search, and help without assigning recovery actions to bare navigation keys.</li>
+        </ul>
 
         <h3>Machine-readable output contract</h3>
         <pre><code>{
@@ -1886,6 +2063,9 @@ Health:          OK</code></pre>
             <ul>
               <li>Configuration parsing and migration.</li>
               <li>Snapshot parsing and validation.</li>
+              <li>Workspace graph invariants, source-scoped typed IDs, linked-window normalization, and deterministic ordering.</li>
+              <li>Tree projection from live and snapshot graphs without copying canonical resource state.</li>
+              <li>Recovery overlays keyed to panes, including missing and cross-snapshot reference rejection.</li>
               <li>Lock state and timestamp collision logic.</li>
               <li>Service template rendering.</li>
               <li>Process detection and command rendering.</li>
@@ -1901,6 +2081,10 @@ Health:          OK</code></pre>
             <ul>
               <li>Fixed terminal sizes, themes, and deterministic clocks.</li>
               <li>Keyboard navigation, focus, modal approval, cancellation, and resize behavior.</li>
+              <li>Every resource node routes to the correct typed detail page; pane and application pages remain distinct in compact rendering.</li>
+              <li>Linked windows render under each session while resolving to one canonical window record and retaining link-specific context.</li>
+              <li>Selection and expansion survive refresh, label/index changes, and live-node disappearance according to the fallback rule.</li>
+              <li>Live, snapshot, and recovery-plan trees share deterministic topology and badges without cross-source identity leakage.</li>
               <li>Text screenshot diffs for overview, pane inspection, recovery plans, doctor, and error states.</li>
               <li>Mutating actions prove the displayed plan is the exact application value submitted for execution.</li>
               <li>No live tmux server, corrupt snapshot, partial restore, and narrow-terminal accessibility states.</li>
@@ -2010,16 +2194,20 @@ Health:          OK</code></pre>
 │   ├── main.ml                  # composition root, Async scheduler, exit code
 │   └── dune
 ├── lib/
-│   ├── domain/                  # pure plans, invariants, results, typed errors
+│   ├── domain/                  # pure graph, plans, invariants, results, errors
+│   │   ├── workspace/           # sessions, window links, windows, panes, apps
+│   │   └── recovery/            # classifications, plans, fidelity, overlays
 │   ├── application/             # save/restore/setup use cases + port signatures
 │   ├── presentation_cli/        # Core.Command, prompts, human and JSON output
 │   ├── presentation_tui/        # Bonsai_term components and interaction state
-│   │   ├── overview/
-│   │   ├── sessions/
-│   │   ├── snapshots/
-│   │   ├── recovery_plan/
-│   │   ├── services/
-│   │   └── doctor/
+│   │   ├── navigation/          # page refs, tree projection, selection, search
+│   │   └── pages/
+│   │       ├── overview/
+│   │       ├── resources/       # workspace/session/window/pane/application
+│   │       ├── snapshots/
+│   │       ├── recovery_plan/
+│   │       ├── services/
+│   │       └── doctor/
 │   ├── config/                  # strict TOML, defaults, schema migrations
 │   ├── snapshot/                # resurrect parsing and validation
 │   └── adapters/
@@ -2074,6 +2262,8 @@ Health:          OK</code></pre>
           <li>Libraries are organized around capabilities, not generic <code>Util</code>, <code>Common</code>, or <code>Models</code> buckets.</li>
           <li>Port signatures are declared by the application library that consumes them and remain narrow.</li>
           <li>Domain values cross library boundaries; Bonsai nodes, command terms, SQL rows, tmux output lines, and platform records do not.</li>
+          <li>The canonical workspace graph lives in <code>domain/workspace</code>; recursive navigation nodes and <code>Page_ref</code> live in <code>presentation_tui/navigation</code>.</li>
+          <li>Presentation tree nodes store stable references, labels, badges, and children only. They never own copied sessions, windows, panes, application records, or recovery decisions.</li>
           <li>Provider and platform adapters translate external formats at their own boundary.</li>
           <li>Only the composition root knows every concrete implementation.</li>
           <li>Dune library dependencies encode and test the intended direction; there are no cyclic library dependencies.</li>
@@ -2119,8 +2309,8 @@ Health:          OK</code></pre>
 
         <div class="phase"><div class="phase-number">0</div><div><h3>Architecture baseline</h3><p>Confirm the OCaml decision, product name, TUI/CLI contract, distribution channels, library boundaries, dependency ownership, and security defaults. Keep revisions documentation-only.</p></div></div>
         <div class="phase"><div class="phase-number">1</div><div><h3>OCaml distribution proof</h3><p>Prove Bonsai_term on pinned OxCaml, native artifacts, static SQLite, Async cancellation, embedded engine extraction, AlmaLinux compatibility, Homebrew, and the verified installer with a disposable vertical slice.</p></div></div>
-        <div class="phase"><div class="phase-number">2</div><div><h3>Domain and headless contracts</h3><p>Create the Dune project, pure domain library, application ports, composition root, command interface, versioned JSON schema, typed config, transaction primitives, and expect-test foundation.</p></div></div>
-        <div class="phase"><div class="phase-number">3</div><div><h3>TUI foundation</h3><p>Build the Bonsai_term navigation shell and fake-data overview, sessions, snapshots, recovery-plan, services, and doctor views with deterministic terminal expect tests.</p></div></div>
+        <div class="phase"><div class="phase-number">2</div><div><h3>Domain and headless contracts</h3><p>Create the Dune project, normalized workspace graph, graph invariants, application ports, composition root, command interface, versioned JSON schema, typed config, transaction primitives, and expect-test foundation.</p></div></div>
+        <div class="phase"><div class="phase-number">3</div><div><h3>TUI foundation</h3><p>Build the Bonsai_term tree projection, typed page router, selection/expansion model, and fake-data workspace, snapshot, recovery-plan, services, and doctor pages with deterministic terminal expect tests.</p></div></div>
         <div class="phase"><div class="phase-number">4</div><div><h3>Snapshot core</h3><p>Implement engine provisioning, status, snapshot validation, locks, guarded save, and direct restore using isolated tmux sockets.</p></div></div>
         <div class="phase"><div class="phase-number">5</div><div><h3>Setup and services</h3><p>Implement transactional setup, tmux integration, stable service binary, systemd, launchd, doctor, and rollback through both presentation modes.</p></div></div>
         <div class="phase"><div class="phase-number">6</div><div><h3>Pane application recovery</h3><p>Add process discovery, conservative restart catalog, versioned manifests, plan/explain UX, clean REPL restart, and the Codex resume adapter with synthetic SQLite fixtures.</p></div></div>
@@ -2147,6 +2337,8 @@ Health:          OK</code></pre>
           <li><strong>Fidelity is part of the contract.</strong> A clean Python REPL restart must not be presented as restoration of variables or interpreter memory.</li>
           <li><strong>OCaml is the accepted whole-application language.</strong> ADR-003 supersedes ADR-001's prior Go decision.</li>
           <li><strong>Bonsai_term is the accepted TUI framework.</strong> The public OxCaml toolchain and dependency set are pinned and proven before product scaffolding.</li>
+          <li><strong>The canonical workspace is a normalized graph.</strong> Sessions reference canonical windows through ordered window links; windows own panes; panes optionally identify one foreground recovery target.</li>
+          <li><strong>The TUI is a tree-shaped projection of that graph.</strong> Every node routes through a typed page reference, and recovery plans annotate panes rather than duplicating topology.</li>
           <li><strong>SQLite is statically included in release artifacts.</strong> It remains read-only and replaceable behind the Codex adapter boundary.</li>
           <li><strong>The canonical product and command name is <code>tmux-recovery</code>.</strong></li>
         </ol>
@@ -2182,6 +2374,9 @@ Health:          OK</code></pre>
           <li>Unknown or unsafe applications fall back to shells without making the overall restore unusable.</li>
           <li>Users can preview and explain every pane's recovery classification without launching processes.</li>
           <li>The TUI presents live state, snapshots, recovery plans, services, and doctor results using the same typed application values as the headless CLI.</li>
+          <li>Every visible resource node opens a typed detail page, including session, linked window, pane, and foreground application nodes.</li>
+          <li>Linked tmux windows remain one canonical domain object even when the navigation tree displays them beneath multiple sessions.</li>
+          <li>Live, snapshot, and recovery-plan trees preserve source-scoped identity, deterministic ordering, and selection across refresh.</li>
           <li>Primary TUI journeys, errors, resizing, and approval flows are protected by deterministic terminal expect tests.</li>
           <li>Codex restoration works without requiring the external SQLite command.</li>
           <li>Release executables include the OCaml runtime and SQLite and require no target OCaml toolchain or system SQLite library.</li>
