@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -657,17 +657,17 @@
 
   <header>
     <div class="hero">
-      <p class="eyebrow">Product and architecture specification · draft 0.4 · 2026-07-19</p>
+      <p class="eyebrow">Product and architecture specification · draft 0.5 · 2026-07-20</p>
       <h1>tmux-recovery</h1>
       <p class="lede">
-        A standalone CLI utility that makes tmux persistence installable,
+        A standalone native terminal application that makes tmux persistence installable,
         automatic, safe, and understandable across macOS and Linux—without
         requiring users to assemble their own scripts, plugin hooks, timers,
         or boot services.
       </p>
-      <div class="status-line" aria-label="Specification status">
+      <div class="status-line" role="group" aria-label="Specification status">
         <span class="badge">Specification phase</span>
-        <span class="badge ready">Go architecture accepted</span>
+        <span class="badge ready">OCaml architecture accepted</span>
         <span class="badge ready">No implementation in repository</span>
       </div>
     </div>
@@ -683,12 +683,12 @@
         <li><a href="#scope">4. Scope and non-goals</a></li>
         <li><a href="#requirements">5. Requirements</a></li>
         <li><a href="#constraints">6. Fleet constraints</a></li>
-        <li><a href="#language">7. Go architecture decision</a></li>
+        <li><a href="#language">7. OCaml architecture decision</a></li>
         <li><a href="#distribution">8. Install and distribution</a></li>
         <li><a href="#first-run">9. First-run experience</a></li>
         <li><a href="#architecture">10. System architecture</a></li>
         <li><a href="#dependency">11. Resurrect ownership</a></li>
-        <li><a href="#cli">12. CLI specification</a></li>
+        <li><a href="#cli">12. CLI and TUI contract</a></li>
         <li><a href="#save">13. Save lifecycle</a></li>
         <li><a href="#restore">14. Restore lifecycle</a></li>
         <li><a href="#processes">15. Pane application recovery</a></li>
@@ -701,7 +701,7 @@
         <li><a href="#observability">22. Observability</a></li>
         <li><a href="#testing">23. Testing</a></li>
         <li><a href="#release">24. Release engineering</a></li>
-        <li><a href="#repository">25. Go repository layout</a></li>
+        <li><a href="#repository">25. OCaml repository layout</a></li>
         <li><a href="#migration">26. Fleet migration</a></li>
         <li><a href="#roadmap">27. Delivery phases</a></li>
         <li><a href="#decisions">28. Decisions and questions</a></li>
@@ -731,7 +731,7 @@
           <dt>Primary platforms</dt>
           <dd>macOS and Linux; Windows excluded except possible future WSL support</dd>
           <dt>Current recommendation</dt>
-          <dd>Go native core distributed through npm platform packages; ADR-001 accepted 2026-07-19</dd>
+          <dd>One OCaml/OxCaml native application with a Bonsai_term TUI; canonical release archives plus Homebrew and a verified installer; ADR-003 and ADR-004 accepted 2026-07-20</dd>
           <dt>Implementation authorization</dt>
           <dd>Architecture work only. Application scaffolding begins in the next explicitly approved phase.</dd>
         </dl>
@@ -754,9 +754,9 @@
           process-aware recovery.
         </p>
 
-        <pre><code>npm install -g tmux-recovery
+        <pre><code>brew install JonathanALevine/tap/tmux-recovery
 tmux-recovery setup
-tmux-recovery status</code></pre>
+tmux-recovery</code></pre>
 
         <p>
           The user should not need to understand TPM, tmux-resurrect's internal
@@ -816,7 +816,7 @@ tmux-recovery status</code></pre>
           <article class="card">
             <h3>In scope for v1</h3>
             <ul>
-              <li>One cohesive CLI with human and JSON output.</li>
+              <li>One cohesive native application with headless CLI commands, stable JSON output, and a Bonsai_term TUI.</li>
               <li>Managed tmux-resurrect dependency.</li>
               <li>Safe manual, timer, startup, and shutdown actions.</li>
               <li>systemd user services and macOS LaunchAgents.</li>
@@ -825,7 +825,7 @@ tmux-recovery status</code></pre>
               <li>Declarative user rules for additional executables and fixed restart commands.</li>
               <li>Application-aware resume adapters, with Codex as the first advanced adapter.</li>
               <li>Migration from common resurrect/continuum installations.</li>
-              <li>npm-based global installation plus direct release artifacts.</li>
+              <li>Precompiled release archives, a Homebrew tap, and a checksum-verifying installer.</li>
             </ul>
           </article>
           <article class="card">
@@ -861,7 +861,7 @@ tmux-recovery status</code></pre>
               </tr>
             </thead>
             <tbody>
-              <tr><td>F-01</td><td>Install as a globally callable CLI through npm.</td><td>Must</td></tr>
+              <tr><td>F-01</td><td>Install as a globally callable native executable without requiring an OCaml or Node runtime.</td><td>Must</td></tr>
               <tr><td>F-02</td><td>Provision a compatible resurrect engine without requiring TPM.</td><td>Must</td></tr>
               <tr><td>F-03</td><td>Install tmux integration idempotently with a backup and rollback path.</td><td>Must</td></tr>
               <tr><td>F-04</td><td>Save safely under manual, timer, and shutdown triggers.</td><td>Must</td></tr>
@@ -875,6 +875,8 @@ tmux-recovery status</code></pre>
               <tr><td>F-12</td><td>Migrate existing resurrect snapshots without conversion.</td><td>Must</td></tr>
               <tr><td>F-13</td><td>Preview and explain the process recovery plan before save or restore.</td><td>Must</td></tr>
               <tr><td>F-14</td><td>Support strict declarative rules for additional restartable applications without writing shell scripts.</td><td>Must</td></tr>
+              <tr><td>F-15</td><td>Provide an interactive TUI for live state, snapshot comparison, recovery plans, service health, and deliberate operations.</td><td>Must</td></tr>
+              <tr><td>F-16</td><td>Keep every service and automation workflow available through non-interactive commands without initializing the TUI.</td><td>Must</td></tr>
             </tbody>
           </table>
         </div>
@@ -882,7 +884,7 @@ tmux-recovery status</code></pre>
         <h3>Non-functional requirements</h3>
         <ul>
           <li><strong>NFR-01:</strong> core service execution must not depend on an interactive shell profile.</li>
-          <li><strong>NFR-02:</strong> normal commands should start in well under 100 ms on supported hardware.</li>
+          <li><strong>NFR-02:</strong> normal headless commands should start in well under 100 ms on supported hardware.</li>
           <li><strong>NFR-03:</strong> save and restore mutations must be serialized across all triggers.</li>
           <li><strong>NFR-04:</strong> installation and repair must be idempotent.</li>
           <li><strong>NFR-05:</strong> uninstall must preserve snapshots unless purge is explicitly requested.</li>
@@ -902,7 +904,9 @@ tmux-recovery status</code></pre>
           The language and packaging decision must account for the actual
           installed fleet, not only the development Mac. The following values
           were observed on 2026-07-16 and are deployment evidence rather than
-          permanent host guarantees.
+          permanent host guarantees. OCaml tooling was additionally checked on
+          the development Mac on 2026-07-20; other hosts do not need it because
+          release artifacts are precompiled.
         </p>
 
         <div class="table-wrap">
@@ -912,6 +916,7 @@ tmux-recovery status</code></pre>
                 <th>Host</th>
                 <th>OS / arch</th>
                 <th>Go</th>
+                <th>OCaml / opam</th>
                 <th>Python</th>
                 <th>Ruby</th>
                 <th>Rust</th>
@@ -920,11 +925,11 @@ tmux-recovery status</code></pre>
               </tr>
             </thead>
             <tbody>
-              <tr><td>mac</td><td>macOS arm64</td><td>1.26</td><td>3.14</td><td>2.6</td><td class="no">Missing</td><td>3.51</td><td>3.7b</td></tr>
-              <tr><td>arch</td><td>Linux amd64</td><td>1.26</td><td>3.14</td><td>3.4</td><td>1.97</td><td>3.53</td><td>3.7b</td></tr>
-              <tr><td>alma</td><td>Linux amd64</td><td>1.22</td><td>3.12</td><td class="no">Missing</td><td class="no">Missing</td><td>3.26</td><td>2.7</td></tr>
-              <tr><td>c3p0</td><td>Linux amd64</td><td class="no">Missing</td><td>3.12</td><td class="no">Missing</td><td class="no">Missing</td><td class="no">Missing</td><td>3.4</td></tr>
-              <tr><td>scott</td><td>Linux amd64</td><td>1.26</td><td>3.9</td><td class="no">Missing</td><td class="no">Missing</td><td class="no">Missing</td><td>3.2a</td></tr>
+              <tr><td>mac</td><td>macOS arm64</td><td>1.26</td><td class="no">Missing</td><td>3.14</td><td>2.6</td><td class="no">Missing</td><td>3.51</td><td>3.7b</td></tr>
+              <tr><td>arch</td><td>Linux amd64</td><td>1.26</td><td class="partial">Not audited</td><td>3.14</td><td>3.4</td><td>1.97</td><td>3.53</td><td>3.7b</td></tr>
+              <tr><td>alma</td><td>Linux amd64</td><td>1.22</td><td class="partial">Not audited</td><td>3.12</td><td class="no">Missing</td><td class="no">Missing</td><td>3.26</td><td>2.7</td></tr>
+              <tr><td>c3p0</td><td>Linux amd64</td><td class="no">Missing</td><td class="partial">Not audited</td><td>3.12</td><td class="no">Missing</td><td class="no">Missing</td><td class="no">Missing</td><td>3.4</td></tr>
+              <tr><td>scott</td><td>Linux amd64</td><td>1.26</td><td class="partial">Not audited</td><td>3.9</td><td class="no">Missing</td><td class="no">Missing</td><td class="no">Missing</td><td>3.2a</td></tr>
             </tbody>
           </table>
         </div>
@@ -933,232 +938,147 @@ tmux-recovery status</code></pre>
         <ul>
           <li>A source-runtime strategy must accommodate Python 3.9–3.14 or install its own runtime.</li>
           <li>Ruby and Rust cannot be assumed on target hosts.</li>
-          <li>Go cannot be assumed on every target host, but a precompiled Go binary needs no target Go toolchain.</li>
+          <li>OCaml, opam, Dune, and OxCaml cannot be assumed on target hosts; users receive a precompiled native executable that includes the OCaml runtime.</li>
           <li>The SQLite command cannot be assumed, so the Codex adapter cannot depend solely on invoking <code>sqlite3</code>.</li>
           <li>A native artifact should avoid a new glibc floor that excludes AlmaLinux 8.</li>
-          <li>Services must work without nvm, mise, Homebrew shell initialization, or interactive PATH changes.</li>
+          <li>Services must work without opam switches, nvm, mise, Homebrew shell initialization, or interactive PATH changes.</li>
         </ul>
       </section>
 
       <section id="language">
-        <p class="kicker">Architecture decision record ADR-001</p>
-        <h2>Go is the accepted implementation language</h2>
+        <p class="kicker">Architecture decision record ADR-003</p>
+        <h2>OCaml is the accepted implementation language</h2>
 
         <p>
-          The implementation language and the install channel are separate
-          decisions. The product core will be a Go executable. npm remains the
-          primary installer by placing that executable behind a small
-          JavaScript launcher and platform-specific packages.
+          The entire application—domain model, headless command interface,
+          orchestration, platform adapters, and interactive TUI—will be written
+          in OCaml. Production releases are native executables built by
+          OxCaml's <code>ocamlopt</code> toolchain. The user does not install
+          OCaml, opam, Dune, OxCaml, Node, or npm.
         </p>
 
         <div class="callout decision">
-          <strong>Decision:</strong> ADR-001 was accepted on 2026-07-19. Go is
-          selected for the native CLI because tmux-recovery is primarily an
-          orchestration, transaction, filesystem, and subprocess application.
-          Rust remains a respected alternative, but the project values a
-          smaller implementation burden and simpler release pipeline more than
-          Rust's additional compile-time control.
+          <strong>Decision:</strong> ADR-003 was accepted on 2026-07-20 and
+          supersedes ADR-001's Go selection and ADR-002's npm-first delivery
+          model. Bonsai_term makes the TUI a first-class product surface while
+          allowing the headless CLI and UI to share typed domain values and
+          application services in one native executable.
         </div>
 
-        <h3>Decision criteria</h3>
+        <h3>Why one OCaml application</h3>
         <ul>
-          <li>Target machines should not require a matching language runtime or compiler.</li>
-          <li>The application must supervise subprocesses, signals, locks, files, services, and terminal-oriented workflows reliably.</li>
-          <li>It must ship predictably for macOS arm64/x64 and Linux amd64, with Linux arm64 feasible.</li>
-          <li>It needs strong testing and typed configuration.</li>
-          <li>The Codex adapter needs read-only SQLite access even when the <code>sqlite3</code> program is absent.</li>
-          <li>Maintenance complexity should match a small infrastructure CLI, not a kernel component.</li>
+          <li>Recovery plans, snapshot state, safety decisions, and UI state use the same algebraic data types instead of an IPC schema between two languages.</li>
+          <li>Bonsai_term provides declarative composition, incremental rendering, and terminal screenshot expect tests.</li>
+          <li>Pure domain modules remain independent of the terminal, filesystem, Async scheduler, and platform APIs.</li>
+          <li>Native compilation produces a standalone executable with the OCaml runtime included.</li>
+          <li>The product remains a normal headless CLI under systemd and launchd; the TUI is an adapter, not the core.</li>
         </ul>
 
+        <h3>Recorded trade-offs</h3>
         <div class="table-wrap">
           <table>
-            <thead>
-              <tr>
-                <th>Candidate</th>
-                <th>Strengths</th>
-                <th>Weaknesses</th>
-                <th>Fit</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Area</th><th>Benefit</th><th>Cost and mitigation</th></tr></thead>
             <tbody>
-              <tr class="recommended">
-                <td>Go</td>
-                <td>Single native executable; straightforward cross-compilation; excellent subprocess, filesystem, embed, and testing support; low startup overhead; approachable maintenance.</td>
-                <td>A CGo-free SQLite driver adds binary and dependency weight. Platform service APIs still require explicit adapters.</td>
-                <td class="score-high">Accepted</td>
-              </tr>
-              <tr>
-                <td>Rust</td>
-                <td>Excellent correctness and performance; robust native binaries; strong bundled SQLite choices; precise signal and platform control.</td>
-                <td>Higher implementation and contributor complexity; cross-platform release plumbing is more involved; little benefit from its strongest safety features for mostly orchestration code.</td>
-                <td class="score-medium">Strong alternative</td>
-              </tr>
-              <tr>
-                <td>Python</td>
-                <td>Fastest development; excellent standard library; SQLite included; subprocess and testing are mature; Python exists on every observed host.</td>
-                <td>Observed versions range from 3.9 to 3.14; services depend on a stable interpreter path; zipapps still require Python; PyInstaller bundles are platform-specific and extract at runtime in one-file mode.</td>
-                <td class="score-medium">Good prototype, weaker product artifact</td>
-              </tr>
-              <tr>
-                <td>TypeScript / Node</td>
-                <td>Natural npm distribution; productive CLI ecosystem; familiar wrapper model; JSON handling is effortless.</td>
-                <td>Core service execution would depend on a stable Node runtime and global-package path unless it ultimately wraps a native binary. Version-manager paths are especially awkward at boot.</td>
-                <td class="score-medium">Best wrapper, not best core</td>
-              </tr>
-              <tr>
-                <td>Ruby</td>
-                <td>Readable; strong command-line culture; gems provide conventional packaging.</td>
-                <td>Missing on several hosts; the Mac system Ruby is old; runtime and Bundler paths complicate service execution; no unique advantage for this domain.</td>
-                <td class="score-low">Reject</td>
-              </tr>
-              <tr>
-                <td>Shell</td>
-                <td>Directly matches tmux-resurrect; ubiquitous; easy to inspect; minimal build system.</td>
-                <td>Quoting, data modeling, concurrency, portability, testing, structured output, service rendering, and error semantics become increasingly brittle—the exact problem this project is meant to resolve.</td>
-                <td class="score-low">Compatibility shims only</td>
-              </tr>
+              <tr><td>UI model</td><td>Bonsai_term components share types and application services with the CLI.</td><td>Bonsai_term currently requires OxCaml; pin the complete toolchain and test upgrades deliberately.</td></tr>
+              <tr><td>Distribution</td><td>Users receive one native executable and no language runtime.</td><td>Build natively for every OS/architecture instead of relying on simple cross-compilation.</td></tr>
+              <tr><td>Linux compatibility</td><td>OxCaml supports the required x86-64 and ARM64 architectures.</td><td>OxCaml currently requires glibc and does not support musl; build Linux releases on the AlmaLinux 8 baseline and verify symbol versions.</td></tr>
+              <tr><td>SQLite</td><td>The maintained OCaml SQLite bindings expose the required read-only API.</td><td>The binding uses C and <code>libsqlite3</code>; release builds vendor and statically link the SQLite amalgamation, then prove no system SQLite dependency remains.</td></tr>
+              <tr><td>Ecosystem</td><td>Core, Async, Dune, opam, and Jane Street testing libraries form a coherent stack.</td><td>The dependency graph is coordinated and comparatively specialized; commit lock metadata and retain a reproducible source manifest.</td></tr>
             </tbody>
           </table>
         </div>
 
-        <h3>Why Go fits this system</h3>
-        <p>
-          tmux-recovery is primarily an orchestration and policy application.
-          It needs reliable process execution and filesystem transactions more
-          than advanced memory control. Go provides the native artifact,
-          explicit error handling, concurrency primitives, standard-library
-          process control, embedded assets, and test tooling this product needs
-          without making ownership and lifetime mechanics part of every change.
-        </p>
-
-        <p>
-          The absence of Go on a target host is irrelevant to normal use.
-          Release artifacts are compiled in CI; target machines receive only
-          the native executable and managed assets. No host installs Go, Node,
-          npm, or a SQLite command in order for scheduled recovery to run.
-        </p>
-
-        <h3>Go toolchain policy</h3>
+        <h3>Toolchain policy</h3>
         <ul>
-          <li>The module path is <code>github.com/JonathanALevine/tmux-recovery</code>.</li>
-          <li>The initial source language baseline is Go 1.25; CI builds with the latest patched Go 1.26 toolchain.</li>
-          <li>The module and CI configuration pin the intended toolchain; developers do not rely on whichever Go happens to be first on <code>PATH</code>.</li>
-          <li>Production artifacts build with <code>CGO_ENABLED=0</code> unless a later ADR records a tested exception.</li>
-          <li><code>go mod tidy</code> produces a clean module graph and <code>go mod verify</code> is part of release validation.</li>
-          <li>The race detector, fuzz tests, static analysis, and vulnerability scanning run in CI where supported.</li>
+          <li>The compiler is a pinned OxCaml switch, initially based on the supported OCaml 5.2 OxCaml release line required by Bonsai_term.</li>
+          <li>Dune is the sole build orchestrator; <code>dune-project</code> is the source of package metadata and generates the opam file.</li>
+          <li>The project commits exact dependency constraints and a reproducible source manifest; CI never follows unpinned development branches.</li>
+          <li>Release artifacts use native compilation. Bytecode artifacts and <code>ocamlrun</code> are never shipped.</li>
+          <li>Compiler, Dune, Bonsai_term, Core, Async, Notty, and SQLite upgrades are tested as explicit dependency changes.</li>
+          <li>New runtime dependencies require a record of purpose, license, maintenance state, transitive weight, C linkage, and release impact.</li>
         </ul>
 
-        <h3>Dependency policy</h3>
+        <h3>Initial dependency boundaries</h3>
         <div class="table-wrap">
           <table>
-            <thead>
-              <tr><th>Concern</th><th>Decision</th><th>Boundary</th></tr>
-            </thead>
+            <thead><tr><th>Concern</th><th>Candidate</th><th>Boundary</th></tr></thead>
             <tbody>
-              <tr><td>CLI tree</td><td><code>github.com/spf13/cobra</code></td><td>Command declaration and help only; business logic stays in application packages.</td></tr>
-              <tr><td>Configuration</td><td><code>github.com/pelletier/go-toml/v2</code></td><td>Strict decode into versioned structs; no Viper or implicit environment merging.</td></tr>
-              <tr><td>SQLite</td><td>CGo-free <code>database/sql</code> driver, initially <code>modernc.org/sqlite</code></td><td>Used only inside the read-only Codex adapter and replaceable behind a narrow interface.</td></tr>
-              <tr><td>Logging</td><td>Standard <code>log/slog</code></td><td>Human and JSON handlers share the same redaction policy.</td></tr>
-              <tr><td>Process execution</td><td>Standard <code>os/exec</code> plus small platform files</td><td>Every child receives a context, explicit argv, a timeout policy, and captured exit metadata.</td></tr>
-              <tr><td>Embedded assets</td><td>Standard <code>embed</code></td><td>Resurrect, service templates, tmux integration, and license notices are checksummed at extraction.</td></tr>
-              <tr><td>Platform calls</td><td><code>golang.org/x/sys</code> only where the standard library is insufficient</td><td>Unix locking and process-group behavior remain isolated from domain logic.</td></tr>
-              <tr><td>Testing</td><td>Standard <code>testing</code>, golden fixtures, and narrowly justified helpers</td><td>No assertion framework becomes part of product packages.</td></tr>
+              <tr><td>Headless CLI</td><td><code>Core.Command</code> / <code>Command_unix</code></td><td>Argument parsing, help, and exit routing only; commands invoke application services.</td></tr>
+              <tr><td>TUI</td><td><code>bonsai_term</code>, components, and test libraries</td><td>Views, keyboard interaction, focus, and local UI state; no recovery policy.</td></tr>
+              <tr><td>Async work</td><td><code>Async</code> and <code>Core_unix</code></td><td>Signals, subprocesses, timeouts, file descriptors, and concurrent read-only probes.</td></tr>
+              <tr><td>Serialization</td><td>Strict TOML parser plus <code>Yojson</code> conversion</td><td>Versioned configuration and stable JSON DTOs are translated at presentation/storage boundaries.</td></tr>
+              <tr><td>SQLite</td><td><code>sqlite3-ocaml</code> with a vendored static SQLite build</td><td>Read-only and isolated inside the Codex adapter; never the snapshot database.</td></tr>
+              <tr><td>Embedded assets</td><td><code>ppx_embed_file</code> or a generated OCaml module</td><td>Pinned resurrect sources, templates, and licenses are checksummed before extraction.</td></tr>
+              <tr><td>Testing</td><td><code>ppx_expect</code>, inline tests, and Bonsai_term expect harnesses</td><td>Pure domain examples, golden parsers, terminal screenshots, and black-box fleet tests.</td></tr>
             </tbody>
           </table>
         </div>
-
-        <p>
-          Versions will be pinned in <code>go.mod</code> when implementation
-          begins. New runtime dependencies require a short record covering
-          purpose, license, maintenance, transitive weight, and whether the
-          standard library was insufficient.
-        </p>
 
         <h3>Concurrency and cancellation model</h3>
         <ul>
-          <li>The program is synchronous by default; no background worker or resident goroutine owns durable state.</li>
-          <li>Each command receives one root <code>context.Context</code> cancelled by signals or its caller.</li>
-          <li>Save, restore, setup, migration, and repair acquire the same process-wide operation lock before mutation.</li>
-          <li>Read-only diagnostics may run independent probes concurrently through a bounded group.</li>
-          <li>Child processes run in controlled process groups so cancellation reaches tmux-resurrect and helper processes.</li>
-          <li>No goroutine may outlive command shutdown; shutdown waits for owned work or reports the timeout.</li>
+          <li>The executable starts the Async scheduler once at the composition root; pure domain modules do not depend on Async.</li>
+          <li>Commands are short-lived jobs. No background fiber owns durable state after a command completes.</li>
+          <li>Save, restore, setup, migration, and repair acquire the same cross-process operation lock before mutation.</li>
+          <li>Read-only diagnostics may run concurrently through a bounded set of deferred jobs.</li>
+          <li>Every subprocess has explicit argv, environment, working directory, process-group ownership, timeout, and cancellation behavior.</li>
+          <li>Signal handling requests structured cancellation, terminates owned process groups, and waits for cleanup before choosing an exit code.</li>
         </ul>
 
         <h3>Error and transaction model</h3>
         <ul>
-          <li>Packages wrap errors with operation and resource context using <code>%w</code>; callers classify them with <code>errors.Is</code> and <code>errors.As</code>.</li>
-          <li>Expected failures use typed categories such as configuration, unavailable dependency, lock contention, invalid snapshot, unsupported provider schema, and partial restore.</li>
-          <li>Panics are reserved for impossible programmer invariants and are recovered only at the CLI boundary to produce a crash diagnostic.</li>
-          <li>Mutating commands build a plan, validate preconditions, print or approve the plan, apply steps, verify postconditions, and roll back reversible steps in reverse order.</li>
-          <li>Atomic file replacement uses a same-directory temporary file, permission setting, flush, rename, and directory synchronization where supported.</li>
-          <li>Rollback failure is never hidden; the result reports both the original failure and residual state.</li>
+          <li>Expected failure is represented by typed variants carrying operation and resource context; exceptions are reserved for violated programmer invariants or library boundaries.</li>
+          <li>Application services return explicit result values for configuration, unavailable dependency, lock contention, invalid snapshot, unsupported provider schema, cancellation, and partial restore.</li>
+          <li>The CLI and TUI translate the same error value into human text, stable JSON, or an interactive recovery action.</li>
+          <li>Mutating commands build a plan, validate preconditions, request approval where appropriate, apply steps, verify postconditions, and roll back reversible steps in reverse order.</li>
+          <li>Atomic replacement uses a same-directory temporary file, permissions, flush, rename, and directory synchronization where supported.</li>
+          <li>Rollback failure is retained alongside the original error; neither presentation surface may hide residual state.</li>
         </ul>
 
-        <h3>Go architecture proof before product scaffolding</h3>
+        <h3>OCaml distribution proof before product scaffolding</h3>
         <ol>
-          <li>Build one throwaway Go vertical slice outside the product source tree.</li>
-          <li>Prove macOS arm64 and Linux amd64 CGo-free artifacts in CI.</li>
-          <li>Run Linux artifact on AlmaLinux 8 and c3p0 without installing a toolchain.</li>
-          <li>Prove read-only access to synthetic Codex-style SQLite data without the SQLite CLI.</li>
-          <li>Prove signal propagation and lock behavior under timer/manual collision.</li>
-          <li>Prove CGo-free foreground process, executable, argv, and working-directory inspection on macOS and Linux.</li>
+          <li>Build a disposable Bonsai_term application with the pinned public OxCaml/opam dependency set.</li>
+          <li>Produce native macOS arm64/x64 and Linux amd64 executables on matching CI runners.</li>
+          <li>Build Linux on an AlmaLinux 8-compatible glibc baseline and run the artifact on alma, c3p0, Arch, and current Ubuntu without opam.</li>
+          <li>Vendor and statically link SQLite; prove read-only synthetic Codex queries without the SQLite CLI or a dynamic <code>libsqlite3</code>.</li>
+          <li>Prove signal propagation, Async cancellation, file locking, and child process-group cleanup.</li>
+          <li>Prove macOS and Linux foreground-process inspection without parsing captured text as shell syntax.</li>
           <li>Prove embedded resurrect extraction, checksum validation, and invocation by absolute path.</li>
-          <li>Record artifact size, startup time, dependency graph, and release workflow.</li>
-          <li>Amend technical details if evidence differs; Go itself remains the accepted language unless a new ADR supersedes this one.</li>
+          <li>Package the same binary through a release archive, Homebrew tap, and verified installer.</li>
+          <li>Record artifact size, startup time, dynamic dependencies, toolchain source manifest, and release duration before implementation authorization.</li>
         </ol>
       </section>
 
       <section id="distribution">
-        <p class="kicker">Architecture decision record ADR-002</p>
+        <p class="kicker">Architecture decision record ADR-004</p>
         <h2>Install and distribution architecture</h2>
 
         <p>
-          The desired primary experience is a global npm installation, similar
-          to other modern native CLIs:
+          The unit of distribution is a versioned release archive containing a
+          precompiled native executable, shell completions, a man page, license
+          notices, and build metadata. Every friendly package channel installs
+          the exact same tested artifact rather than rebuilding an independent
+          variant.
         </p>
 
-        <pre><code>npm install -g tmux-recovery
-tmux-recovery setup</code></pre>
+        <pre><code># Preferred on macOS and on machines already using Homebrew
+brew install JonathanALevine/tap/tmux-recovery
 
-        <p>
-          npm is the delivery channel, not necessarily the runtime. The
-          package should select a native binary built for the user's operating
-          system and CPU.
-        </p>
+# Portable user-local install for macOS and Linux
+curl -fsSL https://github.com/JonathanALevine/tmux-recovery/releases/latest/download/install.sh | sh
 
-        <h3>Recommended npm package topology</h3>
-        <pre><code>tmux-recovery
-├── bin/tmux-recovery.js
-└── optionalDependencies
-    ├── @tmux-recovery/cli-darwin-arm64
-    ├── @tmux-recovery/cli-darwin-x64
-    ├── @tmux-recovery/cli-linux-x64
-    └── @tmux-recovery/cli-linux-arm64</code></pre>
+tmux-recovery setup
+tmux-recovery</code></pre>
 
-        <p>
-          The top-level package declares the <code>tmux-recovery</code>
-          executable. Its small launcher resolves the installed platform
-          package, starts the native binary with inherited standard streams,
-          forwards termination signals, and mirrors the native exit status.
-          Platform packages contain no JavaScript application logic.
-        </p>
-
-        <div class="callout success">
-          <strong>Why optional platform packages:</strong> installation is
-          registry-native, supports npm, pnpm, and compatible package managers,
-          avoids an install-time download script, and continues to work when
-          users disable lifecycle scripts with <code>--ignore-scripts</code>.
+        <div class="callout decision">
+          <strong>Decision:</strong> npm is not required and is not a v1
+          dependency. It adds a Node-based launcher and four registry packages
+          without improving the native runtime. GitHub release archives are
+          canonical, Homebrew is the preferred managed experience, and the
+          installer provides a package-manager-independent path. An npm wrapper
+          may be added later only if demand justifies maintaining it.
         </div>
 
-        <h3>Package naming</h3>
-        <ul>
-          <li>Preferred public command: <code>tmux-recovery</code>.</li>
-          <li>Preferred unscoped package: <code>tmux-recovery</code>, subject to registry availability and ownership.</li>
-          <li>Fallback scoped package: <code>@tmux-recovery/cli</code> or a maintainer-owned scope.</li>
-          <li>Platform packages should be scoped even if the top-level package is unscoped.</li>
-        </ul>
-
-        <h3>Secondary install channels</h3>
+        <h3>Channel strategy</h3>
         <div class="table-wrap">
           <table>
             <thead>
@@ -1169,52 +1089,73 @@ tmux-recovery setup</code></pre>
               </tr>
             </thead>
             <tbody>
-              <tr><td>npm global</td><td>Primary familiar install and upgrade path.</td><td>v1 must</td></tr>
-              <tr><td>GitHub release archives</td><td>Direct native download, CI, offline, and non-Node users.</td><td>v1 must</td></tr>
-              <tr><td>Homebrew tap</td><td>Native macOS and Linuxbrew experience without Node.</td><td>v1 should</td></tr>
-              <tr><td>Install script</td><td>Convenience wrapper over signed/checksummed release artifacts.</td><td>Post-v1</td></tr>
-              <tr><td>System packages</td><td>Arch, Debian, RPM, or Nix community packaging.</td><td>Future</td></tr>
+              <tr><td>GitHub release archives</td><td>Canonical, immutable per-platform artifacts; direct, offline, and CI installation.</td><td>v1 must</td></tr>
+              <tr><td>Homebrew tap</td><td>Preferred macOS and optional Linuxbrew install/upgrade experience using the canonical artifacts.</td><td>v1 must</td></tr>
+              <tr><td>Verified installer</td><td>Detect OS/architecture, download a selected version, verify its checksum, and install under a user-owned prefix.</td><td>v1 must</td></tr>
+              <tr><td>opam package</td><td>Source installation for OCaml developers and contributors who already use the pinned OxCaml repository.</td><td>v1 should</td></tr>
+              <tr><td>npm wrapper</td><td>Optional discovery channel for Node-centric users; contains no product logic.</td><td>Post-v1, demand-driven</td></tr>
+              <tr><td>Native OS packages</td><td>Signed Debian, RPM, Arch, and Nix packages for managed fleets.</td><td>Post-v1</td></tr>
             </tbody>
           </table>
         </div>
 
+        <h3>Canonical archive contract</h3>
+        <pre><code>tmux-recovery-1.0.0-darwin-arm64.tar.gz
+├── bin/tmux-recovery
+├── share/man/man1/tmux-recovery.1
+├── share/completions/
+│   ├── tmux-recovery.bash
+│   ├── _tmux-recovery
+│   └── tmux-recovery.fish
+├── LICENSE
+├── THIRD_PARTY_LICENSES
+└── BUILD-METADATA.json</code></pre>
+
+        <ul>
+          <li>Archives are produced once in CI, checksummed, signed, attested, and smoke-tested before any package channel is updated.</li>
+          <li>The Homebrew tap and installer reference immutable versioned URLs and expected SHA-256 values.</li>
+          <li>The installer accepts <code>--version</code>, <code>--prefix</code>, and a download-only mode; it never activates services.</li>
+          <li>Offline installation is unpack-and-copy and requires no compiler or package manager.</li>
+        </ul>
+
         <h3>Install must not equal activation</h3>
         <p>
-          <code>npm install -g</code> must only install the command. It must not
-          edit tmux configuration, start a timer, create a LaunchAgent, enable
-          systemd units, or inspect personal snapshots during package
-          installation. Those actions belong to an explicit
+          Every channel only installs files. Homebrew, the verified installer,
+          opam, and a future npm wrapper must not edit tmux configuration,
+          start a timer, create a LaunchAgent, enable systemd units, or inspect
+          personal snapshots. Those actions belong to an explicit
           <code>tmux-recovery setup</code> transaction.
         </p>
 
         <h3>Stable service binary</h3>
         <p>
-          User services cannot safely depend on an nvm, mise, pnpm, or
-          Homebrew-initialized shell path. During setup, the native executable
-          should install an atomic service copy under a stable user-owned path:
+          User services cannot safely depend on a package manager's shell
+          initialization or versioned Cellar path. During setup, the native
+          executable installs an atomic service copy under a stable user-owned
+          path:
         </p>
 
         <pre><code>~/.local/share/tmux-recovery/
 └── bin/
     ├── 1.0.0/tmux-recovery
-    └── current -> 1.0.0</code></pre>
+    └── current -&gt; 1.0.0</code></pre>
 
         <p>
-          systemd and launchd invoke the stable <code>current</code> binary,
-          never Node. Running <code>tmux-recovery setup --sync</code> after an
-          npm upgrade installs the new service binary atomically and retains
-          the prior version for rollback. <code>doctor</code> warns when the
-          interactive CLI and service binary differ.
+          systemd and launchd invoke the stable <code>current</code> binary.
+          Running <code>tmux-recovery setup --sync</code> after any package
+          upgrade installs the new service binary atomically and retains the
+          prior version for rollback. <code>doctor</code> warns when the
+          interactive executable and service copy differ.
         </p>
 
         <h3>Upgrade and uninstall contract</h3>
         <ul>
-          <li><code>npm install -g tmux-recovery@latest</code> upgrades the interactive CLI.</li>
+          <li><code>brew upgrade tmux-recovery</code>, rerunning the versioned installer, or replacing the direct binary upgrades the interactive executable.</li>
           <li><code>tmux-recovery setup --sync</code> validates and advances the service binary.</li>
           <li>Automatic background self-update is out of scope.</li>
           <li><code>tmux-recovery uninstall</code> disables services and removes managed integration but preserves snapshots.</li>
           <li><code>tmux-recovery uninstall --purge</code> may remove configuration and application state after an explicit confirmation.</li>
-          <li>Removing the npm package alone should trigger a doctor warning if services remain, but the retained service binary prevents an immediate broken boot job.</li>
+          <li>Removing the package-manager copy does not silently remove an active service copy; explicit product uninstall remains the safe lifecycle path.</li>
         </ul>
       </section>
 
@@ -1274,14 +1215,18 @@ Review changes, then apply?              Yes</code></pre>
         <p class="kicker">Logical design</p>
         <h2>System architecture</h2>
 
-        <div class="stack" aria-label="Layered product architecture">
+        <div class="stack" role="group" aria-label="Layered product architecture">
           <div class="layer">
             <strong>Install channels</strong>
-            <p>npm launcher and platform packages, release archives, and optional Homebrew distribution.</p>
+            <p>Canonical release archives, Homebrew tap, verified installer, and optional ecosystem packages.</p>
           </div>
           <div class="layer">
-            <strong>Native CLI</strong>
-            <p>Commands, typed configuration, transaction planning, locking, lifecycle policy, diagnostics, structured output, and migrations.</p>
+            <strong>Presentation adapters</strong>
+            <p>Bonsai_term TUI plus headless human and JSON commands. Both call the same typed application services.</p>
+          </div>
+          <div class="layer">
+            <strong>Application and domain</strong>
+            <p>Recovery plans, invariants, transactions, locking policy, configuration, diagnostics, and migrations independent of presentation.</p>
           </div>
           <div class="layer">
             <strong>Platform adapters</strong>
@@ -1297,26 +1242,29 @@ Review changes, then apply?              Yes</code></pre>
           </div>
         </div>
 
-        <h3>Go dependency direction</h3>
-        <pre><code>cmd/tmux-recovery
-        │ composition root only
-        ▼
-internal/cli ─────► internal/app ─────► internal/domain
-                         │                    ▲
-                         │ uses ports         │ owns rules and types
-                         ▼                    │
-                 internal/platform ───────────┘
-                 internal/process
-                 internal/engine</code></pre>
+        <h3>OCaml dependency direction</h3>
+        <pre><code>bin/main.ml  (composition root + Async scheduler)
+     │
+     ├────► presentation_cli ──┐
+     └────► presentation_tui ──┤
+                               ▼
+                         application
+                         │         ▲
+                   uses port       │ owns use cases
+                  signatures       │
+                         ▼         │
+                       domain ◄────┘
+                         ▲
+                         │ implementations translate at boundary
+       adapters_tmux / resurrect / process / sqlite / platform</code></pre>
 
         <ul>
-          <li><code>cmd/tmux-recovery</code> constructs dependencies, installs signal handling, executes the root command, and maps the result to one exit code.</li>
-          <li><code>internal/cli</code> owns parsing, help, prompts, and human or JSON rendering; it contains no tmux policy.</li>
-          <li><code>internal/app</code> owns use cases such as save, restore, setup, doctor, migrate, and service management.</li>
-          <li><code>internal/domain</code> owns plans, invariants, snapshot summaries, operation results, and provider-neutral recovery types.</li>
-          <li>Adapters implement small interfaces declared by the package that consumes them. A large global service container is prohibited.</li>
-          <li>Process adapters cannot import CLI, service-manager, or another adapter package.</li>
-          <li>Platform-specific files use Go build constraints only at the platform boundary; common lifecycle logic has no operating-system build tags.</li>
+          <li><code>bin/main.ml</code> constructs concrete modules, starts Async, installs signal handling, selects CLI or TUI presentation, and maps the final result to one exit code.</li>
+          <li><code>presentation_cli</code> owns commands, help, prompts, and human/JSON rendering; <code>presentation_tui</code> owns Bonsai components and local interaction state. Neither owns recovery policy.</li>
+          <li><code>application</code> owns use cases such as save, restore, setup, doctor, migrate, and service management.</li>
+          <li><code>domain</code> owns plans, invariants, snapshot summaries, operation results, recovery types, and typed errors without Unix, Async, Bonsai, or SQLite dependencies.</li>
+          <li>Application services receive narrow first-class module implementations for clocks, locks, commands, tmux, storage, and providers.</li>
+          <li>Adapters cannot import presentation modules or each other; platform selection is confined to the composition root and adapter implementations.</li>
         </ul>
 
         <h3>Composition roots</h3>
@@ -1340,7 +1288,7 @@ internal/cli ─────► internal/app ─────► internal/domain
               </tr>
             </thead>
             <tbody>
-              <tr><td>Product control</td><td>CLI source, embedded templates, migrations, adapters, tests</td><td class="yes">Yes</td></tr>
+              <tr><td>Product control</td><td>CLI and TUI source, embedded templates, migrations, adapters, tests</td><td class="yes">Yes</td></tr>
               <tr><td>User policy</td><td>TOML configuration and generated tmux integration</td><td class="partial">User-managed</td></tr>
               <tr><td>Snapshots</td><td>Resurrect text files and optional pane archive</td><td class="no">Never</td></tr>
               <tr><td>Provider state</td><td>Codex databases and session files</td><td class="no">Never</td></tr>
@@ -1375,7 +1323,7 @@ internal/cli ─────► internal/app ─────► internal/domain
           <li>The native release embeds an exact upstream tmux-resurrect version and license notice.</li>
           <li>Setup extracts it under <code>~/.local/share/tmux-recovery/engines/resurrect/&lt;version&gt;</code>.</li>
           <li>The CLI calls the extracted save and restore scripts by absolute path.</li>
-          <li>Managed mode disables resurrect's native process replay; Go applies the validated process manifest only after layout restoration.</li>
+          <li>Managed mode disables resurrect's native process replay; the application layer applies the validated process manifest only after layout restoration.</li>
           <li>Snapshots remain in the standard XDG resurrect location for interoperability.</li>
           <li>Engine upgrades ship with tmux-recovery releases and pass compatibility tests.</li>
           <li>Advanced users may configure an external resurrect path, but managed mode is the supported default.</li>
@@ -1388,7 +1336,7 @@ internal/cli ─────► internal/app ─────► internal/domain
           adds one reversible managed source line to the active tmux config:
         </p>
 
-        <pre><code># >>> tmux-recovery managed block >>>
+        <pre><code># &gt;&gt;&gt; tmux-recovery managed block &gt;&gt;&gt;
 source-file ~/.config/tmux-recovery/tmux.conf
 # &lt;&lt;&lt; tmux-recovery managed block &lt;&lt;&lt;</code></pre>
 
@@ -1405,7 +1353,14 @@ source-file ~/.config/tmux-recovery/tmux.conf
 
       <section id="cli">
         <p class="kicker">Command contract</p>
-        <h2>The CLI is the product surface</h2>
+        <h2>One product, two presentation modes</h2>
+
+        <p>
+          Headless commands are the stable automation contract. Running
+          <code>tmux-recovery</code> on an interactive terminal opens the TUI;
+          <code>tmux-recovery ui</code> is the explicit equivalent. With no
+          terminal, no subcommand is an error and never initializes Bonsai_term.
+        </p>
 
         <div class="table-wrap">
           <table>
@@ -1417,6 +1372,7 @@ source-file ~/.config/tmux-recovery/tmux.conf
               </tr>
             </thead>
             <tbody>
+              <tr><td><code>ui</code></td><td>Open the interactive dashboard for live state, snapshots, recovery plans, services, and logs.</td><td>Reviewed actions only</td></tr>
               <tr><td><code>setup</code></td><td>Plan and apply installation, integration, services, and upgrades.</td><td>Yes, reviewed</td></tr>
               <tr><td><code>save</code></td><td>Create a guarded snapshot with a recorded trigger reason.</td><td>Snapshot</td></tr>
               <tr><td><code>restore</code></td><td>Restore latest, selected, or layout-only state.</td><td>tmux</td></tr>
@@ -1449,7 +1405,24 @@ source-file ~/.config/tmux-recovery/tmux.conf
           <li><code>--config</code> selects an alternate configuration file.</li>
           <li><code>--socket</code> selects a non-default tmux socket for advanced users.</li>
           <li>No interactive prompt occurs when standard input is not a terminal unless explicitly requested.</li>
+          <li>The TUI calls application services directly; it never scrapes human CLI output or invokes the executable recursively.</li>
+          <li>Every mutating TUI action displays the same typed plan and validation used by <code>--dry-run</code> before applying it.</li>
         </ul>
+
+        <h3>TUI information architecture</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>View</th><th>Purpose</th><th>Primary operations</th></tr></thead>
+            <tbody>
+              <tr><td>Overview</td><td>Live tmux, latest snapshot, automation health, version drift, and current warnings.</td><td>Refresh, save, open doctor.</td></tr>
+              <tr><td>Sessions</td><td>Tree of sessions, windows, panes, foreground applications, and recovery classification.</td><td>Inspect pane, explain rule, preview recovery.</td></tr>
+              <tr><td>Snapshots</td><td>Compare saved snapshots and their process manifests.</td><td>Preview, restore, mark, prune.</td></tr>
+              <tr><td>Recovery plan</td><td>Show exact shell fallback, restart, resume, and blocked decisions with fidelity warnings.</td><td>Approve restore or return without mutation.</td></tr>
+              <tr><td>Services</td><td>systemd/launchd state, timer schedule, stable binary version, and recent results.</td><td>Enable, disable, sync, view logs.</td></tr>
+              <tr><td>Doctor</td><td>Structured checks grouped by severity and repairability.</td><td>Inspect evidence and approve an available repair plan.</td></tr>
+            </tbody>
+          </table>
+        </div>
 
         <h3>Machine-readable output contract</h3>
         <pre><code>{
@@ -1604,7 +1577,7 @@ work:6.0   python app.py  blocked          shell fallback; script not approved</
         </p>
 
         <p>
-          This sequencing prevents upstream command strings from bypassing Go
+          This sequencing prevents upstream command strings from bypassing application
           policy. A compatibility shim may delegate from resurrect back to the
           stable CLI, but it contains only opaque snapshot and pane identifiers—
           never SQL, captured arguments, shell pipelines, or matching logic.
@@ -1860,9 +1833,9 @@ socket = "default"</code></pre>
           <li>Logs redact full command lines and provider identifiers unless explicit debug mode is enabled.</li>
           <li>No telemetry, analytics, or remote snapshot upload is enabled.</li>
           <li>Embedded upstream code retains licenses and attribution.</li>
-          <li>npm and release artifacts publish checksums, provenance, and an SBOM.</li>
-          <li>The npm launcher verifies that it found the expected platform package; it does not download executable code at runtime.</li>
-          <li>Package postinstall hooks are avoided.</li>
+          <li>Release archives publish checksums, signatures, provenance, a source manifest, and an SBOM.</li>
+          <li>The Homebrew tap and installer pin immutable release URLs and verify the expected checksum.</li>
+          <li>Package installation has no activation hook; user state changes require an explicit product command.</li>
         </ul>
       </section>
 
@@ -1920,7 +1893,17 @@ Health:          OK</code></pre>
               <li>Linux and macOS process observations normalize to the same argv and foreground-process model.</li>
               <li>Python REPL versus Python script detection and fidelity reporting.</li>
               <li>Codex schema probes with synthetic SQLite fixtures.</li>
-              <li>Fuzz targets for resurrect, tmux, configuration, and provider parsers.</li>
+              <li>Property tests for resurrect, tmux, configuration, and provider parsers.</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>TUI expect tests</h3>
+            <ul>
+              <li>Fixed terminal sizes, themes, and deterministic clocks.</li>
+              <li>Keyboard navigation, focus, modal approval, cancellation, and resize behavior.</li>
+              <li>Text screenshot diffs for overview, pane inspection, recovery plans, doctor, and error states.</li>
+              <li>Mutating actions prove the displayed plan is the exact application value submitted for execution.</li>
+              <li>No live tmux server, corrupt snapshot, partial restore, and narrow-terminal accessibility states.</li>
             </ul>
           </article>
           <article class="card">
@@ -1941,10 +1924,10 @@ Health:          OK</code></pre>
           <article class="card">
             <h3>Packaging tests</h3>
             <ul>
-              <li>npm, pnpm, and <code>--ignore-scripts</code> install.</li>
-              <li>Correct optional platform package resolution.</li>
-              <li>Signal and exit-status forwarding.</li>
-              <li>Direct release archive installation.</li>
+              <li>Direct release archive unpack-and-run on every target.</li>
+              <li>Homebrew tap installation and upgrade from immutable artifacts.</li>
+              <li>Verified installer version selection, checksum failure, custom prefix, and offline download mode.</li>
+              <li>Native executable signal and exit-status behavior without a launcher.</li>
               <li>Stable service binary sync and rollback.</li>
             </ul>
           </article>
@@ -1960,16 +1943,16 @@ Health:          OK</code></pre>
           </article>
         </div>
 
-        <h3>Go foundation acceptance gates</h3>
+        <h3>OCaml foundation acceptance gates</h3>
         <ul>
-          <li><code>go test ./...</code>, <code>go vet ./...</code>, formatting, and module verification pass.</li>
-          <li>The race detector passes packages that exercise concurrency on supported CI runners.</li>
-          <li>Import-boundary checks prevent CLI and platform adapters from leaking into domain packages.</li>
-          <li>CGo-free Linux execution succeeds on Alma and c3p0.</li>
-          <li>Read-only SQLite access succeeds without external SQLite.</li>
+          <li><code>dune build @all</code>, <code>dune runtest</code>, formatting, dependency consistency, and opam lint pass.</li>
+          <li>Library dependency checks prevent Async, Bonsai, Unix, SQLite, and presentation modules from leaking into the pure domain library.</li>
+          <li>Bonsai_term expect tests cover the primary interactive journeys and render deterministic text diffs.</li>
+          <li>The glibc-baseline Linux executable runs on Alma and c3p0 without opam, OCaml, Dune, or a system SQLite library.</li>
+          <li>Read-only SQLite access succeeds without the external SQLite command.</li>
           <li>Cross-platform file locking semantics.</li>
           <li>Subprocess signal forwarding under systemd and launchd.</li>
-          <li>Artifact size, startup time, dependency inventory, and vulnerability scan are recorded.</li>
+          <li>Artifact size, startup time, dynamic libraries, dependency/source inventory, and vulnerability scan are recorded.</li>
         </ul>
       </section>
 
@@ -1979,31 +1962,33 @@ Health:          OK</code></pre>
 
         <h3>Target artifacts</h3>
         <ul>
-          <li><code>darwin/arm64</code></li>
-          <li><code>darwin/amd64</code></li>
-          <li><code>linux/amd64</code>, CGo-free and tested on the minimum supported Linux baseline</li>
+          <li><code>darwin/arm64</code>, native Apple Silicon build</li>
+          <li><code>darwin/amd64</code>, native Intel build</li>
+          <li><code>linux/amd64</code>, built on the AlmaLinux 8 glibc baseline</li>
           <li><code>linux/arm64</code> when CI and hardware validation are available</li>
         </ul>
 
-        <h3>Go build invariants</h3>
+        <h3>OCaml build invariants</h3>
         <ul>
-          <li>Release builds use the pinned patched toolchain, <code>CGO_ENABLED=0</code>, <code>-trimpath</code>, and reproducible version metadata.</li>
+          <li>Release builds use the pinned OxCaml compiler, Dune, opam repository revisions, and dependency source manifest.</li>
+          <li>Each artifact is compiled natively on a matching OS/architecture runner; cross-compilation is not assumed.</li>
           <li>Version, commit, build date, dirty state, config schema, and engine version are exposed through <code>tmux-recovery version --json</code>.</li>
-          <li>No release binary dynamically depends on a system SQLite library.</li>
+          <li>The OCaml runtime and SQLite are linked into the artifact; Linux <code>ldd</code>/<code>readelf</code> and macOS <code>otool</code> audits reject unexpected package-manager libraries.</li>
+          <li>Linux artifacts reference no glibc symbol newer than the declared AlmaLinux 8 baseline and do not require musl.</li>
           <li>Every platform artifact executes its version and doctor probes on a matching runner before publication.</li>
-          <li>Dependency licenses, <code>govulncheck</code> results, an SBOM, checksums, and build provenance accompany the release.</li>
+          <li>Dependency licenses, opam source inventory, SQLite build options, an SBOM, checksums, signatures, and build provenance accompany the release.</li>
         </ul>
 
         <h3>Release transaction</h3>
         <ol>
-          <li>Tag one semantic version across core and npm packages.</li>
-          <li>Verify modules, format, vet, test, fuzz smoke targets, scan, and build native artifacts in platform CI jobs.</li>
-          <li>Generate checksums, SBOM, license bundle, and provenance.</li>
-          <li>Publish GitHub release artifacts.</li>
-          <li>Publish platform npm packages.</li>
-          <li>Publish the top-level npm launcher only after platform packages succeed.</li>
-          <li>Run clean-machine install smoke tests from the public registry.</li>
-          <li>Advance <code>latest</code>; use <code>next</code> for prereleases.</li>
+          <li>Tag one semantic version in the source repository.</li>
+          <li>Recreate the pinned OxCaml switch, verify formatting and tests, and build native artifacts in platform CI jobs.</li>
+          <li>Audit dynamic linkage, glibc symbols, embedded versions, licenses, and archive contents.</li>
+          <li>Generate checksums, signatures, SBOM, source manifest, license bundle, and provenance.</li>
+          <li>Publish immutable GitHub release artifacts as the canonical release.</li>
+          <li>Run clean-machine and fleet-baseline smoke tests against the published archives.</li>
+          <li>Update the Homebrew tap and installer release index only after canonical artifacts pass.</li>
+          <li>Publish the opam source package when its pinned OxCaml dependency set is available.</li>
         </ol>
 
         <h3>Version compatibility</h3>
@@ -2018,67 +2003,81 @@ Health:          OK</code></pre>
 
       <section id="repository">
         <p class="kicker">Source organization</p>
-        <h2>Approved Go source organization</h2>
+        <h2>Approved OCaml source organization</h2>
 
         <pre><code>tmux-recovery/
-├── cmd/
-│   └── tmux-recovery/
-│       └── main.go              # composition root and exit code only
-├── internal/
-│   ├── cli/                     # Cobra tree, prompts, rendering
-│   ├── app/                     # save/restore/setup use cases
-│   ├── domain/                  # plans, results, invariants, errors
-│   ├── config/                  # strict TOML, defaults, migrations
+├── bin/
+│   ├── main.ml                  # composition root, Async scheduler, exit code
+│   └── dune
+├── lib/
+│   ├── domain/                  # pure plans, invariants, results, typed errors
+│   ├── application/             # save/restore/setup use cases + port signatures
+│   ├── presentation_cli/        # Core.Command, prompts, human and JSON output
+│   ├── presentation_tui/        # Bonsai_term components and interaction state
+│   │   ├── overview/
+│   │   ├── sessions/
+│   │   ├── snapshots/
+│   │   ├── recovery_plan/
+│   │   ├── services/
+│   │   └── doctor/
+│   ├── config/                  # strict TOML, defaults, schema migrations
 │   ├── snapshot/                # resurrect parsing and validation
-│   ├── tmux/                    # explicit tmux argv boundary
-│   ├── engine/
-│   │   └── resurrect/           # embedded engine lifecycle
-│   ├── process/                  # discovery, classification, manifests
-│   │   ├── catalog/              # built-in conservative restart rules
-│   │   └── adapters/
-│   │       └── codex/            # isolated read-only SQLite resume
-│   ├── restore/                 # direct and staged drivers
-│   ├── install/                 # transactional setup and rollback
-│   ├── diagnose/                # status and doctor probes
-│   └── platform/
-│       ├── lock/                # Darwin/Linux operation lock
-│       ├── process/             # /proc and macOS process inspection
-│       ├── launchd/             # LaunchAgent implementation
-│       └── systemd/             # user-unit implementation
+│   └── adapters/
+│       ├── tmux/                # explicit tmux argv boundary
+│       ├── resurrect/           # embedded engine lifecycle
+│       ├── process/             # discovery, catalog, manifests
+│       ├── codex/               # isolated read-only SQLite resume
+│       ├── restore/             # direct and staged drivers
+│       ├── install/             # transactional setup and rollback
+│       ├── diagnose/            # status and doctor probes
+│       └── platform/
+│           ├── lock/            # Darwin/Linux operation lock
+│           ├── process/         # /proc and macOS process inspection
+│           ├── launchd/         # LaunchAgent implementation
+│           └── systemd/         # user-unit implementation
 ├── assets/
 │   ├── resurrect/              # pinned upstream engine + licenses
 │   ├── systemd/                # embedded unit templates
 │   ├── launchd/                # embedded plist templates
 │   ├── tmux/                   # managed config template
 │   └── shims/                  # minimal strategy delegates
-├── npm/
-│   ├── cli/                    # top-level launcher package
-│   └── platform/               # native platform package templates
 ├── tests/
-│   └── integration/            # process and real-tmux acceptance
+│   ├── integration/            # process and real-tmux acceptance
+│   ├── tui/                    # end-to-end Bonsai_term expect scenarios
+│   └── fixtures/               # synthetic snapshots, process trees, SQLite
+├── packaging/
+│   ├── homebrew/               # tap formula template
+│   ├── installer/              # verified user-local installer source
+│   └── release/                # archive manifest and linkage checks
+├── vendor/
+│   └── sqlite/                 # pinned amalgamation + build metadata
 ├── docs/
-│   └── adr/                    # subsequent architecture decisions
-├── go.mod
-├── go.sum
+│   └── adr/                    # architecture decision records
+├── dune-project
+├── dune-workspace
+├── tmux-recovery.opam          # generated from dune-project
+├── tmux-recovery.opam.locked   # exact build constraints/source manifest
+├── .ocamlformat
 ├── architecture.html
 └── README.md</code></pre>
 
         <div class="callout warning">
           This is the approved implementation shape, not application code.
-          Unit tests and fixtures live beside their Go packages in
-          <code>*_test.go</code> and <code>testdata/</code>; the top-level
-          <code>tests/integration</code> tree is reserved for black-box tests.
-          No public <code>pkg/</code> API is planned for v1.
+          Inline and expect tests normally live beside the library they test;
+          the top-level test trees are reserved for black-box, cross-library,
+          and full-screen TUI scenarios. No stable public OCaml library API is
+          promised for v1.
         </div>
 
-        <h3>Package rules</h3>
+        <h3>Library rules</h3>
         <ul>
-          <li>Packages are organized around capabilities, not generic <code>util</code>, <code>common</code>, or <code>models</code> buckets.</li>
-          <li>Interfaces are declared where consumed and normally contain one to three methods.</li>
-          <li>Domain values cross package boundaries; Cobra commands, SQL rows, tmux output lines, and platform structs do not.</li>
+          <li>Libraries are organized around capabilities, not generic <code>Util</code>, <code>Common</code>, or <code>Models</code> buckets.</li>
+          <li>Port signatures are declared by the application library that consumes them and remain narrow.</li>
+          <li>Domain values cross library boundaries; Bonsai nodes, command terms, SQL rows, tmux output lines, and platform records do not.</li>
           <li>Provider and platform adapters translate external formats at their own boundary.</li>
           <li>Only the composition root knows every concrete implementation.</li>
-          <li>Internal packages may later be split only when an actual dependency or test boundary requires it.</li>
+          <li>Dune library dependencies encode and test the intended direction; there are no cyclic library dependencies.</li>
+          <li>Functors are used only where they create a real substitution boundary; ordinary functions and first-class modules are preferred for small ports.</li>
         </ul>
       </section>
 
@@ -2118,15 +2117,16 @@ Health:          OK</code></pre>
         <p class="kicker">Delivery plan</p>
         <h2>Phased implementation strategy</h2>
 
-        <div class="phase"><div class="phase-number">0</div><div><h3>Architecture baseline</h3><p>Confirm the Go decision, product name, install UX, package boundaries, dependency ownership, and security defaults. Keep revisions documentation-only.</p></div></div>
-        <div class="phase"><div class="phase-number">1</div><div><h3>Go foundation proof</h3><p>Prove the CGo-free SQLite choice, locks, process cancellation, embedded engine, Linux compatibility, and npm platform-package model with a disposable vertical slice.</p></div></div>
-        <div class="phase"><div class="phase-number">2</div><div><h3>CLI foundation and contracts</h3><p>Create the Go module, composition root, command framework, versioned output schema, typed config, embedded assets, transaction primitives, and test harness.</p></div></div>
-        <div class="phase"><div class="phase-number">3</div><div><h3>Snapshot core</h3><p>Implement engine provisioning, status, snapshot validation, locks, guarded save, and direct restore using isolated tmux sockets.</p></div></div>
-        <div class="phase"><div class="phase-number">4</div><div><h3>Setup and services</h3><p>Implement transactional setup, tmux integration, stable service binary, systemd, launchd, doctor, and rollback.</p></div></div>
-        <div class="phase"><div class="phase-number">5</div><div><h3>Pane application recovery</h3><p>Add process discovery, conservative restart catalog, versioned manifests, plan/explain UX, clean REPL restart, and the Codex resume adapter with synthetic SQLite fixtures.</p></div></div>
-        <div class="phase"><div class="phase-number">6</div><div><h3>npm and release pipeline</h3><p>Publish prerelease native artifacts and platform packages; validate clean installs and upgrades.</p></div></div>
-        <div class="phase"><div class="phase-number">7</div><div><h3>Canary migration</h3><p>Migrate the local Mac, then arch and alma one at a time with controlled restart, reboot, and rollback tests.</p></div></div>
-        <div class="phase"><div class="phase-number">8</div><div><h3>Public v1</h3><p>Finalize documentation, Homebrew option, security provenance, support matrix, and stable npm release.</p></div></div>
+        <div class="phase"><div class="phase-number">0</div><div><h3>Architecture baseline</h3><p>Confirm the OCaml decision, product name, TUI/CLI contract, distribution channels, library boundaries, dependency ownership, and security defaults. Keep revisions documentation-only.</p></div></div>
+        <div class="phase"><div class="phase-number">1</div><div><h3>OCaml distribution proof</h3><p>Prove Bonsai_term on pinned OxCaml, native artifacts, static SQLite, Async cancellation, embedded engine extraction, AlmaLinux compatibility, Homebrew, and the verified installer with a disposable vertical slice.</p></div></div>
+        <div class="phase"><div class="phase-number">2</div><div><h3>Domain and headless contracts</h3><p>Create the Dune project, pure domain library, application ports, composition root, command interface, versioned JSON schema, typed config, transaction primitives, and expect-test foundation.</p></div></div>
+        <div class="phase"><div class="phase-number">3</div><div><h3>TUI foundation</h3><p>Build the Bonsai_term navigation shell and fake-data overview, sessions, snapshots, recovery-plan, services, and doctor views with deterministic terminal expect tests.</p></div></div>
+        <div class="phase"><div class="phase-number">4</div><div><h3>Snapshot core</h3><p>Implement engine provisioning, status, snapshot validation, locks, guarded save, and direct restore using isolated tmux sockets.</p></div></div>
+        <div class="phase"><div class="phase-number">5</div><div><h3>Setup and services</h3><p>Implement transactional setup, tmux integration, stable service binary, systemd, launchd, doctor, and rollback through both presentation modes.</p></div></div>
+        <div class="phase"><div class="phase-number">6</div><div><h3>Pane application recovery</h3><p>Add process discovery, conservative restart catalog, versioned manifests, plan/explain UX, clean REPL restart, and the Codex resume adapter with synthetic SQLite fixtures.</p></div></div>
+        <div class="phase"><div class="phase-number">7</div><div><h3>Release pipeline</h3><p>Publish prerelease archives, checksums, provenance, Homebrew formula, and installer index; validate clean installs, upgrades, linkage, and rollback.</p></div></div>
+        <div class="phase"><div class="phase-number">8</div><div><h3>Canary migration</h3><p>Migrate the local Mac, then arch and alma one at a time with controlled restart, reboot, and rollback tests.</p></div></div>
+        <div class="phase"><div class="phase-number">9</div><div><h3>Public v1</h3><p>Finalize documentation, opam source package, security provenance, support matrix, canonical archives, Homebrew tap, and verified installer.</p></div></div>
       </section>
 
       <section id="decisions">
@@ -2135,8 +2135,8 @@ Health:          OK</code></pre>
 
         <h3>Recorded decisions</h3>
         <ol class="decision-list">
-          <li><strong>The product is a standalone CLI.</strong> A personal script repository is not the intended user experience.</li>
-          <li><strong>npm is the primary install channel.</strong> It may launch a native binary rather than define the core runtime.</li>
+          <li><strong>The product is one standalone native application.</strong> It exposes a Bonsai_term TUI and headless CLI; a personal script repository is not the intended user experience.</li>
+          <li><strong>Release archives are canonical.</strong> Homebrew and the verified installer install those artifacts; npm is optional and deferred.</li>
           <li><strong>Install and activation are separate.</strong> Package installation never edits config or starts services.</li>
           <li><strong>tmux-resurrect remains the engine.</strong> tmux-recovery manages a pinned upstream copy instead of requiring TPM.</li>
           <li><strong>Native service managers own scheduling.</strong> v1 has no core resident daemon.</li>
@@ -2145,17 +2145,18 @@ Health:          OK</code></pre>
           <li><strong>Ordinary applications use declarative restart rules.</strong> A compiled adapter is required only for application-owned resume state.</li>
           <li><strong>Arbitrary snapshot commands are never trusted.</strong> There is no restore-all mode or implicit shell evaluation.</li>
           <li><strong>Fidelity is part of the contract.</strong> A clean Python REPL restart must not be presented as restoration of variables or interpreter memory.</li>
-          <li><strong>Go is the accepted core language.</strong> ADR-001 was accepted on 2026-07-19.</li>
-          <li><strong>The Go core is CGo-free by default.</strong> SQLite remains replaceable behind the Codex adapter boundary.</li>
+          <li><strong>OCaml is the accepted whole-application language.</strong> ADR-003 supersedes ADR-001's prior Go decision.</li>
+          <li><strong>Bonsai_term is the accepted TUI framework.</strong> The public OxCaml toolchain and dependency set are pinned and proven before product scaffolding.</li>
+          <li><strong>SQLite is statically included in release artifacts.</strong> It remains read-only and replaceable behind the Codex adapter boundary.</li>
           <li><strong>The canonical product and command name is <code>tmux-recovery</code>.</strong></li>
         </ol>
 
         <h3>Open questions requiring review</h3>
         <ul>
-          <li>Whether the npm package remains unscoped or uses a maintainer-owned scope if registry acquisition changes.</li>
           <li>Minimum supported macOS release and Linux baseline.</li>
           <li>Whether Linux arm64 is part of v1 or the first minor release.</li>
-          <li>Whether the initial <code>modernc.org/sqlite</code> candidate passes compatibility, size, and supply-chain acceptance or is replaced behind the same interface.</li>
+          <li>Whether the pinned Bonsai_term/OxCaml combination remains stable enough after the distribution proof or requires a versioned compatibility fork.</li>
+          <li>Whether <code>sqlite3-ocaml</code> can consume the vendored static amalgamation unchanged or needs a minimal maintained build patch.</li>
           <li>Whether the managed resurrect dependency tracks releases, commits, or a maintained compatibility patch set.</li>
           <li>Whether setup should enable recommended services under <code>--yes</code> or require a distinct <code>service enable</code>.</li>
           <li>Whether terminal-bootstrap remains necessary after a macOS permissions spike.</li>
@@ -2169,23 +2170,25 @@ Health:          OK</code></pre>
         <h2>Definition of done for a coherent v1 system</h2>
 
         <ul class="check-list">
-          <li>A new user can install with one npm command and complete setup without manually cloning plugins.</li>
-          <li>The service runtime is independent of Node and shell-profile initialization.</li>
+          <li>A new user can install with one Homebrew or verified-installer command and complete setup without manually cloning plugins.</li>
+          <li>The service runtime is independent of Node, OCaml tooling, package managers, and shell-profile initialization.</li>
           <li>Manual, timer, and shutdown saves cannot corrupt one another.</li>
           <li>A partial restore cannot replace the last-good snapshot.</li>
-          <li>macOS and Linux use the same CLI and common lifecycle logic.</li>
+          <li>macOS and Linux use the same native application and common lifecycle logic.</li>
           <li>Platform differences are contained in tested adapters.</li>
           <li>Existing resurrect snapshots remain usable without conversion.</li>
           <li><code>htop</code> and <code>btop</code> restart automatically in their reconstructed panes under the default conservative policy.</li>
           <li>A configured bare Python REPL restarts cleanly and clearly reports that its in-memory namespace was not recovered.</li>
           <li>Unknown or unsafe applications fall back to shells without making the overall restore unusable.</li>
           <li>Users can preview and explain every pane's recovery classification without launching processes.</li>
+          <li>The TUI presents live state, snapshots, recovery plans, services, and doctor results using the same typed application values as the headless CLI.</li>
+          <li>Primary TUI journeys, errors, resizing, and approval flows are protected by deterministic terminal expect tests.</li>
           <li>Codex restoration works without requiring the external SQLite command.</li>
-          <li>Release binaries are CGo-free and require no target Go toolchain or system SQLite library.</li>
-          <li>Go package boundaries, cancellation behavior, race checks, parser fuzzing, and rollback paths are enforced in CI.</li>
+          <li>Release executables include the OCaml runtime and SQLite and require no target OCaml toolchain or system SQLite library.</li>
+          <li>OCaml library boundaries, Async cancellation, property tests, TUI expect tests, and rollback paths are enforced in CI.</li>
           <li>Unsafe Codex flags are explicit, visible, and off by default.</li>
           <li>Setup, upgrade, repair, rollback, disable, and uninstall are documented and tested.</li>
-          <li>npm artifacts, direct binaries, checksums, provenance, licenses, and an SBOM are published.</li>
+          <li>Canonical archives, a Homebrew tap, verified installer, checksums, signatures, provenance, licenses, source manifest, and an SBOM are published.</li>
           <li>mac, arch, and alma pass controlled restart and real reboot acceptance tests.</li>
           <li>No core production behavior remains as an unversioned script in a user's <code>~/bin</code>.</li>
           <li>Failures are diagnosable through status, doctor, JSON output, and platform logs.</li>
@@ -2205,28 +2208,26 @@ Health:          OK</code></pre>
           <li><a href="https://github.com/tmuxinator/tmuxinator">tmuxinator</a> — declarative workspace and migration precedent.</li>
         </ul>
 
-        <h3>Go implementation and packaging</h3>
+        <h3>OCaml, TUI, and packaging</h3>
         <ul>
-          <li><a href="https://go.dev/doc/tutorial/compile-install">Go: compile and install an application</a>.</li>
-          <li><a href="https://go.dev/doc/go1.16">Go embedded-file support</a>.</li>
-          <li><a href="https://go.dev/doc/devel/release">Go release history and patched toolchains</a>.</li>
-          <li><a href="https://go.dev/doc/modules/gomod-ref#toolchain">Go module toolchain directive</a>.</li>
-          <li><a href="https://pkg.go.dev/os/exec">Go process execution boundary</a>.</li>
-          <li><a href="https://pkg.go.dev/log/slog">Go structured logging</a>.</li>
-          <li><a href="https://github.com/spf13/cobra">Cobra command framework</a>.</li>
-          <li><a href="https://pkg.go.dev/modernc.org/sqlite">CGo-free SQLite driver candidate</a>.</li>
-          <li><a href="https://go.dev/security/vuln/">Go vulnerability management</a>.</li>
-          <li><a href="https://docs.npmjs.com/downloading-and-installing-packages-globally/">npm global CLI installation</a>.</li>
-          <li><a href="https://docs.npmjs.com/creating-and-publishing-scoped-public-packages/">npm scoped public package publication</a>.</li>
+          <li><a href="https://blog.janestreet.com/strace-ui-bonsai-term-and-the-tui-renaissance/">Jane Street: strace-ui, Bonsai_term, and the TUI renaissance</a>.</li>
+          <li><a href="https://github.com/janestreet/bonsai_term">Bonsai_term source and installation</a>.</li>
+          <li><a href="https://github.com/janestreet/bonsai_term_examples">Bonsai_term examples and expect-test patterns</a>.</li>
+          <li><a href="https://oxcaml.org/get-oxcaml/">OxCaml installation and current platform limitations</a>.</li>
+          <li><a href="https://ocaml.org/tools/native-target">OCaml native standalone executables</a>.</li>
+          <li><a href="https://dune.readthedocs.io/en/stable/howto/opam-file-generation.html">Dune opam metadata generation</a>.</li>
+          <li><a href="https://opam.ocaml.org/doc/Packaging.html">opam packaging guide</a>.</li>
+          <li><a href="https://github.com/mmottl/sqlite3-ocaml">sqlite3-ocaml bindings and C linkage</a>.</li>
+          <li><a href="https://docs.brew.sh/Formula-Cookbook">Homebrew formula packaging</a>.</li>
+          <li><a href="https://docs.brew.sh/Bottles">Homebrew binary bottles</a>.</li>
         </ul>
 
         <p>
-          The locally installed Codex npm package was also inspected as a
-          packaging precedent: its JavaScript entry point selects a
-          platform-specific optional dependency containing the native
-          executable, forwards signals, and mirrors the native exit result.
-          tmux-recovery should adopt that architectural pattern without
-          depending on Codex itself.
+          The Jane Street article is archived locally under
+          <code>~/research/inbox/Jane Street Blog - strace-ui, Bonsai_term, and the TUI renaissance/</code>.
+          Its composable UI and terminal expect-test model informed ADR-003.
+          The previous Codex-style npm launcher design remains documented by
+          repository history, but ADR-004 removes it from the v1 critical path.
         </p>
       </section>
     </main>
