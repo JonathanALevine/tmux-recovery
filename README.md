@@ -9,7 +9,8 @@ then adds the lifecycle controls needed for unattended operation:
 - guarded and serialized saves;
 - startup and shutdown integration;
 - staged restore drivers;
-- process-aware Codex restoration;
+- policy-driven restart of ordinary pane applications;
+- application-aware resume for tools such as Codex;
 - systemd user units and macOS LaunchAgents;
 - installation, diagnostics, and migration tooling.
 
@@ -45,6 +46,7 @@ tmux-recovery save
 tmux-recovery restore
 tmux-recovery status
 tmux-recovery doctor
+tmux-recovery processes plan
 tmux-recovery service status
 tmux-recovery service enable
 tmux-recovery service disable

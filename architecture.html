@@ -657,7 +657,7 @@
 
   <header>
     <div class="hero">
-      <p class="eyebrow">Product and architecture specification · draft 0.3 · 2026-07-19</p>
+      <p class="eyebrow">Product and architecture specification · draft 0.4 · 2026-07-19</p>
       <h1>tmux-recovery</h1>
       <p class="lede">
         A standalone CLI utility that makes tmux persistence installable,
@@ -691,7 +691,7 @@
         <li><a href="#cli">12. CLI specification</a></li>
         <li><a href="#save">13. Save lifecycle</a></li>
         <li><a href="#restore">14. Restore lifecycle</a></li>
-        <li><a href="#processes">15. Process adapters</a></li>
+        <li><a href="#processes">15. Pane application recovery</a></li>
         <li><a href="#codex">16. Codex adapter</a></li>
         <li><a href="#services">17. Background services</a></li>
         <li><a href="#config">18. Configuration</a></li>
@@ -780,7 +780,7 @@ tmux-recovery status</code></pre>
         <div class="grid">
           <article class="card">
             <h3>Single-machine developer</h3>
-            <p>Wants sessions, panes, paths, and selected tools to return after a laptop update or reboot with minimal configuration.</p>
+            <p>Wants sessions, panes, paths, and everyday tools such as htop, btop, editors, and REPLs to return after a laptop update or reboot.</p>
           </article>
           <article class="card">
             <h3>Multi-host operator</h3>
@@ -801,6 +801,7 @@ tmux-recovery status</code></pre>
           <li>Install the CLI globally and complete guided setup.</li>
           <li>Confirm that automatic saving is active.</li>
           <li>Reboot and find the tmux workspace reconstructed.</li>
+          <li>Preview which pane applications will restart, resume, or fall back to a shell.</li>
           <li>Inspect status after a failed or partial restoration.</li>
           <li>Upgrade the CLI without losing snapshots or service configuration.</li>
           <li>Disable or uninstall automation without deleting user state.</li>
@@ -820,8 +821,9 @@ tmux-recovery status</code></pre>
               <li>Safe manual, timer, startup, and shutdown actions.</li>
               <li>systemd user services and macOS LaunchAgents.</li>
               <li>Snapshot inspection and validation.</li>
-              <li>Conservative process replay with built-in adapters.</li>
-              <li>Codex restoration as the first advanced adapter.</li>
+              <li>Conservative generic restart for approved pane applications.</li>
+              <li>Declarative user rules for additional executables and fixed restart commands.</li>
+              <li>Application-aware resume adapters, with Codex as the first advanced adapter.</li>
               <li>Migration from common resurrect/continuum installations.</li>
               <li>npm-based global installation plus direct release artifacts.</li>
             </ul>
@@ -830,6 +832,8 @@ tmux-recovery status</code></pre>
             <h3>Not in scope for v1</h3>
             <ul>
               <li>Keeping live processes alive through a reboot.</li>
+              <li>Checkpointing or recreating arbitrary process memory, open sockets, file descriptors, or kernel state.</li>
+              <li>Automatically replaying every captured command line.</li>
               <li>Synchronizing snapshots between machines.</li>
               <li>Replacing tmux, tmuxp, or tmuxinator.</li>
               <li>General dotfile management.</li>
@@ -865,10 +869,12 @@ tmux-recovery status</code></pre>
               <tr><td>F-06</td><td>Prevent incomplete restore state from replacing the last-good snapshot.</td><td>Must</td></tr>
               <tr><td>F-07</td><td>Expose status, diagnostics, logs, and repair operations.</td><td>Must</td></tr>
               <tr><td>F-08</td><td>Support human-readable and stable JSON output.</td><td>Must</td></tr>
-              <tr><td>F-09</td><td>Restore only allowlisted applications through explicit adapters.</td><td>Must</td></tr>
+              <tr><td>F-09</td><td>Classify each pane as shell fallback, approved restart, or application-aware resume.</td><td>Must</td></tr>
               <tr><td>F-10</td><td>List, inspect, select, and prune snapshots.</td><td>Should</td></tr>
               <tr><td>F-11</td><td>Generate shell completions and a man page.</td><td>Should</td></tr>
               <tr><td>F-12</td><td>Migrate existing resurrect snapshots without conversion.</td><td>Must</td></tr>
+              <tr><td>F-13</td><td>Preview and explain the process recovery plan before save or restore.</td><td>Must</td></tr>
+              <tr><td>F-14</td><td>Support strict declarative rules for additional restartable applications without writing shell scripts.</td><td>Must</td></tr>
             </tbody>
           </table>
         </div>
@@ -1095,6 +1101,7 @@ tmux-recovery status</code></pre>
           <li>Run Linux artifact on AlmaLinux 8 and c3p0 without installing a toolchain.</li>
           <li>Prove read-only access to synthetic Codex-style SQLite data without the SQLite CLI.</li>
           <li>Prove signal propagation and lock behavior under timer/manual collision.</li>
+          <li>Prove CGo-free foreground process, executable, argv, and working-directory inspection on macOS and Linux.</li>
           <li>Prove embedded resurrect extraction, checksum validation, and invocation by absolute path.</li>
           <li>Record artifact size, startup time, dependency graph, and release workflow.</li>
           <li>Amend technical details if evidence differs; Go itself remains the accepted language unless a new ADR supersedes this one.</li>
@@ -1222,17 +1229,20 @@ tmux-recovery 1.0.0
 ✓ macOS LaunchAgent support found
 ✓ Existing tmux config found at ~/.config/tmux/tmux.conf
 ✓ Existing resurrect snapshots found; they will be preserved
+✓ Process plan: htop 2 restart; btop 1 restart; Codex 12 resume; Python 1 restart-clean
 
 Enable automatic save every 10 minutes?  Yes
 Restore at login?                        Yes
 Capture pane contents?                  No
+Enable conservative app restarts?       Yes
+Restart bare Python REPLs without state? Yes
 Enable Codex conversation restoration?  Yes
 
 Review changes, then apply?              Yes</code></pre>
 
         <h3>Setup transaction</h3>
         <div class="flow">
-          <div class="flow-step"><strong>Inspect</strong><span>OS, tmux, config, snapshots, service manager</span></div>
+          <div class="flow-step"><strong>Inspect</strong><span>OS, tmux, config, snapshots, pane applications, service manager</span></div>
           <div class="flow-step"><strong>Plan</strong><span>show every file and service change</span></div>
           <div class="flow-step"><strong>Backup</strong><span>copy modified config and legacy definitions</span></div>
           <div class="flow-step"><strong>Apply</strong><span>install engine, integration, stable binary, services</span></div>
@@ -1243,6 +1253,7 @@ Review changes, then apply?              Yes</code></pre>
         <ul>
           <li>Interactive setup prompts before enabling services.</li>
           <li><code>setup --yes</code> accepts recommended defaults for automated installs.</li>
+          <li>Recommended defaults enable the built-in conservative catalog, not newly invented rules or replay-all behavior.</li>
           <li><code>setup --dry-run --json</code> emits a machine-readable change plan.</li>
           <li>Setup is idempotent and may be rerun for upgrades or repairs.</li>
           <li>A failed setup rolls back files changed in the current transaction.</li>
@@ -1295,7 +1306,7 @@ internal/cli ─────► internal/app ─────► internal/domain
                          │ uses ports         │ owns rules and types
                          ▼                    │
                  internal/platform ───────────┘
-                 internal/providers
+                 internal/process
                  internal/engine</code></pre>
 
         <ul>
@@ -1304,7 +1315,7 @@ internal/cli ─────► internal/app ─────► internal/domain
           <li><code>internal/app</code> owns use cases such as save, restore, setup, doctor, migrate, and service management.</li>
           <li><code>internal/domain</code> owns plans, invariants, snapshot summaries, operation results, and provider-neutral recovery types.</li>
           <li>Adapters implement small interfaces declared by the package that consumes them. A large global service container is prohibited.</li>
-          <li>Provider packages cannot import CLI, service-manager, or another provider package.</li>
+          <li>Process adapters cannot import CLI, service-manager, or another adapter package.</li>
           <li>Platform-specific files use Go build constraints only at the platform boundary; common lifecycle logic has no operating-system build tags.</li>
         </ul>
 
@@ -1364,6 +1375,7 @@ internal/cli ─────► internal/app ─────► internal/domain
           <li>The native release embeds an exact upstream tmux-resurrect version and license notice.</li>
           <li>Setup extracts it under <code>~/.local/share/tmux-recovery/engines/resurrect/&lt;version&gt;</code>.</li>
           <li>The CLI calls the extracted save and restore scripts by absolute path.</li>
+          <li>Managed mode disables resurrect's native process replay; Go applies the validated process manifest only after layout restoration.</li>
           <li>Snapshots remain in the standard XDG resurrect location for interoperability.</li>
           <li>Engine upgrades ship with tmux-recovery releases and pass compatibility tests.</li>
           <li>Advanced users may configure an external resurrect path, but managed mode is the supported default.</li>
@@ -1385,7 +1397,9 @@ source-file ~/.config/tmux-recovery/tmux.conf
           stable service binary and supplies resurrect options. Existing
           user-managed resurrect installations are detected and either adopted
           explicitly or left untouched; setup must never create two competing
-          automatic save systems.
+          automatic save systems. Managed settings also prevent upstream
+          <code>@resurrect-processes</code> rules from bypassing the application's
+          restart policy.
         </p>
       </section>
 
@@ -1411,6 +1425,8 @@ source-file ~/.config/tmux-recovery/tmux.conf
               <tr><td><code>snapshots list</code></td><td>List saved snapshots with age, size, sessions, and validity.</td><td>No</td></tr>
               <tr><td><code>snapshots show</code></td><td>Show a redacted summary of a snapshot.</td><td>No</td></tr>
               <tr><td><code>snapshots prune</code></td><td>Apply configured retention while preserving last-good state.</td><td>Yes</td></tr>
+              <tr><td><code>processes plan</code></td><td>Classify live or saved panes as shell, restart, resume, or blocked and explain the resulting command safely.</td><td>No</td></tr>
+              <tr><td><code>processes explain</code></td><td>Show the matching rule, captured state, redactions, and expected fidelity for one pane.</td><td>No</td></tr>
               <tr><td><code>service status</code></td><td>Show installed definitions and current platform service state.</td><td>No</td></tr>
               <tr><td><code>service enable</code></td><td>Enable automatic save and restore.</td><td>Yes</td></tr>
               <tr><td><code>service disable</code></td><td>Stop automation without deleting snapshots.</td><td>Yes</td></tr>
@@ -1459,9 +1475,9 @@ source-file ~/.config/tmux-recovery/tmux.conf
         <div class="phase"><div class="phase-number">2</div><div><h3>Lock</h3><p>Acquire the machine-local lifecycle lock. Manual, keybinding, timer, and shutdown saves share the same lock namespace as restore.</p></div></div>
         <div class="phase"><div class="phase-number">3</div><div><h3>Gate</h3><p>Exit successfully when no tmux server exists, only the bootstrap session exists, or a restore transaction has not committed.</p></div></div>
         <div class="phase"><div class="phase-number">4</div><div><h3>Separate timestamps</h3><p>Ensure the generated resurrect filename differs from the prior locked save second, preventing same-name rotation and dangling <code>last</code> links.</p></div></div>
-        <div class="phase"><div class="phase-number">5</div><div><h3>Capture</h3><p>Invoke the managed engine with a controlled environment and process-adapter configuration.</p></div></div>
-        <div class="phase"><div class="phase-number">6</div><div><h3>Validate</h3><p>Confirm that <code>last</code> resolves to a readable snapshot containing at least one real pane and that optional pane archives are structurally valid.</p></div></div>
-        <div class="phase"><div class="phase-number">7</div><div><h3>Commit</h3><p>Atomically record last-save metadata and emit a concise structured event. A safe no-op returns success.</p></div></div>
+        <div class="phase"><div class="phase-number">5</div><div><h3>Capture</h3><p>Inspect each pane's foreground process tree, classify its recovery action, then invoke the managed engine with a controlled environment.</p></div></div>
+        <div class="phase"><div class="phase-number">6</div><div><h3>Validate</h3><p>Confirm that <code>last</code> resolves to a readable snapshot containing at least one real pane, optional pane archives are structurally valid, and every manifest record maps to one saved pane.</p></div></div>
+        <div class="phase"><div class="phase-number">7</div><div><h3>Commit</h3><p>Atomically commit the snapshot-bound process manifest and last-save metadata, then emit a concise structured event. A safe no-op returns success.</p></div></div>
       </section>
 
       <section id="restore">
@@ -1471,8 +1487,8 @@ source-file ~/.config/tmux-recovery/tmux.conf
         <div class="phase"><div class="phase-number">1</div><div><h3>Select and validate</h3><p>Resolve latest or requested snapshot, reject dangling or bootstrap-only state, and verify compatibility before changing tmux.</p></div></div>
         <div class="phase"><div class="phase-number">2</div><div><h3>Create context</h3><p>If no tmux server exists, create one temporary detached <code>restore-bootstrap</code> session to provide the engine context.</p></div></div>
         <div class="phase"><div class="phase-number">3</div><div><h3>Arm guard</h3><p>Write an incomplete-restore marker before reconstructing state. Scheduled saves refuse to run while it is armed.</p></div></div>
-        <div class="phase"><div class="phase-number">4</div><div><h3>Restore layout</h3><p>Recreate sessions, windows, panes, paths, layouts, focus, and optional scrollback.</p></div></div>
-        <div class="phase"><div class="phase-number">5</div><div><h3>Restore approved processes</h3><p>Execute process adapters only after required terminal capabilities and working directories are ready.</p></div></div>
+        <div class="phase"><div class="phase-number">4</div><div><h3>Restore layout</h3><p>Recreate sessions, windows, shell panes, paths, layouts, focus, and optional scrollback with native resurrect process replay disabled.</p></div></div>
+        <div class="phase"><div class="phase-number">5</div><div><h3>Recover approved applications</h3><p>Apply the saved process plan after required terminal capabilities and working directories are ready: restart ordinary tools, invoke resume adapters, and leave unmatched panes at a shell.</p></div></div>
         <div class="phase"><div class="phase-number">6</div><div><h3>Clean bootstrap</h3><p>Remove the temporary session only after at least one real session exists.</p></div></div>
         <div class="phase"><div class="phase-number">7</div><div><h3>Commit or degrade safely</h3><p>Clear the guard on success. If process restoration fails, retain reconstructed layouts and report a recoverable partial state.</p></div></div>
 
@@ -1482,7 +1498,7 @@ source-file ~/.config/tmux-recovery/tmux.conf
             <thead><tr><th>Driver</th><th>Purpose</th><th>v1 status</th></tr></thead>
             <tbody>
               <tr><td>direct</td><td>Standard detached restore on Linux and macOS when terminal capabilities are not application-critical.</td><td>Required</td></tr>
-              <tr><td>staged-palette</td><td>Restore layouts first, then process adapters through a deterministic terminal-control environment.</td><td>Required for Arch parity</td></tr>
+              <tr><td>staged-palette</td><td>Restore layouts first, then apply process recovery actions through a deterministic terminal-control environment.</td><td>Required for Arch parity</td></tr>
               <tr><td>terminal-bootstrap</td><td>Use Terminal.app on macOS when privacy permissions or terminal environment cannot be inherited by a plain LaunchAgent.</td><td>Required for current Mac parity</td></tr>
             </tbody>
           </table>
@@ -1491,36 +1507,121 @@ source-file ~/.config/tmux-recovery/tmux.conf
 
       <section id="processes">
         <p class="kicker">Application restoration</p>
-        <h2>Process adapters must be conservative</h2>
+        <h2>Recover pane applications by capability</h2>
 
         <p>
-          A saved command is not automatically trusted merely because it
-          appeared in a tmux pane. Default restoration rebuilds layout and
-          shells. Applications restart only through explicit adapters that
-          recognize, validate, and render safe commands.
+          After a reboot, the original process no longer exists. tmux-recovery
+          can create a new process in the reconstructed pane, but it can recover
+          internal application state only when that application persists a
+          session, history, or resume identifier. The product must say
+          <em>restart</em> when it means restart and reserve <em>resume</em> for
+          application-aware recovery.
         </p>
 
-        <h3>Adapter contract</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Recovery class</th><th>Behavior</th><th>Examples</th><th>State fidelity</th></tr></thead>
+            <tbody>
+              <tr><td>shell</td><td>Recreate the pane and working directory, then leave the user's shell ready.</td><td>Unknown or disallowed process</td><td>Layout and path only</td></tr>
+              <tr><td>restart</td><td>Start a new approved executable using fixed or validated arguments.</td><td><code>htop</code>, <code>btop</code>, <code>top</code>, <code>man</code>, <code>less</code></td><td>New application instance</td></tr>
+              <tr><td>restart-clean</td><td>Reopen an interactive tool while explicitly discarding volatile state.</td><td>bare <code>python</code>, <code>python3</code>, <code>ipython</code></td><td>History files may survive; variables and interpreter memory do not</td></tr>
+              <tr><td>resume</td><td>Validate application-owned persistent state and invoke a dedicated adapter.</td><td>Codex conversation, Vim/Neovim session</td><td>Application-defined</td></tr>
+              <tr><td>blocked</td><td>Do not replay; report why and fall back to a shell.</td><td><code>sudo</code>, arbitrary scripts, destructive commands, unsupported remote sessions</td><td>None</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout warning">
+          <strong>“Any app” means any explicitly described restartable app, not
+          arbitrary process checkpointing.</strong> tmux-recovery does not
+          recreate process memory, Python objects, open network connections,
+          file descriptors, kernel state, or an instruction that was executing
+          during the save.
+        </div>
+
+        <pre><code>$ tmux-recovery processes plan
+PANE       OBSERVED       ACTION          FIDELITY
+ops:1.0    btop           restart         new instance
+lab:2.0    python3        restart-clean   cwd; no variables
+agents:4.1 codex          resume           conversation thread
+work:6.0   python app.py  blocked          shell fallback; script not approved</code></pre>
+
+        <h3>Default behavior</h3>
         <ul>
-          <li><strong>Detect:</strong> decide whether a live pane belongs to the adapter.</li>
-          <li><strong>Capture:</strong> derive a stable minimal restoration record.</li>
-          <li><strong>Validate:</strong> confirm identifiers, paths, and provider state still exist.</li>
-          <li><strong>Render:</strong> produce the exact safe command to store or execute.</li>
-          <li><strong>Redact:</strong> provide a status-safe summary without secrets.</li>
-          <li><strong>Degrade:</strong> fall back to a shell or provider start command when exact resume is impossible.</li>
+          <li>A built-in conservative catalog restarts common terminal monitors, pagers, and approved editor commands.</li>
+          <li><code>htop</code> and <code>btop</code> are built-in restart profiles and normally return automatically.</li>
+          <li>A bare interactive Python or IPython command may use <code>restart-clean</code>; a Python script is blocked unless the user creates a specific rule.</li>
+          <li>Unmatched applications always fall back to a shell in the saved working directory.</li>
+          <li>No mode equivalent to tmux-resurrect's dangerous <code>:all:</code> replay is exposed.</li>
+          <li>Setup previews detected foreground applications and the policy that would apply, but package installation never approves processes.</li>
         </ul>
 
+        <h3>Generic restart rule contract</h3>
+        <ul>
+          <li><strong>Detect:</strong> combine tmux's pane PID, current-command and pane-TTY formats with the platform process table, then identify the foreground process group without assuming the immediate child is the user-visible application.</li>
+          <li><strong>Match:</strong> compare a normalized executable path or basename plus structural conditions such as “interactive, no script argument.”</li>
+          <li><strong>Capture:</strong> retain only the executable, structurally captured and approved arguments, working directory, selected non-secret environment keys, and the rule identifier.</li>
+          <li><strong>Validate:</strong> require the executable and working directory to exist and re-evaluate the rule against current policy before launch.</li>
+          <li><strong>Launch:</strong> use an argv array and an explicit environment; never evaluate a captured command with <code>sh -c</code>.</li>
+          <li><strong>Redact:</strong> omit or mask tokens, credentials, URLs with user information, and rule-defined sensitive arguments in snapshots and output.</li>
+          <li><strong>Degrade:</strong> leave an ordinary shell and report an actionable warning when any condition fails.</li>
+        </ul>
+
+        <h3>Platform process inspection</h3>
+        <ul>
+          <li>Linux reads structured process data from <code>/proc</code>, including NUL-delimited argv where permitted.</li>
+          <li>macOS uses a dedicated platform inspector for executable path and argument vectors; it does not parse human-formatted <code>ps</code> output as shell syntax.</li>
+          <li>The normalized observation contains PID relationships, foreground group, executable path, argv vector, working directory, and only policy-approved environment keys.</li>
+          <li>If exact argv is unavailable, only a fixed rule command may restart the application; tmux-recovery never guesses quoting by splitting a display string.</li>
+          <li>Permission-denied process fields reduce fidelity and produce a shell fallback rather than weakening policy.</li>
+        </ul>
+
+        <h3>Application-aware adapter contract</h3>
+        <ul>
+          <li><strong>Detect:</strong> decide whether a live pane belongs to the adapter.</li>
+          <li><strong>Capture:</strong> derive the smallest stable resume record, not an opaque process dump.</li>
+          <li><strong>Validate:</strong> confirm identifiers, paths, versions, and provider state still exist.</li>
+          <li><strong>Render:</strong> produce a typed launch request using approved arguments.</li>
+          <li><strong>Describe fidelity:</strong> state exactly what returns and what cannot return.</li>
+          <li><strong>Degrade:</strong> fall back to a clean application start or shell when exact resume is impossible.</li>
+        </ul>
+
+        <h3>Managed-engine bridge</h3>
         <p>
-          Built-in adapters are compiled into the native CLI. The resurrect
-          engine may require a small executable shell strategy file; setup
-          generates that file as a compatibility shim that delegates back to
-          the stable CLI. The shim contains no SQL, process traversal, or policy.
+          The managed tmux-resurrect engine reconstructs sessions, panes,
+          layouts, and paths with its native program replay disabled.
+          tmux-recovery then applies its validated process manifest to those
+          fresh panes. It launches a hidden, versioned dispatcher in the pane;
+          the dispatcher replaces itself with the approved target executable so
+          the application directly owns the pane's terminal.
+        </p>
+
+        <p>
+          Launch actions target only panes created by the current restore
+          transaction and still running the expected bootstrap shell. A repeated
+          restore never respawns a pane that a user or another process has
+          already occupied.
+        </p>
+
+        <p>
+          This sequencing prevents upstream command strings from bypassing Go
+          policy. A compatibility shim may delegate from resurrect back to the
+          stable CLI, but it contains only opaque snapshot and pane identifiers—
+          never SQL, captured arguments, shell pipelines, or matching logic.
         </p>
       </section>
 
       <section id="codex">
         <p class="kicker">Built-in adapter 001</p>
         <h2>Codex conversation restoration</h2>
+
+        <p>
+          Codex is the first <code>resume</code> adapter, not a special case in
+          the lifecycle core. It demonstrates how an application with durable
+          identity can recover more than a generic process restart while using
+          the same pane manifest, validation, launch, redaction, and degradation
+          contracts as every future adapter.
+        </p>
 
         <div class="flow">
           <div class="flow-step"><strong>Find pane process</strong><span>walk the child process tree</span></div>
@@ -1610,9 +1711,29 @@ log_level = "info"
 mode = "managed"
 
 [processes]
-enabled = ["codex"]
+policy = "conservative"
+unmatched = "shell"
+builtin_groups = ["monitors", "pagers", "editors"]
+environment_allowlist = ["TERM", "COLORTERM", "LANG", "LC_*"]
 
-[codex]
+[[processes.rules]]
+id = "python-repl"
+executables = ["python", "python3", "ipython"]
+action = "restart-clean"
+require_interactive = true
+reject_script_arguments = true
+arguments = "drop"
+working_directory = "captured"
+
+[[processes.rules]]
+id = "my-tui"
+executables = ["my-tui"]
+action = "restart"
+argv = ["my-tui", "--profile", "default"]
+working_directory = "captured"
+
+[processes.adapters.codex]
+enabled = true
 resume_mode = "thread"
 bypass_approvals = false
 
@@ -1627,6 +1748,8 @@ socket = "default"</code></pre>
           <li>Hostnames do not select behavior implicitly; profiles select capabilities.</li>
           <li>Secrets do not belong in the configuration.</li>
           <li>Environment variables may override configuration and state paths for testing; lifecycle policy is never inferred implicitly from the environment.</li>
+          <li>Process commands are argv arrays or built-in action names; configuration never contains sourced shell fragments.</li>
+          <li><code>processes plan</code> validates rules against live panes or a snapshot without launching anything.</li>
           <li><code>config validate</code> performs all checks without contacting the network.</li>
         </ul>
       </section>
@@ -1641,6 +1764,7 @@ socket = "default"</code></pre>
             <tbody>
               <tr><td>Configuration</td><td><code>~/.config/tmux-recovery/</code></td><td>TOML and generated tmux integration.</td></tr>
               <tr><td>Snapshots</td><td><code>~/.local/share/tmux/resurrect/</code></td><td>Standard compatible resurrect directory.</td></tr>
+              <tr><td>Process manifests</td><td><code>~/.local/share/tmux-recovery/manifests/</code></td><td>Versioned, user-only recovery plans tied to snapshot hashes.</td></tr>
               <tr><td>Managed engines</td><td><code>~/.local/share/tmux-recovery/engines/</code></td><td>Versioned upstream dependency extraction.</td></tr>
               <tr><td>Stable binaries</td><td><code>~/.local/share/tmux-recovery/bin/</code></td><td>Versioned service copies and current symlink.</td></tr>
               <tr><td>Operation state</td><td><code>~/.local/state/tmux-recovery/</code></td><td>Last-save metadata, restore markers, migrations.</td></tr>
@@ -1655,10 +1779,38 @@ socket = "default"</code></pre>
         <p>
           v1 intentionally retains tmux-resurrect's timestamped tab-separated
           text snapshots, <code>last</code> symlink, and optional
-          <code>pane_contents.tar.gz</code>. tmux-recovery may maintain a small
-          sidecar metadata file for validation and trigger history, but it must
-          not rewrite the upstream snapshot format.
+          <code>pane_contents.tar.gz</code>. tmux-recovery maintains a versioned
+          process manifest for validation, trigger history, pane classifications,
+          rule identifiers, redacted launch records, and adapter resume data. It
+          never rewrites the upstream snapshot format.
         </p>
+
+        <ul>
+          <li>Each manifest records the exact snapshot basename and content hash; a mismatch disables process recovery.</li>
+          <li>The manifest commits atomically only after the resurrect snapshot passes validation.</li>
+          <li>Manifest files are mode <code>0600</code> because even redacted process metadata can reveal sensitive paths and workflows.</li>
+          <li>A legacy snapshot without a manifest receives a newly synthesized conservative plan; captured full commands are never trusted automatically.</li>
+          <li>Normal uninstall preserves process manifests with snapshots. Explicit purge may remove them after confirmation.</li>
+        </ul>
+
+        <pre><code>{
+  "schema_version": 1,
+  "snapshot": {
+    "name": "tmux_resurrect_20260719T220000.txt",
+    "sha256": "..."
+  },
+  "panes": [
+    {
+      "pane": {"session": "ops", "window": 1, "pane": 0},
+      "observed": "btop",
+      "action": "restart",
+      "rule_id": "builtin:btop",
+      "executable": "/opt/homebrew/bin/btop",
+      "args": [],
+      "fidelity": "new-instance"
+    }
+  ]
+}</code></pre>
       </section>
 
       <section id="errors">
@@ -1675,7 +1827,7 @@ socket = "default"</code></pre>
               <tr><td>4</td><td>No valid snapshot available.</td><td>Non-fatal on first run</td></tr>
               <tr><td>5</td><td>tmux or managed-engine operation failed.</td><td>Operational failure</td></tr>
               <tr><td>6</td><td>Safety gate rejected an unsafe mutation.</td><td>Protected no-change</td></tr>
-              <tr><td>7</td><td>Partial restore: layout exists, one or more process adapters failed.</td><td>Degraded but attachable</td></tr>
+              <tr><td>7</td><td>Partial restore: layout exists, one or more application restart or resume actions failed.</td><td>Degraded but attachable</td></tr>
               <tr><td>8</td><td>Managed integration drift or version mismatch.</td><td>Run doctor/setup sync</td></tr>
             </tbody>
           </table>
@@ -1699,7 +1851,11 @@ socket = "default"</code></pre>
           <li>State directories are user-only, normally mode <code>0700</code>.</li>
           <li>Snapshots may contain paths, pane titles, commands, thread IDs, and terminal output.</li>
           <li>Pane-content capture defaults off for new installs.</li>
-          <li>Process replay is adapter-allowlisted; arbitrary saved commands are not trusted by default.</li>
+          <li>Application launch is policy-allowlisted; arbitrary saved commands are not trusted by default.</li>
+          <li>Generic restart is rule-allowlisted and uses explicit argv; no captured process string is evaluated by a shell.</li>
+          <li>Privilege escalation, destructive utilities, background servers, remote connections, and scripts are blocked unless a narrowly defined user rule opts in.</li>
+          <li>Environment capture is deny-by-default and limited to non-secret keys explicitly approved by policy.</li>
+          <li>Process manifests are user-only and bind to the hash of their corresponding resurrect snapshot.</li>
           <li>Provider databases are opened read-only.</li>
           <li>Logs redact full command lines and provider identifiers unless explicit debug mode is enabled.</li>
           <li>No telemetry, analytics, or remote snapshot upload is enabled.</li>
@@ -1722,7 +1878,8 @@ tmux server:     running; 18 sessions, 42 panes
 Last snapshot:   4 minutes ago; valid
 Auto-save:       enabled; next in 6 minutes
 Login restore:   enabled; driver terminal-bootstrap
-Process adapters: codex
+Process plan:     9 restart; 18 resume; 15 shell; 0 blocked
+Resume adapters: codex
 Health:          OK</code></pre>
 
         <h3>Doctor checks</h3>
@@ -1736,6 +1893,7 @@ Health:          OK</code></pre>
           <li>Snapshot directory permissions and <code>last</code> validity.</li>
           <li>Stale locks or restore markers.</li>
           <li>Provider availability and schema support.</li>
+          <li>Process-rule ambiguity, missing executables, unsafe captured arguments, and manifest/snapshot hash mismatches.</li>
           <li>Conflicting continuum or duplicate save timers.</li>
         </ul>
 
@@ -1758,6 +1916,9 @@ Health:          OK</code></pre>
               <li>Lock state and timestamp collision logic.</li>
               <li>Service template rendering.</li>
               <li>Process detection and command rendering.</li>
+              <li>Recovery classification, rule precedence, ambiguous matches, argv validation, and redaction.</li>
+              <li>Linux and macOS process observations normalize to the same argv and foreground-process model.</li>
+              <li>Python REPL versus Python script detection and fidelity reporting.</li>
               <li>Codex schema probes with synthetic SQLite fixtures.</li>
               <li>Fuzz targets for resurrect, tmux, configuration, and provider parsers.</li>
             </ul>
@@ -1771,6 +1932,9 @@ Health:          OK</code></pre>
               <li>Manual/timer collision.</li>
               <li>Detached save with no current client.</li>
               <li>Partial provider restore and bootstrap cleanup.</li>
+              <li>Fresh <code>htop</code>/<code>btop</code> restart and clean Python REPL relaunch in reconstructed panes.</li>
+              <li>Unknown, missing, tampered, or newly disallowed process records falling back to a usable shell.</li>
+              <li>No process launch path evaluates captured text through a shell.</li>
               <li>Cancellation and child process-group termination.</li>
             </ul>
           </article>
@@ -1869,13 +2033,16 @@ Health:          OK</code></pre>
 │   ├── tmux/                    # explicit tmux argv boundary
 │   ├── engine/
 │   │   └── resurrect/           # embedded engine lifecycle
-│   ├── providers/
-│   │   └── codex/               # isolated read-only SQLite adapter
+│   ├── process/                  # discovery, classification, manifests
+│   │   ├── catalog/              # built-in conservative restart rules
+│   │   └── adapters/
+│   │       └── codex/            # isolated read-only SQLite resume
 │   ├── restore/                 # direct and staged drivers
 │   ├── install/                 # transactional setup and rollback
 │   ├── diagnose/                # status and doctor probes
 │   └── platform/
 │       ├── lock/                # Darwin/Linux operation lock
+│       ├── process/             # /proc and macOS process inspection
 │       ├── launchd/             # LaunchAgent implementation
 │       └── systemd/             # user-unit implementation
 ├── assets/
@@ -1956,7 +2123,7 @@ Health:          OK</code></pre>
         <div class="phase"><div class="phase-number">2</div><div><h3>CLI foundation and contracts</h3><p>Create the Go module, composition root, command framework, versioned output schema, typed config, embedded assets, transaction primitives, and test harness.</p></div></div>
         <div class="phase"><div class="phase-number">3</div><div><h3>Snapshot core</h3><p>Implement engine provisioning, status, snapshot validation, locks, guarded save, and direct restore using isolated tmux sockets.</p></div></div>
         <div class="phase"><div class="phase-number">4</div><div><h3>Setup and services</h3><p>Implement transactional setup, tmux integration, stable service binary, systemd, launchd, doctor, and rollback.</p></div></div>
-        <div class="phase"><div class="phase-number">5</div><div><h3>Process adapters</h3><p>Add the generic adapter contract and Codex adapter with synthetic SQLite fixtures and explicit unsafe-flag policy.</p></div></div>
+        <div class="phase"><div class="phase-number">5</div><div><h3>Pane application recovery</h3><p>Add process discovery, conservative restart catalog, versioned manifests, plan/explain UX, clean REPL restart, and the Codex resume adapter with synthetic SQLite fixtures.</p></div></div>
         <div class="phase"><div class="phase-number">6</div><div><h3>npm and release pipeline</h3><p>Publish prerelease native artifacts and platform packages; validate clean installs and upgrades.</p></div></div>
         <div class="phase"><div class="phase-number">7</div><div><h3>Canary migration</h3><p>Migrate the local Mac, then arch and alma one at a time with controlled restart, reboot, and rollback tests.</p></div></div>
         <div class="phase"><div class="phase-number">8</div><div><h3>Public v1</h3><p>Finalize documentation, Homebrew option, security provenance, support matrix, and stable npm release.</p></div></div>
@@ -1974,7 +2141,10 @@ Health:          OK</code></pre>
           <li><strong>tmux-resurrect remains the engine.</strong> tmux-recovery manages a pinned upstream copy instead of requiring TPM.</li>
           <li><strong>Native service managers own scheduling.</strong> v1 has no core resident daemon.</li>
           <li><strong>State remains local.</strong> Fleet machines share releases and policy, not snapshots.</li>
-          <li><strong>Process replay is allowlisted.</strong> Arbitrary snapshot commands do not receive automatic trust.</li>
+          <li><strong>Process recovery is tiered.</strong> Each pane becomes shell fallback, approved restart, application-aware resume, or blocked.</li>
+          <li><strong>Ordinary applications use declarative restart rules.</strong> A compiled adapter is required only for application-owned resume state.</li>
+          <li><strong>Arbitrary snapshot commands are never trusted.</strong> There is no restore-all mode or implicit shell evaluation.</li>
+          <li><strong>Fidelity is part of the contract.</strong> A clean Python REPL restart must not be presented as restoration of variables or interpreter memory.</li>
           <li><strong>Go is the accepted core language.</strong> ADR-001 was accepted on 2026-07-19.</li>
           <li><strong>The Go core is CGo-free by default.</strong> SQLite remains replaceable behind the Codex adapter boundary.</li>
           <li><strong>The canonical product and command name is <code>tmux-recovery</code>.</strong></li>
@@ -2006,6 +2176,10 @@ Health:          OK</code></pre>
           <li>macOS and Linux use the same CLI and common lifecycle logic.</li>
           <li>Platform differences are contained in tested adapters.</li>
           <li>Existing resurrect snapshots remain usable without conversion.</li>
+          <li><code>htop</code> and <code>btop</code> restart automatically in their reconstructed panes under the default conservative policy.</li>
+          <li>A configured bare Python REPL restarts cleanly and clearly reports that its in-memory namespace was not recovered.</li>
+          <li>Unknown or unsafe applications fall back to shells without making the overall restore unusable.</li>
+          <li>Users can preview and explain every pane's recovery classification without launching processes.</li>
           <li>Codex restoration works without requiring the external SQLite command.</li>
           <li>Release binaries are CGo-free and require no target Go toolchain or system SQLite library.</li>
           <li>Go package boundaries, cancellation behavior, race checks, parser fuzzing, and rollback paths are enforced in CI.</li>
@@ -2025,6 +2199,7 @@ Health:          OK</code></pre>
         <h3>Persistence and tmux</h3>
         <ul>
           <li><a href="https://github.com/tmux-plugins/tmux-resurrect">tmux-resurrect</a> — snapshot and reconstruction engine.</li>
+          <li><a href="https://github.com/tmux-plugins/tmux-resurrect/blob/master/docs/restoring_programs.md">tmux-resurrect program restoration</a> — conservative defaults, explicit process lists, command mapping, and the warning against restoring everything.</li>
           <li><a href="https://github.com/tmux-plugins/tmux-continuum">tmux-continuum</a> — automatic save, server startup, and restore precedent.</li>
           <li><a href="https://github.com/tmux-python/tmuxp">tmuxp</a> — CLI, freeze/load, plugin, and diagnostics inspiration.</li>
           <li><a href="https://github.com/tmuxinator/tmuxinator">tmuxinator</a> — declarative workspace and migration precedent.</li>
