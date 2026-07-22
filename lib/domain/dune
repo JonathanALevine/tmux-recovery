@@ -1,0 +1,7 @@
+(library
+ (name tmux_recovery_domain)
+ (public_name tmux-recovery.domain)
+ (wrapped true)
+ (libraries core yojson)
+ (preprocess
+  (pps ppx_jane)))

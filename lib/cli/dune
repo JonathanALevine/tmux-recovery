@@ -1,0 +1,13 @@
+(library
+ (name tmux_recovery_cli)
+ (public_name tmux-recovery.cli)
+ (wrapped false)
+ (libraries
+  async
+  core
+  core_unix.command_unix
+  tmux_recovery_application
+  tmux_recovery_domain
+  yojson)
+ (preprocess
+  (pps ppx_jane)))

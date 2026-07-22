@@ -1,0 +1,28 @@
+(library
+ (name tmux_recovery_tui_fixture)
+ (modules tui_fixture)
+ (libraries
+  bonsai_test
+  bonsai_term
+  bonsai_term_test
+  core
+  tmux_recovery_application
+  tmux_recovery_domain
+  tmux_recovery_tui)
+ (preprocess
+  (pps ppx_jane bonsai.ppx_bonsai)))
+
+(executable
+ (name render_fixture)
+ (modules render_fixture)
+ (libraries
+  bonsai_test
+  bonsai_term
+  bonsai_term_test
+  core
+  tmux_recovery_tui_fixture)
+ (preprocess
+  (pps ppx_jane bonsai.ppx_bonsai)))
+
+(cram
+ (deps render_fixture.exe))

@@ -1,0 +1,12 @@
+(library
+ (name adapter_expect_tests)
+ (libraries
+  async
+  core
+  core_unix
+  sqlite3
+  tmux_recovery_adapters
+  tmux_recovery_domain)
+ (inline_tests)
+ (preprocess
+  (pps ppx_jane)))

@@ -4,4 +4,9 @@
 coverage/
 dist/
 state/
+/dev/
 
+/_build/
+/_opam/
+/.direnv/
+*.install

@@ -1,0 +1,6 @@
+(library
+ (name domain_expect_tests)
+ (libraries core tmux_recovery_domain)
+ (inline_tests)
+ (preprocess
+  (pps ppx_jane)))

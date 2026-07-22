@@ -1,0 +1,15 @@
+(executable
+ (name main)
+ (modules main)
+ (public_name tmux-recovery)
+ (libraries core core_unix.command_unix tmux_recovery_cli tmux_recovery_tui)
+ (preprocess
+  (pps ppx_jane)))
+
+(executable
+ (name headless)
+ (modules headless)
+ (public_name tmux-recovery-headless)
+ (libraries core core_unix.command_unix tmux_recovery_cli)
+ (preprocess
+  (pps ppx_jane)))

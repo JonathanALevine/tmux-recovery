@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+{
+  printf 'cwd=%s\n' "$PWD"
+  for argument in "$@"; do
+    printf 'arg=%s\n' "$argument"
+  done
+} >"$TMUX_RECOVERY_CODEX_LOG"
+
+sleep 30

@@ -1,0 +1,7 @@
+(library
+ (name tmux_recovery_application)
+ (public_name tmux-recovery.application)
+ (wrapped true)
+ (libraries async core core_unix tmux_recovery_adapters tmux_recovery_domain)
+ (preprocess
+  (pps ppx_jane)))

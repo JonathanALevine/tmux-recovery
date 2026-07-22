@@ -1,0 +1,16 @@
+(library
+ (name tmux_recovery_tui)
+ (public_name tmux-recovery.tui)
+ (wrapped false)
+ (libraries
+  async
+  bonsai
+  bonsai_term
+  bonsai_term_components.ansi_text_renderer
+  core
+  core_unix.command_unix
+  patdiff.ansi_text
+  tmux_recovery_application
+  tmux_recovery_domain)
+ (preprocess
+  (pps ppx_jane bonsai.ppx_bonsai)))

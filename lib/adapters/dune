@@ -1,0 +1,7 @@
+(library
+ (name tmux_recovery_adapters)
+ (public_name tmux-recovery.adapters)
+ (wrapped false)
+ (libraries async core core_unix sqlite3 tmux_recovery_domain yojson)
+ (preprocess
+  (pps ppx_jane)))
