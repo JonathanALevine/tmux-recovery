@@ -12,7 +12,7 @@ module Snapshot = Tmux_recovery_domain.Snapshot
 module Workspace = Tmux_recovery_domain.Workspace
 
 let schema_version = "1"
-let version = "0.3.0-dev.7"
+let version = "0.3.0-dev.8"
 
 let envelope ~command ?(warnings = []) data =
   `Assoc
@@ -513,7 +513,7 @@ let snapshots_validate_command =
 
 let snapshots_prune_command =
   Command.async_or_error
-    ~summary:"Preview or apply conservative native snapshot retention"
+    ~summary:"Preview or apply rolling native snapshot retention"
     (let%map_open.Command native_directory = native_snapshot_directory_param
      and apply = flag "--apply" no_arg ~doc:" delete the reviewed retention candidates"
      and dry_run = flag "--dry-run" no_arg ~doc:" preview retention (the default)"
@@ -926,9 +926,15 @@ let doctor_command =
                ~f:(fun summary -> Snapshot.Id.to_string summary.id) )
          ; ( "application recovery"
            , (if blocked = 0 then `Pass else `Warn)
-           , [%string
-               "%{codex_resumes#Int} exact Codex resume(s) · %{blocked#Int} blocked \
-                pane(s)"] )
+           , if blocked = 0
+             then
+               [%string
+                 "%{codex_resumes#Int} exact Codex resume(s) · no panes fall back to \
+                  shells"]
+             else
+               [%string
+                 "%{codex_resumes#Int} exact Codex resume(s) · %{blocked#Int} pane(s) \
+                  lack durable application state and will restore as usable shells"] )
          ; ( "managed services"
            , (if Service.equal_ownership services.ownership Managed then `Pass else `Warn)
            , [%string

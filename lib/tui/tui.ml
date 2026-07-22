@@ -24,10 +24,7 @@ module Page_ref = struct
     type t =
       | Overview
       | Resource of resource
-      | Snapshots
-      | Snapshot of Snapshot.Id.t
-      | Services
-      | Doctor
+      | Status
     [@@deriving compare, equal, sexp_of]
   end
 
@@ -123,46 +120,39 @@ let session_node (workspace : Workspace.t) decisions (session : Workspace.Sessio
   }
 ;;
 
-let snapshot_badge (summary : Snapshot.summary) =
-  [ Option.some_if summary.latest "latest"
-  ; Option.some_if summary.last_good "last-good"
-  ; (match summary.validity with
-     | Valid -> None
-     | Invalid _ -> Some "invalid")
-  ; Option.some_if summary.manifest "manifest"
-  ; Option.some_if summary.legacy "legacy"
-  ]
-  |> List.filter_opt
-  |> function
-  | [] -> None
-  | badges -> Some (String.concat badges ~sep:" ")
+let native_snapshots (catalog : Snapshot.catalog) =
+  List.filter catalog.snapshots ~f:(fun summary -> not summary.Snapshot.legacy)
 ;;
 
-let snapshot_node (summary : Snapshot.summary) =
-  { page = Page_ref.Snapshot summary.id
-  ; label = Snapshot.Id.display_time summary.id
-  ; badge = snapshot_badge summary
-  ; children = []
-  }
+let native_last_good catalog =
+  native_snapshots catalog
+  |> List.find ~f:(fun summary -> summary.last_good && Snapshot.is_valid summary)
 ;;
 
-let snapshot_navigation (snapshots : Snapshot.catalog Or_error.t) =
-  match snapshots with
-  | Error _ -> Some "unavailable", []
-  | Ok catalog ->
-    let invalid = List.count catalog.snapshots ~f:(Fn.non Snapshot.is_valid) in
-    let badge =
-      if invalid = 0
-      then Int.to_string (List.length catalog.snapshots)
-      else [%string "%{List.length catalog.snapshots#Int} · %{invalid#Int} invalid"]
-    in
-    Some badge, List.map catalog.snapshots ~f:snapshot_node
+let blocked_decisions (recovery : Recovery.plan) =
+  List.filter recovery.decisions ~f:(fun decision ->
+    Recovery.Action.equal decision.action Recovery.Action.Blocked)
 ;;
 
-let service_badge (services : Service.t Or_error.t) =
-  match services with
-  | Error _ -> Some "unavailable"
-  | Ok status -> Some (Service.ownership_label status.ownership)
+let status_badge workspace recovery snapshots services =
+  let snapshots_ready =
+    match snapshots with
+    | Error _ -> false
+    | Ok catalog -> Option.is_some (native_last_good catalog)
+  and services_ready =
+    match services with
+    | Error _ -> false
+    | Ok (status : Service.t) ->
+      Service.equal_ownership status.ownership Service.Managed
+      && List.is_empty status.conflicts
+  in
+  Some
+    (if workspace.Workspace.server.available
+        && snapshots_ready
+        && services_ready
+        && List.is_empty (blocked_decisions recovery)
+     then "ready"
+     else "attention")
 ;;
 
 let navigation (workspace : Workspace.t) recovery snapshots services =
@@ -170,24 +160,17 @@ let navigation (workspace : Workspace.t) recovery snapshots services =
   let live_children =
     Workspace.ordered_sessions workspace |> List.map ~f:(session_node workspace decisions)
   in
-  let snapshots_badge, snapshot_children = snapshot_navigation snapshots in
   [ { page = Overview; label = "Overview"; badge = None; children = [] }
   ; { page = Resource (Workspace workspace.source)
     ; label = "Sessions"
     ; badge = Some (if workspace.server.available then "online" else "offline")
     ; children = live_children
     }
-  ; { page = Snapshots
-    ; label = "Snapshots"
-    ; badge = snapshots_badge
-    ; children = snapshot_children
-    }
-  ; { page = Services
-    ; label = "Automation"
-    ; badge = service_badge services
+  ; { page = Status
+    ; label = "Status"
+    ; badge = status_badge workspace recovery snapshots services
     ; children = []
     }
-  ; { page = Doctor; label = "Doctor"; badge = None; children = [] }
   ]
 ;;
 
@@ -449,30 +432,11 @@ let node_color model (node : node) =
     (match Map.find model.workspace.panes pane_id with
      | Some pane -> program_color pane.current_command
      | None -> red)
-  | Snapshots ->
-    (match model.snapshots with
-     | Error _ -> red
-     | Ok catalog when List.exists catalog.snapshots ~f:(Fn.non Snapshot.is_valid) ->
-       amber
-     | Ok _ -> cyan)
-  | Snapshot id ->
-    (match model.snapshots with
-     | Error _ -> red
-     | Ok catalog ->
-       (match Snapshot.find catalog id with
-        | Some summary when not (Snapshot.is_valid summary) -> red
-        | Some summary when summary.latest || summary.last_good -> green
-        | Some _ -> cyan
-        | None -> red))
-  | Services ->
-    (match model.services with
-     | Error _ -> red
-     | Ok status ->
-       (match status.ownership with
-        | Service.Managed -> green
-        | Legacy | Drifted -> amber
-        | Absent -> muted))
-  | Doctor -> cyan
+  | Status ->
+    (match status_badge model.workspace model.recovery model.snapshots model.services with
+     | Some "ready" -> green
+     | Some _ -> amber
+     | None -> cyan)
 ;;
 
 let crop_to view ~width ~height =
@@ -553,6 +517,46 @@ let lookup_link workspace id =
   List.find workspace.Workspace.window_links ~f:(fun link -> String.equal link.id id)
 ;;
 
+let recovery_count (recovery : Recovery.plan) action =
+  List.count recovery.decisions ~f:(fun decision ->
+    Recovery.Action.equal decision.action action)
+;;
+
+let pane_location (workspace : Workspace.t) pane_id =
+  match Map.find workspace.panes pane_id with
+  | None -> pane_id
+  | Some pane ->
+    let locations =
+      workspace.window_links
+      |> List.filter ~f:(fun link -> String.equal link.window_id pane.window_id)
+      |> List.filter_map ~f:(fun link ->
+        Map.find workspace.sessions link.session_id
+        |> Option.map ~f:(fun session ->
+          [%string "%{session.name}:%{link.index#Int}.%{pane.index#Int}"]))
+      |> List.dedup_and_sort ~compare:String.compare
+    in
+    (match locations with
+     | [] -> pane_id
+     | locations -> String.concat locations ~sep:" / ")
+;;
+
+let component_status (component : Service.component) =
+  let state = Service.activation_label component.activation in
+  match component.schedule with
+  | None -> state
+  | Some schedule -> state ^ " · " ^ schedule
+;;
+
+let component_health (component : Service.component) =
+  let mark =
+    match component.activation with
+    | Service.Loaded -> "PASS"
+    | Service.Installed | Service.Disabled | Service.Not_installed | Service.Unknown ->
+      "WARN"
+  in
+  mark ^ " · " ^ component_status component
+;;
+
 let decision_lines decision =
   [ heading decision.Recovery.observed
   ; field "Action" (Recovery.Action.label decision.action)
@@ -613,7 +617,7 @@ let detail_lines model ~height =
   | Overview ->
     let snapshot_count =
       match model.snapshots with
-      | Ok catalog -> Int.to_string (List.length catalog.snapshots)
+      | Ok catalog -> Int.to_string (List.length (native_snapshots catalog))
       | Error _ -> "unavailable"
     in
     [ heading "tmux-recovery"
@@ -623,7 +627,7 @@ let detail_lines model ~height =
     ; field "Sessions" (Int.to_string (Map.length workspace.sessions))
     ; field "Canonical windows" (Int.to_string (Map.length workspace.windows))
     ; field "Panes" (Int.to_string (Map.length workspace.panes))
-    ; field "Snapshots" snapshot_count
+    ; field "Native snapshots" (snapshot_count ^ " saved · rolling limit 10")
     ; plain ""
     ; plain ~color:muted "Guarded mutations require explicit approval in the CLI."
     ]
@@ -689,142 +693,130 @@ let detail_lines model ~height =
      | Some pane ->
        (decision_for (decisions_by_pane model.recovery) pane |> decision_lines)
        @ pane_preview_lines model pane.id ~line_limit:preview_line_limit)
-  | Snapshots ->
-    (match model.snapshots with
-     | Error error ->
-       [ heading "Snapshots unavailable"
-       ; plain ~color:amber (Error.to_string_hum error |> String.strip)
-       ; plain ""
-       ; plain ~color:muted "Press r to retry. No snapshot files were changed."
-       ]
-     | Ok catalog ->
-       let newest =
-         Snapshot.newest catalog
-         |> Option.value_map ~default:"none" ~f:(fun item ->
-           Snapshot.Id.display_time item.id)
-       and last_good =
-         Snapshot.last_good catalog
-         |> Option.value_map ~default:"none" ~f:(fun item ->
-           Snapshot.Id.to_string item.id)
-       in
-       [ heading "Snapshots"
-       ; field "Directory" catalog.directory
-       ; field
-           "Directory health"
-           (if catalog.directory_exists then "available" else "missing")
-       ; field "Total" (Int.to_string (List.length catalog.snapshots))
-       ; field "Valid" (Int.to_string (Snapshot.valid_count catalog))
-       ; field "Newest" newest
-       ; field "Last good" last_good
-       ; field "Storage" (bytes (Snapshot.storage_bytes catalog))
-       ; field "Retention" "native: keep 5 and 30 days · legacy: preserved"
-       ; plain ""
-       ; plain ~color:muted "Expand Snapshots to inspect immutable saved entries."
-       ; plain ~color:muted "Captured pane contents and full commands are not displayed."
-       ]
-       @ warning_lines catalog.warnings)
-  | Snapshot id ->
-    (match model.snapshots with
-     | Error error ->
-       [ heading "Snapshot unavailable"; plain ~color:amber (Error.to_string_hum error) ]
-     | Ok catalog ->
-       (match Snapshot.find catalog id with
-        | None -> [ heading "Snapshot no longer exists" ]
-        | Some summary ->
-          let badges = snapshot_badge summary |> Option.value ~default:"none" in
-          let lines =
-            [ heading (Snapshot.Id.display_time summary.id)
-            ; field "Source ID" (Snapshot.Id.to_string summary.id)
-            ; field "Validity" (Snapshot.validity_label summary.validity)
-            ; field "Status" badges
-            ; field "Sessions" (Int.to_string summary.session_count)
-            ; field "Windows" (Int.to_string summary.window_count)
-            ; field "Panes" (Int.to_string summary.pane_count)
-            ; field "Size" (bytes summary.size_bytes)
-            ; field "Process manifest" (if summary.manifest then "present" else "absent")
-            ; field
-                "Compatibility"
-                (if summary.legacy then "legacy/upstream" else "managed")
-            ; plain ""
-            ; plain
-                ~color:muted
-                "Use snapshots restore --dry-run before approving restore."
-            ]
-          in
-          let validity_lines =
-            match summary.validity with
-            | Valid -> [ plain ~color:green "Snapshot structure is valid." ]
-            | Invalid errors -> warning_lines errors
-          in
-          lines @ validity_lines @ warning_lines summary.warnings))
-  | Services ->
-    (match model.services with
-     | Error error ->
-       [ heading "Automation unavailable"
-       ; plain ~color:amber (Error.to_string_hum error |> String.strip)
-       ; plain ""
-       ; plain ~color:muted "Press r to retry. No automation settings were changed."
-       ]
-     | Ok status ->
-       let component_status (component : Service.component) =
-         match component.schedule with
-         | None -> Service.activation_label component.activation
-         | Some schedule ->
-           Service.activation_label component.activation ^ " · " ^ schedule
-       in
-       [ heading "Automation"
-       ; plain ~color:muted "Background snapshots and reboot recovery."
-       ; plain ""
-       ; field "Manager" (Service.manager_label status.manager)
-       ; field "Ownership" (Service.ownership_label status.ownership)
-       ; heading "Periodic snapshots"
-       ; field "Status" (component_status status.periodic_save)
-       ; field "Definition" (Option.value status.periodic_save.definition ~default:"none")
-       ; heading "Restore after login"
-       ; field "Status" (component_status status.login_restore)
-       ; field "Definition" (Option.value status.login_restore.definition ~default:"none")
-       ; heading "Runtime binary"
-       ; field "Path" (Option.value status.binary_path ~default:"not detected")
-       ; field "Version" (Option.value status.binary_version ~default:"unknown")
-       ; heading "Recent result"
-       ; field "Last result" (Option.value status.last_result ~default:"unavailable")
-       ; field "Next run" (Option.value status.next_run ~default:"unavailable")
-       ; field "Conflicts" (Int.to_string (List.length status.conflicts))
-       ]
-       @ List.map status.conflicts ~f:(fun conflict -> plain ~color:amber conflict)
-       @ warning_lines status.warnings
-       @ [ plain ~color:muted "Changes require reviewed CLI --approve flags." ])
-  | Doctor ->
-    let snapshot_health =
-      match model.snapshots with
-      | Error _ -> "WARN · unavailable"
-      | Ok catalog ->
-        (match Snapshot.last_good catalog with
-         | Some _ -> "PASS · valid recovery point"
-         | None -> "WARN · no valid recovery point")
-    and application_health =
-      if List.is_empty model.recovery.warnings then "PASS" else "WARN · review policy"
-    and automation_health =
-      match model.services with
-      | Error _ -> "WARN · unavailable"
-      | Ok status when Service.equal_ownership status.ownership Managed ->
-        "PASS · managed"
-      | Ok status -> "WARN · " ^ Service.ownership_label status.ownership
+  | Status ->
+    let blocked = blocked_decisions model.recovery in
+    let blocked_count = List.length blocked in
+    let resumes = recovery_count model.recovery Recovery.Action.Resume in
+    let restarts =
+      recovery_count model.recovery Recovery.Action.Restart
+      + recovery_count model.recovery Recovery.Action.Restart_clean
     in
-    [ heading "Doctor"
-    ; plain ~color:muted "Recovery readiness at a glance."
+    let application_health =
+      if blocked_count = 0
+      then
+        [%string
+          "PASS · %{resumes#Int} exact resume(s) · %{restarts#Int} safe restart(s) · 0 \
+           blocked"]
+      else [%string "WARN · %{blocked_count#Int} shell fallback(s) · details below"]
+    in
+    let application_warnings =
+      List.concat_map blocked ~f:(fun decision ->
+        let cause =
+          match decision.rule_id with
+          | Some "adapter:codex:missing-thread" -> "Codex has no durable thread ID."
+          | Some _ | None -> decision.reason
+        in
+        [ plain
+            ~color:amber
+            [%string
+              "Affected pane: %{pane_location workspace decision.pane_id} \
+               (%{decision.observed})"]
+        ; plain ~color:amber ("Cause: " ^ cause)
+        ; plain ~color:amber "Recovery: shell only; the application will not resume."
+        ])
+    in
+    let snapshot_lines =
+      match model.snapshots with
+      | Error error ->
+        [ heading "Snapshots"
+        ; field "Readiness" "WARN · snapshot inventory unavailable"
+        ; plain ~color:amber (Error.to_string_hum error |> String.strip)
+        ; plain ~color:muted "Press r to retry. Existing snapshot files are unchanged."
+        ]
+      | Ok catalog ->
+        let native = native_snapshots catalog in
+        let legacy_count =
+          List.count catalog.snapshots ~f:(fun summary -> summary.legacy)
+        in
+        let last_good = native_last_good catalog in
+        let native_storage =
+          List.fold native ~init:0L ~f:(fun total summary ->
+            Int64.(total + summary.size_bytes))
+        in
+        [ heading "Snapshots"
+        ; field
+            "Readiness"
+            (if Option.is_some last_good
+             then "PASS · valid native recovery point available"
+             else "WARN · no valid native recovery point; reboot recovery is unsafe")
+        ; field
+            "Native history"
+            [%string "%{List.length native#Int} saved · rolling limit 10"]
+        ; field
+            "Last good"
+            (Option.value_map last_good ~default:"none" ~f:(fun summary ->
+               Snapshot.Id.display_time summary.id))
+        ; field "Native storage" (bytes native_storage)
+        ; field
+            "Legacy history"
+            [%string "%{legacy_count#Int} preserved · not written by tmux-recovery"]
+        ]
+        @ warning_lines catalog.warnings
+    in
+    let automation_lines =
+      match model.services with
+      | Error error ->
+        [ heading "Automation"
+        ; field "Readiness" "WARN · service manager status unavailable"
+        ; plain ~color:amber (Error.to_string_hum error |> String.strip)
+        ; plain ~color:muted "Press r to retry. No automation settings were changed."
+        ]
+      | Ok status ->
+        [ heading "Automation"
+        ; field
+            "Readiness"
+            (if Service.equal_ownership status.ownership Managed
+                && List.is_empty status.conflicts
+             then "PASS · tmux-recovery manages save and login restore"
+             else
+               "WARN · "
+               ^ Service.ownership_label status.ownership
+               ^ "; inspect conflicts below")
+        ; field "Periodic save" (component_health status.periodic_save)
+        ; field "Login restore" (component_health status.login_restore)
+        ; field "Runtime version" (Option.value status.binary_version ~default:"unknown")
+        ; field "Last result" (Option.value status.last_result ~default:"unavailable")
+        ; field "Next save" (Option.value status.next_run ~default:"unavailable")
+        ]
+        @ List.map status.conflicts ~f:(fun conflict ->
+          plain ~color:amber ("Active conflict: " ^ conflict))
+        @ warning_lines status.warnings
+    in
+    [ heading "Status"
+    ; plain ~color:muted "Recovery readiness, snapshot history, and automation."
     ; plain ""
+    ; heading "Recovery"
     ; field
         "tmux"
-        (if workspace.server.available then "PASS · server running" else "WARN")
-    ; field "workspace" "PASS · graph valid"
-    ; field "snapshots" snapshot_health
-    ; field "applications" application_health
-    ; field "automation" automation_health
-    ; field "mutation safety" "PASS · plan, approve, verify, rollback"
-    ; plain ""
-    ; plain ~color:muted "Run tmux-recovery doctor for full diagnostics."
+        (if workspace.server.available
+         then "PASS · server running"
+         else "WARN · no tmux server; there is no live workspace to save")
+    ; field
+        "Workspace"
+        [%string
+          "PASS · %{Map.length workspace.sessions#Int} session(s) · %{Map.length \
+           workspace.windows#Int} window(s) · %{Map.length workspace.panes#Int} pane(s)"]
+    ; field "Applications" application_health
     ]
+    @ application_warnings
+    @ [ plain "" ]
+    @ snapshot_lines
+    @ [ plain "" ]
+    @ automation_lines
+    @ [ plain ""
+      ; field "Mutation safety" "PASS · destructive operations require explicit approval"
+      ; plain ~color:muted "Use the CLI for snapshot restore and automation changes."
+      ]
 ;;
 
 let render_detail model ~width ~height =
@@ -837,9 +829,7 @@ let render_detail model ~width ~height =
       (let title =
          match model.selected with
          | Resource (Window_link _ | Pane _ | Application _) -> "PREVIEW"
-         | Overview
-         | Resource (Workspace _ | Session _)
-         | Snapshots | Snapshot _ | Services | Doctor -> "DETAIL"
+         | Overview | Resource (Workspace _ | Session _) | Status -> "DETAIL"
        in
        if equal_focus model.focus Page then title ^ " ◀" else title)
     ~width

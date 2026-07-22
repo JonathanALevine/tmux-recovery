@@ -15,7 +15,7 @@ ID; conversation content and arbitrary database rows are never copied.
 - Atomic, hashed native snapshot bundles under
   `~/.local/share/tmux-recovery/snapshots/`.
 - Atomic `latest` and `last-good` pointers, per-socket locking, validation, and
-  conservative retention (five snapshots and 30 days by default).
+  rolling retention of the newest ten native snapshots.
 - Empty-target-only restore of sessions, canonical/shared windows, panes,
   indexes, active state, layouts, titles, and working directories.
 - Exact Codex conversation resume using an explicit `codex resume <UUID>` first,
@@ -37,7 +37,8 @@ ID; conversation content and arbitrary database rows are never copied.
 - Native launchd and systemd user definitions. Service files call the stable
   binary directly; there is no resident daemon or shell wrapper.
 - Reversible legacy migration with checksummed rollback bundles.
-- Keyboard-only TUI with terminal-theme colors and bottom-of-pane live previews.
+- Keyboard-only TUI with terminal-theme colors, bottom-of-pane live previews,
+  and one combined Status page for recovery, snapshots, and automation.
 
 All external processes use explicit argument arrays. Captured pane text and
 saved full command strings are never evaluated as shell commands.
@@ -146,7 +147,7 @@ Run `tmux-recovery` in an interactive terminal or use `tmux-recovery ui`.
 - `h`/`l` collapse and expand.
 - `Enter` opens or toggles a branch.
 - `Tab` switches panes on narrow terminals.
-- `r` refreshes sessions, snapshots, automation, and the selected live preview.
+- `r` refreshes sessions, combined status, and the selected live preview.
 - `q` or `Ctrl-C` exits.
 
 The TUI inherits the terminal foreground/background, disables mouse reporting,

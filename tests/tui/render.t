@@ -4,11 +4,11 @@
   │  Overview                                  │tmux-recovery                                          │
   │▾ Sessions  [online]                        │A conservative recovery control plane for tmux.        │
   │  ▸ development  [attached]                 │                                                       │
-  │▸ Snapshots  [1]                            │tmux: online                                           │
-  │  Automation  [legacy/unmanaged]            │Sessions: 1                                            │
-  │  Doctor                                    │Canonical windows: 1                                   │
+  │  Status  [ready]                           │tmux: online                                           │
+  │                                            │Sessions: 1                                            │
+  │                                            │Canonical windows: 1                                   │
   │                                            │Panes: 1                                               │
-  │                                            │Snapshots: 1                                           │
+  │                                            │Native snapshots: 1 saved · rolling limit 10           │
   │                                            │                                                       │
   │                                            │Guarded mutations require explicit approval in the CLI.│
   │                                            │                                                       │
@@ -30,9 +30,9 @@
   │  Overview                                  │Sessions                                               │
   │▾ Sessions  [online]                        │Source: live                                           │
   │  ▸ development  [attached]                 │Server: running                                        │
-  │▸ Snapshots  [1]                            │Version: tmux test                                     │
-  │  Automation  [legacy/unmanaged]            │Socket: default                                        │
-  │  Doctor                                    │                                                       │
+  │  Status  [ready]                           │Version: tmux test                                     │
+  │                                            │Socket: default                                        │
+  │                                            │                                                       │
   │                                            │                                                       │
   │                                            │                                                       │
   │                                            │                                                       │
@@ -57,9 +57,9 @@
   │▾ Sessions  [online]                        │Window 0 · active pane 0 · btop                        │
   │  ▾ development  [attached]                 │                                                       │
   │    ▸ 0:monitoring  [active]                │Live window contents                                   │
-  │▸ Snapshots  [1]                            │Active pane · bottom of screen · read-only · refresh wi│
-  │  Automation  [legacy/unmanaged]            │                                                       │
-  │  Doctor                                    │older output 01                                        │
+  │  Status  [ready]                           │Active pane · bottom of screen · read-only · refresh wi│
+  │                                            │                                                       │
+  │                                            │older output 01                                        │
   │                                            │older output 02                                        │
   │                                            │older output 03                                        │
   │                                            │older output 04                                        │
@@ -84,9 +84,9 @@
   │  ▾ development  [attached]                 │Working directory: /Users/demo                         │
   │    ▾ 0:monitoring  [active]                │Title: btop                                            │
   │      ▸ pane 0  [active]                    │Observed command: btop                                 │
-  │▸ Snapshots  [1]                            │Recovery: restart                                      │
-  │  Automation  [legacy/unmanaged]            │                                                       │
-  │  Doctor                                    │Latest pane output                                     │
+  │  Status  [ready]                           │Recovery: restart                                      │
+  │                                            │                                                       │
+  │                                            │Latest pane output                                     │
   │                                            │Bottom of pane · read-only · refresh with r            │
   │                                            │                                                       │
   │                                            │older output 05                                        │
@@ -102,159 +102,107 @@
   │ ↑/↓ or j/k move  ←/→ or h/l fold  enter open  tab focus  r refresh  q quit                         │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   
-  --- SNAPSHOTS ---
+  --- STATUS ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
   │ NAVIGATION ◀                               │ DETAIL                                                │
-  │  Overview                                  │Snapshots                                              │
-  │▾ Sessions  [online]                        │Directory: /Users/demo/.local/share/tmux/resurrect     │
-  │  ▸ development  [attached]                 │Directory health: available                            │
-  │▸ Snapshots  [1]                            │Total: 1                                               │
-  │  Automation  [legacy/unmanaged]            │Valid: 1                                               │
-  │  Doctor                                    │Newest: 2026-07-20 21:32:39                            │
-  │                                            │Last good: tmux_resurrect_20260720T213239.txt          │
-  │                                            │Storage: 4.0 KiB                                       │
-  │                                            │Retention: native: keep 5 and 30 days · legacy: preserv│
-  │                                            │                                                       │
-  │                                            │Expand Snapshots to inspect immutable saved entries.   │
-  │                                            │Captured pane contents and full commands are not displa│
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │ ↑/↓ or j/k move  ←/→ or h/l fold  enter open  tab focus  r refresh  q quit                         │
-  └────────────────────────────────────────────────────────────────────────────────────────────────────┘
-  
-  --- SNAPSHOT SELECTED ---
-  ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │ NAVIGATION ◀                               │ DETAIL                                                │
-  │  Overview                                  │2026-07-20 21:32:39                                    │
-  │▾ Sessions  [online]                        │Source ID: tmux_resurrect_20260720T213239.txt          │
-  │  ▸ development  [attached]                 │Validity: valid                                        │
-  │▾ Snapshots  [1]                            │Status: latest last-good legacy                        │
-  │    2026-07-20 21:32:39  [latest last-good l│Sessions: 1                                            │
-  │  Automation  [legacy/unmanaged]            │Windows: 1                                             │
-  │  Doctor                                    │Panes: 1                                               │
-  │                                            │Size: 4.0 KiB                                          │
-  │                                            │Process manifest: absent                               │
-  │                                            │Compatibility: legacy/upstream                         │
-  │                                            │                                                       │
-  │                                            │Use snapshots restore --dry-run before approving restor│
-  │                                            │Snapshot structure is valid.                           │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │ ↑/↓ or j/k move  ←/→ or h/l fold  enter open  tab focus  r refresh  q quit                         │
-  └────────────────────────────────────────────────────────────────────────────────────────────────────┘
-  
-  --- AUTOMATION ---
-  ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │ NAVIGATION ◀                               │ DETAIL                                                │
-  │  Overview                                  │Automation                                             │
-  │▾ Sessions  [online]                        │Background snapshots and reboot recovery.              │
+  │  Overview                                  │Status                                                 │
+  │▾ Sessions  [online]                        │Recovery readiness, snapshot history, and automation.  │
   │  ▸ development  [attached]                 │                                                       │
-  │▸ Snapshots  [1]                            │Manager: launchd                                       │
-  │  Automation  [legacy/unmanaged]            │Ownership: legacy/unmanaged                            │
-  │  Doctor                                    │Periodic snapshots                                     │
-  │                                            │Status: loaded · 600 seconds                           │
-  │                                            │Definition: /Users/demo/Library/LaunchAgents/com.demo.t│
-  │                                            │Restore after login                                    │
-  │                                            │Status: loaded · at login                              │
-  │                                            │Definition: /Users/demo/Library/LaunchAgents/com.demo.t│
-  │                                            │Runtime binary                                         │
-  │                                            │Path: /Users/demo/bin/tmux-resurrect-save-safe         │
-  │                                            │Version: unknown                                       │
-  │                                            │Recent result                                          │
-  │                                            │Last result: launchctl exit status 0                   │
-  │                                            │Next run: unavailable                                  │
-  │                                            │Conflicts: 0                                           │
-  │                                            │Warning: legacy tmux automation detected; tmux-recovery│
-  │                                            │Changes require reviewed CLI --approve flags.          │
+  │  Status  [ready]                           │Recovery                                               │
+  │                                            │tmux: PASS · server running                            │
+  │                                            │Workspace: PASS · 1 session(s) · 1 window(s) · 1 pane(s│
+  │                                            │Applications: PASS · 0 exact resume(s) · 1 safe restart│
+  │                                            │                                                       │
+  │                                            │Snapshots                                              │
+  │                                            │Readiness: PASS · valid native recovery point available│
+  │                                            │Native history: 1 saved · rolling limit 10             │
+  │                                            │Last good: 2026-07-21 01:32:39.000000000Z              │
+  │                                            │Native storage: 8.0 KiB                                │
+  │                                            │Legacy history: 1 preserved · not written by tmux-recov│
+  │                                            │                                                       │
+  │                                            │Automation                                             │
+  │                                            │Readiness: PASS · tmux-recovery manages save and login │
+  │                                            │Periodic save: PASS · loaded · 600 seconds             │
+  │                                            │Login restore: PASS · loaded · at login                │
+  │                                            │Runtime version: 0.3.0-dev.8                           │
   │ ↑/↓ or j/k move  ←/→ or h/l fold  enter open  tab focus  r refresh  q quit                         │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   
-  --- DOCTOR ---
+  --- STATUS WITH APPLICATION WARNING ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
   │ NAVIGATION ◀                               │ DETAIL                                                │
-  │  Overview                                  │Doctor                                                 │
-  │▾ Sessions  [online]                        │Recovery readiness at a glance.                        │
+  │  Overview                                  │Status                                                 │
+  │▾ Sessions  [online]                        │Recovery readiness, snapshot history, and automation.  │
   │  ▸ development  [attached]                 │                                                       │
-  │▸ Snapshots  [1]                            │tmux: PASS · server running                            │
-  │  Automation  [legacy/unmanaged]            │workspace: PASS · graph valid                          │
-  │  Doctor                                    │snapshots: PASS · valid recovery point                 │
-  │                                            │applications: PASS                                     │
-  │                                            │automation: WARN · legacy/unmanaged                    │
-  │                                            │mutation safety: PASS · plan, approve, verify, rollback│
+  │  Status  [attention]                       │Recovery                                               │
+  │                                            │tmux: PASS · server running                            │
+  │                                            │Workspace: PASS · 1 session(s) · 1 window(s) · 1 pane(s│
+  │                                            │Applications: WARN · 1 shell fallback(s) · details belo│
+  │                                            │Affected pane: development:0.0 (codex)                 │
+  │                                            │Cause: Codex has no durable thread ID.                 │
+  │                                            │Recovery: shell only; the application will not resume. │
   │                                            │                                                       │
-  │                                            │Run tmux-recovery doctor for full diagnostics.         │
+  │                                            │Snapshots                                              │
+  │                                            │Readiness: PASS · valid native recovery point available│
+  │                                            │Native history: 1 saved · rolling limit 10             │
+  │                                            │Last good: 2026-07-21 01:32:39.000000000Z              │
+  │                                            │Native storage: 8.0 KiB                                │
+  │                                            │Legacy history: 1 preserved · not written by tmux-recov│
   │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
+  │                                            │Automation                                             │
+  │                                            │Readiness: PASS · tmux-recovery manages save and login │
   │ ↑/↓ or j/k move  ←/→ or h/l fold  enter open  tab focus  r refresh  q quit                         │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   
-  --- EMPTY SNAPSHOTS ---
+  --- EMPTY STATUS ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
   │ NAVIGATION ◀                               │ DETAIL                                                │
-  │  Overview                                  │Snapshots                                              │
-  │▾ Sessions  [online]                        │Directory: /Users/demo/.local/share/tmux/resurrect     │
-  │  ▸ development  [attached]                 │Directory health: available                            │
-  │  Snapshots  [0]                            │Total: 0                                               │
-  │  Automation  [absent]                      │Valid: 0                                               │
-  │  Doctor                                    │Newest: none                                           │
+  │  Overview                                  │Status                                                 │
+  │▾ Sessions  [online]                        │Recovery readiness, snapshot history, and automation.  │
+  │  ▸ development  [attached]                 │                                                       │
+  │  Status  [attention]                       │Recovery                                               │
+  │                                            │tmux: PASS · server running                            │
+  │                                            │Workspace: PASS · 1 session(s) · 1 window(s) · 1 pane(s│
+  │                                            │Applications: PASS · 0 exact resume(s) · 1 safe restart│
+  │                                            │                                                       │
+  │                                            │Snapshots                                              │
+  │                                            │Readiness: WARN · no valid native recovery point; reboo│
+  │                                            │Native history: 0 saved · rolling limit 10             │
   │                                            │Last good: none                                        │
-  │                                            │Storage: 0 B                                           │
-  │                                            │Retention: native: keep 5 and 30 days · legacy: preserv│
+  │                                            │Native storage: 0 B                                    │
+  │                                            │Legacy history: 0 preserved · not written by tmux-recov│
   │                                            │                                                       │
-  │                                            │Expand Snapshots to inspect immutable saved entries.   │
-  │                                            │Captured pane contents and full commands are not displa│
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
+  │                                            │Automation                                             │
+  │                                            │Readiness: WARN · absent; inspect conflicts below      │
+  │                                            │Periodic save: WARN · not installed                    │
+  │                                            │Login restore: WARN · not installed                    │
+  │                                            │Runtime version: unknown                               │
   │ ↑/↓ or j/k move  ←/→ or h/l fold  enter open  tab focus  r refresh  q quit                         │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   
-  --- UNAVAILABLE INVENTORIES ---
+  --- UNAVAILABLE STATUS ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
   │ NAVIGATION ◀                               │ DETAIL                                                │
-  │  Overview                                  │Snapshots unavailable                                  │
-  │▾ Sessions  [online]                        │fixture snapshot directory is unreadable               │
+  │  Overview                                  │Status                                                 │
+  │▾ Sessions  [online]                        │Recovery readiness, snapshot history, and automation.  │
   │  ▸ development  [attached]                 │                                                       │
-  │  Snapshots  [unavailable]                  │Press r to retry. No snapshot files were changed.      │
-  │  Automation  [unavailable]                 │                                                       │
-  │  Doctor                                    │                                                       │
+  │  Status  [attention]                       │Recovery                                               │
+  │                                            │tmux: PASS · server running                            │
+  │                                            │Workspace: PASS · 1 session(s) · 1 window(s) · 1 pane(s│
+  │                                            │Applications: PASS · 0 exact resume(s) · 1 safe restart│
   │                                            │                                                       │
+  │                                            │Snapshots                                              │
+  │                                            │Readiness: WARN · snapshot inventory unavailable       │
+  │                                            │fixture snapshot directory is unreadable               │
+  │                                            │Press r to retry. Existing snapshot files are unchanged│
   │                                            │                                                       │
+  │                                            │Automation                                             │
+  │                                            │Readiness: WARN · service manager status unavailable   │
+  │                                            │fixture service manager is unavailable                 │
+  │                                            │Press r to retry. No automation settings were changed. │
   │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
-  │                                            │                                                       │
+  │                                            │Mutation safety: PASS · destructive operations require │
+  │                                            │Use the CLI for snapshot restore and automation changes│
   │ ↑/↓ or j/k move  ←/→ or h/l fold  enter open  tab focus  r refresh  q quit                         │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   

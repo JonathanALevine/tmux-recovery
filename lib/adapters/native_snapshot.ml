@@ -6,8 +6,7 @@ module Snapshot = Tmux_recovery_domain.Snapshot
 type config =
   { directory : string
   ; runtime_directory : string
-  ; minimum_snapshots : int
-  ; retention_days : int
+  ; maximum_snapshots : int
   }
 
 let default_config () =
@@ -24,8 +23,7 @@ let default_config () =
   in
   { directory = Filename.concat data_home "tmux-recovery/snapshots"
   ; runtime_directory
-  ; minimum_snapshots = 5
-  ; retention_days = 30
+  ; maximum_snapshots = 10
   }
 ;;
 
@@ -337,16 +335,12 @@ let save config ~socket_name snapshot =
     Or_error.try_with (fun () -> save_sync config ~socket_name snapshot))
 ;;
 
-let prune_candidates config ~now catalog =
-  let cutoff =
-    Time_ns.sub now (Time_ns.Span.of_day (Float.of_int config.retention_days))
-  in
-  let valid = List.filter catalog.Snapshot.snapshots ~f:Snapshot.is_valid in
-  valid
-  |> fun snapshots ->
-  List.drop snapshots config.minimum_snapshots
+let prune_candidates config ~now:_ catalog =
+  catalog.Snapshot.snapshots
+  |> Snapshot.sort_newest_first
+  |> Fn.flip List.drop (Int.max 1 config.maximum_snapshots)
   |> List.filter ~f:(fun (item : Snapshot.summary) ->
-    Time_ns.(item.created_at < cutoff) && (not item.latest) && not item.last_good)
+    (not item.latest) && not item.last_good)
 ;;
 
 let delete_bundle config (summary : Snapshot.summary) =

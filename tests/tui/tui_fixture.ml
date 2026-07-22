@@ -1,6 +1,7 @@
 open! Core
 open Bonsai_term
 module App_recovery = Tmux_recovery_application.Recovery
+module Recovery = Tmux_recovery_domain.Recovery
 module Service = Tmux_recovery_domain.Service
 module Snapshot = Tmux_recovery_domain.Snapshot
 module Workspace = Tmux_recovery_domain.Workspace
@@ -36,20 +37,38 @@ let workspace =
   |> Result.ok_or_failwith
 ;;
 
-let snapshot_id =
+let legacy_snapshot_id =
   Snapshot.Id.of_string "tmux_resurrect_20260720T213239.txt" |> Or_error.ok_exn
+;;
+
+let native_snapshot_id =
+  Snapshot.Id.of_string "tmux_recovery_1784597559000000000_0123abcd.snapshot"
+  |> Or_error.ok_exn
 ;;
 
 let snapshots : Snapshot.catalog Or_error.t =
   Ok
-    { directory = "/Users/demo/.local/share/tmux/resurrect"
+    { directory = "/Users/demo/.local/share/tmux-recovery/snapshots"
     ; directory_exists = true
     ; snapshots =
-        [ { id = snapshot_id
+        [ { id = native_snapshot_id
           ; created_at = Time_ns.epoch
-          ; size_bytes = 4096L
+          ; size_bytes = 8192L
           ; latest = true
           ; last_good = true
+          ; validity = Valid
+          ; warnings = []
+          ; session_count = 1
+          ; window_count = 1
+          ; pane_count = 1
+          ; manifest = true
+          ; legacy = false
+          }
+        ; { id = legacy_snapshot_id
+          ; created_at = Time_ns.epoch
+          ; size_bytes = 4096L
+          ; latest = false
+          ; last_good = false
           ; validity = Valid
           ; warnings = []
           ; session_count = 1
@@ -66,7 +85,7 @@ let snapshots : Snapshot.catalog Or_error.t =
 let services : Service.t Or_error.t =
   Ok
     { manager = Launchd
-    ; ownership = Legacy
+    ; ownership = Managed
     ; periodic_save =
         { activation = Loaded
         ; schedule = Some "600 seconds"
@@ -77,16 +96,20 @@ let services : Service.t Or_error.t =
         ; schedule = Some "at login"
         ; definition = Some "/Users/demo/Library/LaunchAgents/com.demo.tmux.plist"
         }
-    ; binary_path = Some "/Users/demo/bin/tmux-resurrect-save-safe"
-    ; binary_version = None
+    ; binary_path =
+        Some "/Users/demo/.local/share/tmux-recovery/bin/current/tmux-recovery"
+    ; binary_version = Some "0.3.0-dev.8"
     ; last_result = Some "launchctl exit status 0"
     ; next_run = None
     ; conflicts = []
-    ; warnings = [ "legacy tmux automation detected; tmux-recovery will not modify it" ]
+    ; warnings =
+        [ "old recovery files remain on disk for rollback, but they are disabled and not \
+           running"
+        ]
     }
 ;;
 
-let make_app ~snapshots ~services =
+let make_app ~initial_recovery ~snapshots ~services =
   let service = App_recovery.create ~socket_name:"tmux-recovery-golden-test" () in
   let capture_pane ~pane_id:_ =
     Effect.return
@@ -112,6 +135,7 @@ let make_app ~snapshots ~services =
       ~capture_pane
       ~service
       ~initial:workspace
+      ?initial_recovery
       ~initial_snapshots:snapshots
       ~initial_services:services
       ~exit:(fun () -> Effect.Ignore)
@@ -119,7 +143,28 @@ let make_app ~snapshots ~services =
       graph
 ;;
 
-let app = make_app ~snapshots ~services
+let app = make_app ~initial_recovery:None ~snapshots ~services
+
+let warning_app =
+  let decision : Recovery.decision =
+    { pane_id = "%1"
+    ; observed = "codex"
+    ; action = Blocked
+    ; executable = None
+    ; argv = []
+    ; fidelity = "shell fallback"
+    ; reason = "Codex is running, but no durable thread reference is available"
+    ; rule_id = Some "adapter:codex:missing-thread"
+    }
+  in
+  let recovery : Recovery.plan =
+    { source = Live
+    ; decisions = [ decision ]
+    ; warnings = [ "one application cannot resume exactly" ]
+    }
+  in
+  make_app ~initial_recovery:(Some recovery) ~snapshots ~services
+;;
 
 let empty_app =
   let snapshots =
@@ -144,11 +189,12 @@ let empty_app =
       ; warnings = []
       }
   in
-  make_app ~snapshots ~services
+  make_app ~initial_recovery:None ~snapshots ~services
 ;;
 
 let unavailable_app =
   make_app
+    ~initial_recovery:None
     ~snapshots:(Or_error.error_string "fixture snapshot directory is unreadable")
     ~services:(Or_error.error_string "fixture service manager is unavailable")
 ;;

@@ -6,8 +6,7 @@ module Snapshot = Tmux_recovery_domain.Snapshot
 type config =
   { directory : string
   ; runtime_directory : string
-  ; minimum_snapshots : int
-  ; retention_days : int
+  ; maximum_snapshots : int
   }
 
 val default_config : unit -> config

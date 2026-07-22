@@ -229,8 +229,7 @@ let%test_unit "native bundles commit atomically and reject hash corruption" =
       let config : Native_snapshot.config =
         { directory = Filename.concat root "snapshots"
         ; runtime_directory = Filename.concat root "run"
-        ; minimum_snapshots = 5
-        ; retention_days = 30
+        ; maximum_snapshots = 10
         }
       in
       let snapshot = native_fixture ~id ~created_at in
@@ -298,7 +297,7 @@ let%test_unit "systemd telemetry is normalized for the service page" =
   [%test_eq: string option] next (Some "2026-07-22 16:29:16.705309000Z")
 ;;
 
-let%test_unit "retention preserves the newest five and last-good" =
+let%test_unit "retention keeps a rolling maximum of ten native snapshots" =
   let day value = Time_ns.add Time_ns.epoch (Time_ns.Span.of_day (Float.of_int value)) in
   let summary position created_at ~last_good : Snapshot.summary =
     let id =
@@ -320,28 +319,22 @@ let%test_unit "retention preserves the newest five and last-good" =
     }
   in
   let snapshots =
-    [ summary 0 (day 99) ~last_good:false
-    ; summary 1 (day 98) ~last_good:false
-    ; summary 2 (day 97) ~last_good:false
-    ; summary 3 (day 96) ~last_good:false
-    ; summary 4 (day 95) ~last_good:false
-    ; summary 5 (day 60) ~last_good:false
-    ; summary 6 (day 50) ~last_good:true
-    ]
+    List.init 12 ~f:(fun position ->
+      summary position (day (99 - position)) ~last_good:(position = 0))
   in
   let config : Native_snapshot.config =
     { directory = "/fixtures/snapshots"
     ; runtime_directory = "/fixtures/run"
-    ; minimum_snapshots = 5
-    ; retention_days = 30
+    ; maximum_snapshots = 10
     }
   in
   let catalog : Snapshot.catalog =
     { directory = config.directory; directory_exists = true; snapshots; warnings = [] }
   in
   let candidates = Native_snapshot.prune_candidates config ~now:(day 100) catalog in
-  [%test_eq: int] (List.length candidates) 1;
-  [%test_eq: Snapshot.Id.t] (List.hd_exn candidates).id (List.nth_exn snapshots 5).id
+  [%test_eq: int] (List.length candidates) 2;
+  [%test_eq: Snapshot.Id.t] (List.hd_exn candidates).id (List.nth_exn snapshots 10).id;
+  [%test_eq: Snapshot.Id.t] (List.last_exn candidates).id (List.nth_exn snapshots 11).id
 ;;
 
 let%test_unit "pane capture keeps SGR color and neutralizes other controls" =

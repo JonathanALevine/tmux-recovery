@@ -47,33 +47,21 @@ let () =
   Bonsai_term_test.send_event selected (Key_press { key = Arrow `Down; mods = [] });
   Handle.recompute_view_until_stable selected;
   Handle.show selected;
-  print_endline "--- SNAPSHOTS ---";
-  let snapshots =
-    Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.app
+  print_endline "--- STATUS ---";
+  let status = Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.app in
+  Bonsai_term_test.set_dimensions status { width = 100; height = 22 };
+  Handle.recompute_view_until_stable status;
+  move_down status 3;
+  Handle.show status;
+  print_endline "--- STATUS WITH APPLICATION WARNING ---";
+  let warning =
+    Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.warning_app
   in
-  Bonsai_term_test.set_dimensions snapshots { width = 100; height = 22 };
-  Handle.recompute_view_until_stable snapshots;
-  move_down snapshots 3;
-  Handle.show snapshots;
-  print_endline "--- SNAPSHOT SELECTED ---";
-  Bonsai_term_test.send_event snapshots (Key_press { key = Arrow `Right; mods = [] });
-  Bonsai_term_test.send_event snapshots (Key_press { key = Arrow `Down; mods = [] });
-  Handle.show snapshots;
-  print_endline "--- AUTOMATION ---";
-  let services =
-    Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.app
-  in
-  Bonsai_term_test.set_dimensions services { width = 100; height = 22 };
-  Handle.recompute_view_until_stable services;
-  move_down services 4;
-  Handle.show services;
-  print_endline "--- DOCTOR ---";
-  let doctor = Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.app in
-  Bonsai_term_test.set_dimensions doctor { width = 100; height = 22 };
-  Handle.recompute_view_until_stable doctor;
-  move_down doctor 5;
-  Handle.show doctor;
-  print_endline "--- EMPTY SNAPSHOTS ---";
+  Bonsai_term_test.set_dimensions warning { width = 100; height = 22 };
+  Handle.recompute_view_until_stable warning;
+  move_down warning 3;
+  Handle.show warning;
+  print_endline "--- EMPTY STATUS ---";
   let empty =
     Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.empty_app
   in
@@ -81,7 +69,7 @@ let () =
   Handle.recompute_view_until_stable empty;
   move_down empty 3;
   Handle.show empty;
-  print_endline "--- UNAVAILABLE INVENTORIES ---";
+  print_endline "--- UNAVAILABLE STATUS ---";
   let unavailable =
     Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.unavailable_app
   in

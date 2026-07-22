@@ -159,7 +159,9 @@ let status_from_inventory inventory =
        | Legacy -> [ "legacy tmux automation detected; tmux-recovery will not modify it" ]
        | Drifted -> [ "managed and legacy or incomplete service definitions coexist" ]
        | Managed when has_legacy_assets ->
-         [ "inactive legacy assets are retained only for migration rollback" ]
+         [ "old recovery files remain on disk for rollback, but they are disabled and \
+            not running"
+         ]
        | Absent | Managed -> [])
   }
 ;;
