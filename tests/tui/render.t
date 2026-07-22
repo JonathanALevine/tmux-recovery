@@ -6,7 +6,7 @@
   │  ▸ development  [attached]                 │                                                       │
   │▸ Snapshots  [1]                            │tmux: online                                           │
   │  Automation  [legacy/unmanaged]            │Sessions: 1                                            │
-  │  Health checks                             │Canonical windows: 1                                   │
+  │  Doctor                                    │Canonical windows: 1                                   │
   │                                            │Panes: 1                                               │
   │                                            │Snapshots: 1                                           │
   │                                            │                                                       │
@@ -32,7 +32,7 @@
   │  ▸ development  [attached]                 │Server: running                                        │
   │▸ Snapshots  [1]                            │Version: tmux test                                     │
   │  Automation  [legacy/unmanaged]            │Socket: default                                        │
-  │  Health checks                             │                                                       │
+  │  Doctor                                    │                                                       │
   │                                            │                                                       │
   │                                            │                                                       │
   │                                            │                                                       │
@@ -59,7 +59,7 @@
   │    ▸ 0:monitoring  [active]                │Live window contents                                   │
   │▸ Snapshots  [1]                            │Active pane · bottom of screen · read-only · refresh wi│
   │  Automation  [legacy/unmanaged]            │                                                       │
-  │  Health checks                             │older output 01                                        │
+  │  Doctor                                    │older output 01                                        │
   │                                            │older output 02                                        │
   │                                            │older output 03                                        │
   │                                            │older output 04                                        │
@@ -86,7 +86,7 @@
   │      ▸ pane 0  [active]                    │Observed command: btop                                 │
   │▸ Snapshots  [1]                            │Recovery: restart                                      │
   │  Automation  [legacy/unmanaged]            │                                                       │
-  │  Health checks                             │Latest pane output                                     │
+  │  Doctor                                    │Latest pane output                                     │
   │                                            │Bottom of pane · read-only · refresh with r            │
   │                                            │                                                       │
   │                                            │older output 05                                        │
@@ -110,7 +110,7 @@
   │  ▸ development  [attached]                 │Directory health: available                            │
   │▸ Snapshots  [1]                            │Total: 1                                               │
   │  Automation  [legacy/unmanaged]            │Valid: 1                                               │
-  │  Health checks                             │Newest: 2026-07-20 21:32:39                            │
+  │  Doctor                                    │Newest: 2026-07-20 21:32:39                            │
   │                                            │Last good: tmux_resurrect_20260720T213239.txt          │
   │                                            │Storage: 4.0 KiB                                       │
   │                                            │Retention: native: keep 5 and 30 days · legacy: preserv│
@@ -137,7 +137,7 @@
   │▾ Snapshots  [1]                            │Status: latest last-good legacy                        │
   │    2026-07-20 21:32:39  [latest last-good l│Sessions: 1                                            │
   │  Automation  [legacy/unmanaged]            │Windows: 1                                             │
-  │  Health checks                             │Panes: 1                                               │
+  │  Doctor                                    │Panes: 1                                               │
   │                                            │Size: 4.0 KiB                                          │
   │                                            │Process manifest: absent                               │
   │                                            │Compatibility: legacy/upstream                         │
@@ -162,7 +162,7 @@
   │  ▸ development  [attached]                 │                                                       │
   │▸ Snapshots  [1]                            │Manager: launchd                                       │
   │  Automation  [legacy/unmanaged]            │Ownership: legacy/unmanaged                            │
-  │  Health checks                             │Periodic snapshots                                     │
+  │  Doctor                                    │Periodic snapshots                                     │
   │                                            │Status: loaded · 600 seconds                           │
   │                                            │Definition: /Users/demo/Library/LaunchAgents/com.demo.t│
   │                                            │Restore after login                                    │
@@ -180,15 +180,15 @@
   │ ↑/↓ or j/k move  ←/→ or h/l fold  enter open  tab focus  r refresh  q quit                         │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   
-  --- HEALTH ---
+  --- DOCTOR ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
   │ NAVIGATION ◀                               │ DETAIL                                                │
-  │  Overview                                  │Health checks                                          │
+  │  Overview                                  │Doctor                                                 │
   │▾ Sessions  [online]                        │Recovery readiness at a glance.                        │
   │  ▸ development  [attached]                 │                                                       │
   │▸ Snapshots  [1]                            │tmux: PASS · server running                            │
   │  Automation  [legacy/unmanaged]            │workspace: PASS · graph valid                          │
-  │  Health checks                             │snapshots: PASS · valid recovery point                 │
+  │  Doctor                                    │snapshots: PASS · valid recovery point                 │
   │                                            │applications: PASS                                     │
   │                                            │automation: WARN · legacy/unmanaged                    │
   │                                            │mutation safety: PASS · plan, approve, verify, rollback│
@@ -214,7 +214,7 @@
   │  ▸ development  [attached]                 │Directory health: available                            │
   │  Snapshots  [0]                            │Total: 0                                               │
   │  Automation  [absent]                      │Valid: 0                                               │
-  │  Health checks                             │Newest: none                                           │
+  │  Doctor                                    │Newest: none                                           │
   │                                            │Last good: none                                        │
   │                                            │Storage: 0 B                                           │
   │                                            │Retention: native: keep 5 and 30 days · legacy: preserv│
@@ -240,7 +240,7 @@
   │  ▸ development  [attached]                 │                                                       │
   │  Snapshots  [unavailable]                  │Press r to retry. No snapshot files were changed.      │
   │  Automation  [unavailable]                 │                                                       │
-  │  Health checks                             │                                                       │
+  │  Doctor                                    │                                                       │
   │                                            │                                                       │
   │                                            │                                                       │
   │                                            │                                                       │

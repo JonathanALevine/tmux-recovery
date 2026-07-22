@@ -187,7 +187,7 @@ let navigation (workspace : Workspace.t) recovery snapshots services =
     ; badge = service_badge services
     ; children = []
     }
-  ; { page = Doctor; label = "Health checks"; badge = None; children = [] }
+  ; { page = Doctor; label = "Doctor"; badge = None; children = [] }
   ]
 ;;
 
@@ -811,7 +811,7 @@ let detail_lines model ~height =
         "PASS · managed"
       | Ok status -> "WARN · " ^ Service.ownership_label status.ownership
     in
-    [ heading "Health checks"
+    [ heading "Doctor"
     ; plain ~color:muted "Recovery readiness at a glance."
     ; plain ""
     ; field

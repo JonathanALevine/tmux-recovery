@@ -67,12 +67,12 @@ let () =
   Handle.recompute_view_until_stable services;
   move_down services 4;
   Handle.show services;
-  print_endline "--- HEALTH ---";
-  let health = Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.app in
-  Bonsai_term_test.set_dimensions health { width = 100; height = 22 };
-  Handle.recompute_view_until_stable health;
-  move_down health 5;
-  Handle.show health;
+  print_endline "--- DOCTOR ---";
+  let doctor = Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.app in
+  Bonsai_term_test.set_dimensions doctor { width = 100; height = 22 };
+  Handle.recompute_view_until_stable doctor;
+  move_down doctor 5;
+  Handle.show doctor;
   print_endline "--- EMPTY SNAPSHOTS ---";
   let empty =
     Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.empty_app
