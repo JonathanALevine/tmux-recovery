@@ -24,10 +24,11 @@ ID; conversation content and arbitrary database rows are never copied.
   Codex pane without a durable provider thread is recorded and reported as
   blocked instead of silently resuming the wrong conversation. Existing
   unrestricted session policy is preserved, not introduced.
-- Approved direct application restarts for btop, htop, top, and bare
-  Python/IPython. Approved programs are resolved to verified absolute paths so
-  login services do not depend on an interactive shell's `PATH`. Unknown
-  programs fall back to usable shells.
+- Approved direct application restarts for btop, htop, top, bare
+  Python/IPython, and tmux-recovery's own interactive navigator. Approved
+  programs are resolved to verified absolute paths so login services do not
+  depend on an interactive shell's `PATH`. Unknown programs fall back to usable
+  shells.
 - Backward-compatible native snapshot reader for schema v1 and a schema v2
   writer containing minimal application resume records.
 - Read-only conversion of compatible tmux-resurrect snapshots to native

@@ -150,6 +150,13 @@ let classify ?codex_resume ?(codex_detected = false) (pane : Workspace.Pane.t) =
       executable
       "new application instance"
       "matched the conservative built-in restart catalog"
+  | None, false, "tmux-recovery" ->
+    fixed
+      pane
+      Restart
+      "tmux-recovery"
+      "new interactive recovery navigator"
+      "matched the native self-recovery rule"
   | None, false, (("python" | "python3" | "ipython") as executable) ->
     fixed
       pane

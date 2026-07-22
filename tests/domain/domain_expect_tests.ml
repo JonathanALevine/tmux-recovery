@@ -79,6 +79,26 @@ let%test_unit "unknown programs fall back to a usable shell" =
   [%test_eq: string] decision.reason "no approved recovery rule for mystery-agent"
 ;;
 
+let%test_unit "tmux-recovery relaunches its own interactive navigator" =
+  let pane : Workspace.Pane.t =
+    { id = "%10"
+    ; window_id = "@10"
+    ; index = 0
+    ; active = true
+    ; title = "tmux-recovery"
+    ; cwd = "/tmp"
+    ; current_command = "tmux-recovery"
+    ; pid = Some 100
+    ; tty = None
+    }
+  in
+  let decision = Recovery.classify pane in
+  [%test_eq: Recovery.Action.t] decision.action Restart;
+  [%test_eq: string option] decision.executable (Some "tmux-recovery");
+  [%test_eq: string] decision.fidelity "new interactive recovery navigator";
+  [%test_eq: string option] decision.rule_id (Some "builtin:tmux-recovery")
+;;
+
 let%test_unit "Codex panes resume only with a validated durable thread reference" =
   let pane : Workspace.Pane.t =
     { id = "%9"

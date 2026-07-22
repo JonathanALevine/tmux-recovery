@@ -590,7 +590,8 @@ let safe_command_word value =
 ;;
 
 let approved_application_names =
-  String.Set.of_list [ "btop"; "htop"; "top"; "python"; "python3"; "ipython" ]
+  String.Set.of_list
+    [ "btop"; "htop"; "top"; "python"; "python3"; "ipython"; "tmux-recovery" ]
 ;;
 
 let approved_executable executable =
