@@ -146,7 +146,7 @@ Run `tmux-recovery` in an interactive terminal or use `tmux-recovery ui`.
 - `h`/`l` collapse and expand.
 - `Enter` opens or toggles a branch.
 - `Tab` switches panes on narrow terminals.
-- `r` refreshes sessions, snapshots, services, and the selected live preview.
+- `r` refreshes sessions, snapshots, automation, and the selected live preview.
 - `q` or `Ctrl-C` exits.
 
 The TUI inherits the terminal foreground/background, disables mouse reporting,

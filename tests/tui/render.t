@@ -5,9 +5,9 @@
   │▾ Sessions  [online]                        │A conservative recovery control plane for tmux.        │
   │  ▸ development  [attached]                 │                                                       │
   │▸ Snapshots  [1]                            │tmux: online                                           │
-  │  Recovery plan                             │Sessions: 1                                            │
-  │  Services  [legacy/unmanaged]              │Canonical windows: 1                                   │
-  │  Doctor                                    │Panes: 1                                               │
+  │  Automation  [legacy/unmanaged]            │Sessions: 1                                            │
+  │  Health checks                             │Canonical windows: 1                                   │
+  │                                            │Panes: 1                                               │
   │                                            │Snapshots: 1                                           │
   │                                            │                                                       │
   │                                            │Guarded mutations require explicit approval in the CLI.│
@@ -31,9 +31,9 @@
   │▾ Sessions  [online]                        │Source: live                                           │
   │  ▸ development  [attached]                 │Server: running                                        │
   │▸ Snapshots  [1]                            │Version: tmux test                                     │
-  │  Recovery plan                             │Socket: default                                        │
-  │  Services  [legacy/unmanaged]              │                                                       │
-  │  Doctor                                    │                                                       │
+  │  Automation  [legacy/unmanaged]            │Socket: default                                        │
+  │  Health checks                             │                                                       │
+  │                                            │                                                       │
   │                                            │                                                       │
   │                                            │                                                       │
   │                                            │                                                       │
@@ -58,9 +58,9 @@
   │  ▾ development  [attached]                 │                                                       │
   │    ▸ 0:monitoring  [active]                │Live window contents                                   │
   │▸ Snapshots  [1]                            │Active pane · bottom of screen · read-only · refresh wi│
-  │  Recovery plan                             │                                                       │
-  │  Services  [legacy/unmanaged]              │older output 01                                        │
-  │  Doctor                                    │older output 02                                        │
+  │  Automation  [legacy/unmanaged]            │                                                       │
+  │  Health checks                             │older output 01                                        │
+  │                                            │older output 02                                        │
   │                                            │older output 03                                        │
   │                                            │older output 04                                        │
   │                                            │older output 05                                        │
@@ -85,9 +85,9 @@
   │    ▾ 0:monitoring  [active]                │Title: btop                                            │
   │      ▸ pane 0  [active]                    │Observed command: btop                                 │
   │▸ Snapshots  [1]                            │Recovery: restart                                      │
-  │  Recovery plan                             │                                                       │
-  │  Services  [legacy/unmanaged]              │Latest pane output                                     │
-  │  Doctor                                    │Bottom of pane · read-only · refresh with r            │
+  │  Automation  [legacy/unmanaged]            │                                                       │
+  │  Health checks                             │Latest pane output                                     │
+  │                                            │Bottom of pane · read-only · refresh with r            │
   │                                            │                                                       │
   │                                            │older output 05                                        │
   │                                            │older output 06                                        │
@@ -109,9 +109,9 @@
   │▾ Sessions  [online]                        │Directory: /Users/demo/.local/share/tmux/resurrect     │
   │  ▸ development  [attached]                 │Directory health: available                            │
   │▸ Snapshots  [1]                            │Total: 1                                               │
-  │  Recovery plan                             │Valid: 1                                               │
-  │  Services  [legacy/unmanaged]              │Newest: 2026-07-20 21:32:39                            │
-  │  Doctor                                    │Last good: tmux_resurrect_20260720T213239.txt          │
+  │  Automation  [legacy/unmanaged]            │Valid: 1                                               │
+  │  Health checks                             │Newest: 2026-07-20 21:32:39                            │
+  │                                            │Last good: tmux_resurrect_20260720T213239.txt          │
   │                                            │Storage: 4.0 KiB                                       │
   │                                            │Retention: native: keep 5 and 30 days · legacy: preserv│
   │                                            │                                                       │
@@ -136,9 +136,9 @@
   │  ▸ development  [attached]                 │Validity: valid                                        │
   │▾ Snapshots  [1]                            │Status: latest last-good legacy                        │
   │    2026-07-20 21:32:39  [latest last-good l│Sessions: 1                                            │
-  │  Recovery plan                             │Windows: 1                                             │
-  │  Services  [legacy/unmanaged]              │Panes: 1                                               │
-  │  Doctor                                    │Size: 4.0 KiB                                          │
+  │  Automation  [legacy/unmanaged]            │Windows: 1                                             │
+  │  Health checks                             │Panes: 1                                               │
+  │                                            │Size: 4.0 KiB                                          │
   │                                            │Process manifest: absent                               │
   │                                            │Compatibility: legacy/upstream                         │
   │                                            │                                                       │
@@ -154,16 +154,18 @@
   │ ↑/↓ or j/k move  ←/→ or h/l fold  enter open  tab focus  r refresh  q quit                         │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   
-  --- SERVICES ---
+  --- AUTOMATION ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
   │ NAVIGATION ◀                               │ DETAIL                                                │
-  │  Overview                                  │Services                                               │
-  │▾ Sessions  [online]                        │Manager: launchd                                       │
-  │  ▸ development  [attached]                 │Ownership: legacy/unmanaged                            │
-  │▸ Snapshots  [1]                            │Periodic save                                          │
-  │  Recovery plan                             │Status: loaded · 600 seconds                           │
-  │  Services  [legacy/unmanaged]              │Definition: /Users/demo/Library/LaunchAgents/com.demo.t│
-  │  Doctor                                    │Login restore                                          │
+  │  Overview                                  │Automation                                             │
+  │▾ Sessions  [online]                        │Background snapshots and reboot recovery.              │
+  │  ▸ development  [attached]                 │                                                       │
+  │▸ Snapshots  [1]                            │Manager: launchd                                       │
+  │  Automation  [legacy/unmanaged]            │Ownership: legacy/unmanaged                            │
+  │  Health checks                             │Periodic snapshots                                     │
+  │                                            │Status: loaded · 600 seconds                           │
+  │                                            │Definition: /Users/demo/Library/LaunchAgents/com.demo.t│
+  │                                            │Restore after login                                    │
   │                                            │Status: loaded · at login                              │
   │                                            │Definition: /Users/demo/Library/LaunchAgents/com.demo.t│
   │                                            │Runtime binary                                         │
@@ -174,7 +176,31 @@
   │                                            │Next run: unavailable                                  │
   │                                            │Conflicts: 0                                           │
   │                                            │Warning: legacy tmux automation detected; tmux-recovery│
-  │                                            │Service mutations require reviewed CLI --approve flags.│
+  │                                            │Changes require reviewed CLI --approve flags.          │
+  │ ↑/↓ or j/k move  ←/→ or h/l fold  enter open  tab focus  r refresh  q quit                         │
+  └────────────────────────────────────────────────────────────────────────────────────────────────────┘
+  
+  --- HEALTH ---
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ NAVIGATION ◀                               │ DETAIL                                                │
+  │  Overview                                  │Health checks                                          │
+  │▾ Sessions  [online]                        │Recovery readiness at a glance.                        │
+  │  ▸ development  [attached]                 │                                                       │
+  │▸ Snapshots  [1]                            │tmux: PASS · server running                            │
+  │  Automation  [legacy/unmanaged]            │workspace: PASS · graph valid                          │
+  │  Health checks                             │snapshots: PASS · valid recovery point                 │
+  │                                            │applications: PASS                                     │
+  │                                            │automation: WARN · legacy/unmanaged                    │
+  │                                            │mutation safety: PASS · plan, approve, verify, rollback│
+  │                                            │                                                       │
+  │                                            │Run tmux-recovery doctor for full diagnostics.         │
+  │                                            │                                                       │
+  │                                            │                                                       │
+  │                                            │                                                       │
+  │                                            │                                                       │
+  │                                            │                                                       │
+  │                                            │                                                       │
+  │                                            │                                                       │
   │                                            │                                                       │
   │                                            │                                                       │
   │ ↑/↓ or j/k move  ←/→ or h/l fold  enter open  tab focus  r refresh  q quit                         │
@@ -187,9 +213,9 @@
   │▾ Sessions  [online]                        │Directory: /Users/demo/.local/share/tmux/resurrect     │
   │  ▸ development  [attached]                 │Directory health: available                            │
   │  Snapshots  [0]                            │Total: 0                                               │
-  │  Recovery plan                             │Valid: 0                                               │
-  │  Services  [absent]                        │Newest: none                                           │
-  │  Doctor                                    │Last good: none                                        │
+  │  Automation  [absent]                      │Valid: 0                                               │
+  │  Health checks                             │Newest: none                                           │
+  │                                            │Last good: none                                        │
   │                                            │Storage: 0 B                                           │
   │                                            │Retention: native: keep 5 and 30 days · legacy: preserv│
   │                                            │                                                       │
@@ -213,9 +239,9 @@
   │▾ Sessions  [online]                        │fixture snapshot directory is unreadable               │
   │  ▸ development  [attached]                 │                                                       │
   │  Snapshots  [unavailable]                  │Press r to retry. No snapshot files were changed.      │
-  │  Recovery plan                             │                                                       │
-  │  Services  [unavailable]                   │                                                       │
-  │  Doctor                                    │                                                       │
+  │  Automation  [unavailable]                 │                                                       │
+  │  Health checks                             │                                                       │
+  │                                            │                                                       │
   │                                            │                                                       │
   │                                            │                                                       │
   │                                            │                                                       │

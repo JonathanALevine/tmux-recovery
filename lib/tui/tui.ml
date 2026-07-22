@@ -26,7 +26,6 @@ module Page_ref = struct
       | Resource of resource
       | Snapshots
       | Snapshot of Snapshot.Id.t
-      | Recovery_plan
       | Services
       | Doctor
     [@@deriving compare, equal, sexp_of]
@@ -183,9 +182,12 @@ let navigation (workspace : Workspace.t) recovery snapshots services =
     ; badge = snapshots_badge
     ; children = snapshot_children
     }
-  ; { page = Recovery_plan; label = "Recovery plan"; badge = None; children = [] }
-  ; { page = Services; label = "Services"; badge = service_badge services; children = [] }
-  ; { page = Doctor; label = "Doctor"; badge = None; children = [] }
+  ; { page = Services
+    ; label = "Automation"
+    ; badge = service_badge services
+    ; children = []
+    }
+  ; { page = Doctor; label = "Health checks"; badge = None; children = [] }
   ]
 ;;
 
@@ -369,7 +371,7 @@ let apply_action _context model action =
     ; message =
         Some
           (if unavailable = 0
-           then "sessions, snapshots, and services refreshed"
+           then "sessions, snapshots, and automation refreshed"
            else [%string "refresh completed · %{unavailable#Int} source(s) unavailable"])
     ; preview_generation = model.preview_generation + 1
     ; pane_preview = No_preview
@@ -462,7 +464,6 @@ let node_color model (node : node) =
         | Some summary when summary.latest || summary.last_good -> green
         | Some _ -> cyan
         | None -> red))
-  | Recovery_plan -> violet
   | Services ->
     (match model.services with
      | Error _ -> red
@@ -688,17 +689,6 @@ let detail_lines model ~height =
      | Some pane ->
        (decision_for (decisions_by_pane model.recovery) pane |> decision_lines)
        @ pane_preview_lines model pane.id ~line_limit:preview_line_limit)
-  | Recovery_plan ->
-    let plan = model.recovery in
-    let summary =
-      Recovery.counts plan
-      |> List.map ~f:(fun (action, count) ->
-        [%string "%{Recovery.Action.label action}: %{count#Int}"])
-    in
-    heading "Recovery plan"
-    :: plain "No applications are launched by this preview."
-    :: plain ""
-    :: List.map summary ~f:plain
   | Snapshots ->
     (match model.snapshots with
      | Error error ->
@@ -770,10 +760,10 @@ let detail_lines model ~height =
   | Services ->
     (match model.services with
      | Error error ->
-       [ heading "Services unavailable"
+       [ heading "Automation unavailable"
        ; plain ~color:amber (Error.to_string_hum error |> String.strip)
        ; plain ""
-       ; plain ~color:muted "Press r to retry. No service definitions were changed."
+       ; plain ~color:muted "Press r to retry. No automation settings were changed."
        ]
      | Ok status ->
        let component_status (component : Service.component) =
@@ -782,13 +772,15 @@ let detail_lines model ~height =
          | Some schedule ->
            Service.activation_label component.activation ^ " · " ^ schedule
        in
-       [ heading "Services"
+       [ heading "Automation"
+       ; plain ~color:muted "Background snapshots and reboot recovery."
+       ; plain ""
        ; field "Manager" (Service.manager_label status.manager)
        ; field "Ownership" (Service.ownership_label status.ownership)
-       ; heading "Periodic save"
+       ; heading "Periodic snapshots"
        ; field "Status" (component_status status.periodic_save)
        ; field "Definition" (Option.value status.periodic_save.definition ~default:"none")
-       ; heading "Login restore"
+       ; heading "Restore after login"
        ; field "Status" (component_status status.login_restore)
        ; field "Definition" (Option.value status.login_restore.definition ~default:"none")
        ; heading "Runtime binary"
@@ -801,13 +793,37 @@ let detail_lines model ~height =
        ]
        @ List.map status.conflicts ~f:(fun conflict -> plain ~color:amber conflict)
        @ warning_lines status.warnings
-       @ [ plain ~color:muted "Service mutations require reviewed CLI --approve flags." ])
+       @ [ plain ~color:muted "Changes require reviewed CLI --approve flags." ])
   | Doctor ->
-    [ heading "Doctor"
-    ; field "tmux executable" "PASS"
-    ; field "tmux server" (if workspace.server.available then "PASS" else "WARN")
-    ; field "workspace graph" "PASS"
+    let snapshot_health =
+      match model.snapshots with
+      | Error _ -> "WARN · unavailable"
+      | Ok catalog ->
+        (match Snapshot.last_good catalog with
+         | Some _ -> "PASS · valid recovery point"
+         | None -> "WARN · no valid recovery point")
+    and application_health =
+      if List.is_empty model.recovery.warnings then "PASS" else "WARN · review policy"
+    and automation_health =
+      match model.services with
+      | Error _ -> "WARN · unavailable"
+      | Ok status when Service.equal_ownership status.ownership Managed ->
+        "PASS · managed"
+      | Ok status -> "WARN · " ^ Service.ownership_label status.ownership
+    in
+    [ heading "Health checks"
+    ; plain ~color:muted "Recovery readiness at a glance."
+    ; plain ""
+    ; field
+        "tmux"
+        (if workspace.server.available then "PASS · server running" else "WARN")
+    ; field "workspace" "PASS · graph valid"
+    ; field "snapshots" snapshot_health
+    ; field "applications" application_health
+    ; field "automation" automation_health
     ; field "mutation safety" "PASS · plan, approve, verify, rollback"
+    ; plain ""
+    ; plain ~color:muted "Run tmux-recovery doctor for full diagnostics."
     ]
 ;;
 
@@ -823,7 +839,7 @@ let render_detail model ~width ~height =
          | Resource (Window_link _ | Pane _ | Application _) -> "PREVIEW"
          | Overview
          | Resource (Workspace _ | Session _)
-         | Snapshots | Snapshot _ | Recovery_plan | Services | Doctor -> "DETAIL"
+         | Snapshots | Snapshot _ | Services | Doctor -> "DETAIL"
        in
        if equal_focus model.focus Page then title ^ " ◀" else title)
     ~width

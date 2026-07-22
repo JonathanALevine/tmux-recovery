@@ -59,14 +59,20 @@ let () =
   Bonsai_term_test.send_event snapshots (Key_press { key = Arrow `Right; mods = [] });
   Bonsai_term_test.send_event snapshots (Key_press { key = Arrow `Down; mods = [] });
   Handle.show snapshots;
-  print_endline "--- SERVICES ---";
+  print_endline "--- AUTOMATION ---";
   let services =
     Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.app
   in
   Bonsai_term_test.set_dimensions services { width = 100; height = 22 };
   Handle.recompute_view_until_stable services;
-  move_down services 5;
+  move_down services 4;
   Handle.show services;
+  print_endline "--- HEALTH ---";
+  let health = Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.app in
+  Bonsai_term_test.set_dimensions health { width = 100; height = 22 };
+  Handle.recompute_view_until_stable health;
+  move_down health 5;
+  Handle.show health;
   print_endline "--- EMPTY SNAPSHOTS ---";
   let empty =
     Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.empty_app
