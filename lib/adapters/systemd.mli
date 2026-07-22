@@ -23,6 +23,8 @@ type config =
 val default_config : unit -> config
 val status : config -> Service.t Or_error.t Deferred.t
 val status_from_inventory : inventory -> Service.t
+val service_result : string -> string option
+val next_run_of_json : string -> string option
 
 val managed_definitions
   :  config

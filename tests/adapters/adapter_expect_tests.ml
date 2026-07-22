@@ -284,6 +284,20 @@ let%test_unit "stable runtime sync retains a rollback pointer" =
       [%test_eq: string] (Core_unix.readlink second.previous) "1.1.0")
 ;;
 
+let%test_unit "systemd telemetry is normalized for the service page" =
+  let result =
+    Systemd.service_result
+      "Result=success\n\
+       ExecMainExitTimestamp=Wed 2026-07-22 12:19:08 EDT\n\
+       ExecMainStatus=0\n"
+  and next =
+    Systemd.next_run_of_json
+      {|[{"next":1784737756705309,"unit":"tmux-recovery-save.timer"}]|}
+  in
+  [%test_eq: string option] result (Some "success · exit 0 · Wed 2026-07-22 12:19:08 EDT");
+  [%test_eq: string option] next (Some "2026-07-22 16:29:16.705309000Z")
+;;
+
 let%test_unit "retention preserves the newest five and last-good" =
   let day value = Time_ns.add Time_ns.epoch (Time_ns.Span.of_day (Float.of_int value)) in
   let summary position created_at ~last_good : Snapshot.summary =

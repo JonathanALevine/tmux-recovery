@@ -78,10 +78,11 @@ let create
 let merge_catalogs native legacy =
   let native_snapshots = native.Snapshot.snapshots in
   let legacy_snapshots = legacy.Snapshot.snapshots in
+  let legacy_warnings = if legacy.directory_exists then legacy.warnings else [] in
   { Snapshot.directory = native.directory
   ; directory_exists = native.directory_exists || legacy.directory_exists
   ; snapshots = Snapshot.sort_newest_first (native_snapshots @ legacy_snapshots)
-  ; warnings = native.warnings @ legacy.warnings
+  ; warnings = native.warnings @ legacy_warnings
   }
 ;;
 

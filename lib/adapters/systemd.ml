@@ -173,6 +173,44 @@ let probe unit argument =
   Result.ok result |> Option.map ~f:String.strip
 ;;
 
+let run_systemctl arguments =
+  let%map result = Process.run ~prog:"systemctl" ~args:("--user" :: arguments) () in
+  Result.ok result |> Option.map ~f:String.strip
+;;
+
+let nonempty_property contents key =
+  config_value contents key |> Option.filter ~f:(Fn.non String.is_empty)
+;;
+
+let service_result contents =
+  nonempty_property contents "Result"
+  |> Option.map ~f:(fun result ->
+    [ Some result
+    ; nonempty_property contents "ExecMainStatus" |> Option.map ~f:(sprintf "exit %s")
+    ; nonempty_property contents "ExecMainExitTimestamp"
+    ]
+    |> List.filter_opt
+    |> String.concat ~sep:" · ")
+;;
+
+let next_run_of_json contents =
+  Option.try_with (fun () ->
+    let open Yojson.Safe.Util in
+    let next_microseconds =
+      Yojson.Safe.from_string contents
+      |> to_list
+      |> List.hd_exn
+      |> member "next"
+      |> to_int
+    in
+    if next_microseconds <= 0
+    then None
+    else (
+      let nanoseconds = Int63.of_string (Int.to_string next_microseconds ^ "000") in
+      Some (Time_ns.of_int63_ns_since_epoch nanoseconds |> Time_ns.to_string_utc)))
+  |> Option.join
+;;
+
 let status config =
   let%bind definitions_result =
     In_thread.run (fun () ->
@@ -199,8 +237,31 @@ let status config =
       List.filter_map probes ~f:(fun (name, _, state) ->
         Option.some_if (Option.exists state ~f:(String.equal "enabled")) name)
     in
-    let%map scripts = In_thread.run (fun () -> legacy_scripts config.bin_directory) in
-    Ok (status_from_inventory { definitions; active; enabled; legacy_scripts = scripts })
+    let%bind scripts = In_thread.run (fun () -> legacy_scripts config.bin_directory)
+    and last_result_output =
+      run_systemctl
+        [ "show"
+        ; "tmux-recovery-save.service"
+        ; "--property=Result"
+        ; "--property=ExecMainStatus"
+        ; "--property=ExecMainExitTimestamp"
+        ; "--no-pager"
+        ]
+    and next_run_output =
+      run_systemctl
+        [ "list-timers"
+        ; "tmux-recovery-save.timer"
+        ; "--all"
+        ; "--output=json"
+        ; "--no-pager"
+        ]
+    in
+    let status =
+      status_from_inventory { definitions; active; enabled; legacy_scripts = scripts }
+    in
+    let last_result = Option.bind last_result_output ~f:service_result
+    and next_run = Option.bind next_run_output ~f:next_run_of_json in
+    return (Ok { status with last_result; next_run })
 ;;
 
 let managed_definitions config ~binary_path ~tmux_path =
