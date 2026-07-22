@@ -595,6 +595,31 @@ let%test_unit "systemd fixtures normalize managed timer state" =
   [%test_eq: string option] status.periodic_save.schedule (Some "10min")
 ;;
 
+let%test_unit "systemd prefers the timer over its inactive save service" =
+  let save_service =
+    unit
+      ~name:"tmux-recovery-save.service"
+      ~contents:
+        "[Service]\nExecStart=/fixtures/bin/tmux-recovery snapshots save --trigger timer"
+  and save_timer =
+    unit ~name:"tmux-recovery-save.timer" ~contents:"[Timer]\nOnUnitActiveSec=10min"
+  and restore =
+    unit
+      ~name:"tmux-recovery-restore.service"
+      ~contents:"[Service]\nExecStart=/fixtures/bin/tmux-recovery snapshots restore"
+  in
+  let status =
+    Systemd.status_from_inventory
+      { definitions = [ save_service; save_timer; restore ]
+      ; active = [ save_timer.name; restore.name ]
+      ; enabled = [ save_timer.name; restore.name ]
+      ; legacy_scripts = []
+      }
+  in
+  [%test_eq: Service.activation] status.periodic_save.activation Loaded;
+  [%test_eq: string option] status.periodic_save.schedule (Some "10min")
+;;
+
 let%test_unit "systemd recognizes legacy user units without adopting them" =
   let save =
     unit ~name:"tmux-resurrect-save.timer" ~contents:"[Timer]\nOnUnitActiveSec=10min"

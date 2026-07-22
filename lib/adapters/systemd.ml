@@ -60,8 +60,9 @@ let schedule contents =
   |> Option.first_some (config_value contents "OnUnitActiveSec")
 ;;
 
-let component definitions inventory ~kind =
-  match List.find definitions ~f:kind with
+let component definitions inventory ~kind ~prefer =
+  let matching = List.filter definitions ~f:kind in
+  match Option.first_some (List.find matching ~f:prefer) (List.hd matching) with
   | None -> Service.empty_component
   | Some definition ->
     let activation =
@@ -118,8 +119,18 @@ let status_from_inventory inventory =
   in
   { Service.manager = Systemd
   ; ownership
-  ; periodic_save = component active_definitions inventory ~kind:save_definition
-  ; login_restore = component active_definitions inventory ~kind:restore_definition
+  ; periodic_save =
+      component
+        active_definitions
+        inventory
+        ~kind:save_definition
+        ~prefer:(fun definition -> String.is_suffix definition.name ~suffix:".timer")
+  ; login_restore =
+      component
+        active_definitions
+        inventory
+        ~kind:restore_definition
+        ~prefer:(fun definition -> String.is_suffix definition.name ~suffix:".service")
   ; binary_path = Option.bind primary ~f:(fun definition -> binary definition.contents)
   ; binary_version = None
   ; last_result = None
