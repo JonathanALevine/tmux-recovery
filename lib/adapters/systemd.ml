@@ -150,10 +150,6 @@ let status_from_inventory inventory =
       (match ownership with
        | Legacy -> [ "legacy tmux automation detected; tmux-recovery will not modify it" ]
        | Drifted -> [ "managed and legacy or incomplete service definitions coexist" ]
-       | Managed when has_legacy_assets ->
-         [ "old recovery files remain on disk for rollback, but they are disabled and \
-            not running"
-         ]
        | Absent | Managed -> [])
   }
 ;;

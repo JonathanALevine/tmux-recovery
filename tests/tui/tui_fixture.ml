@@ -98,14 +98,11 @@ let services : Service.t Or_error.t =
         }
     ; binary_path =
         Some "/Users/demo/.local/share/tmux-recovery/bin/current/tmux-recovery"
-    ; binary_version = Some "0.3.0-dev.8"
+    ; binary_version = Some "0.3.0-dev.9"
     ; last_result = Some "launchctl exit status 0"
     ; next_run = None
     ; conflicts = []
-    ; warnings =
-        [ "old recovery files remain on disk for rollback, but they are disabled and not \
-           running"
-        ]
+    ; warnings = []
     }
 ;;
 
