@@ -118,13 +118,13 @@
   │                                            │Native history: 1 saved · rolling limit 10             │
   │                                            │Last good: 2026-07-21 01:32:39.000000000Z              │
   │                                            │Native storage: 8.0 KiB                                │
-  │                                            │Legacy history: 1 preserved · not written by tmux-recov│
   │                                            │                                                       │
   │                                            │Automation                                             │
   │                                            │Readiness: PASS · tmux-recovery manages save and login │
   │                                            │Periodic save: PASS · loaded · 600 seconds             │
   │                                            │Login restore: PASS · loaded · at login                │
-  │                                            │Runtime version: 0.3.0-dev.9                           │
+  │                                            │Runtime version: 0.3.0-dev.10                          │
+  │                                            │Last result: launchctl exit status 0                   │
   │ ↑/↓ or j/k move  ←/→ or h/l fold  enter open  tab focus  r refresh  q quit                         │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   
@@ -147,10 +147,10 @@
   │                                            │Native history: 1 saved · rolling limit 10             │
   │                                            │Last good: 2026-07-21 01:32:39.000000000Z              │
   │                                            │Native storage: 8.0 KiB                                │
-  │                                            │Legacy history: 1 preserved · not written by tmux-recov│
   │                                            │                                                       │
   │                                            │Automation                                             │
   │                                            │Readiness: PASS · tmux-recovery manages save and login │
+  │                                            │Periodic save: PASS · loaded · 600 seconds             │
   │ ↑/↓ or j/k move  ←/→ or h/l fold  enter open  tab focus  r refresh  q quit                         │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   
@@ -170,13 +170,13 @@
   │                                            │Native history: 0 saved · rolling limit 10             │
   │                                            │Last good: none                                        │
   │                                            │Native storage: 0 B                                    │
-  │                                            │Legacy history: 0 preserved · not written by tmux-recov│
   │                                            │                                                       │
   │                                            │Automation                                             │
   │                                            │Readiness: WARN · absent; inspect conflicts below      │
   │                                            │Periodic save: WARN · not installed                    │
   │                                            │Login restore: WARN · not installed                    │
   │                                            │Runtime version: unknown                               │
+  │                                            │Last result: unavailable                               │
   │ ↑/↓ or j/k move  ←/→ or h/l fold  enter open  tab focus  r refresh  q quit                         │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   

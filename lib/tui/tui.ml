@@ -735,9 +735,6 @@ let detail_lines model ~height =
         ]
       | Ok catalog ->
         let native = native_snapshots catalog in
-        let legacy_count =
-          List.count catalog.snapshots ~f:(fun summary -> summary.legacy)
-        in
         let last_good = native_last_good catalog in
         let native_storage =
           List.fold native ~init:0L ~f:(fun total summary ->
@@ -757,9 +754,6 @@ let detail_lines model ~height =
             (Option.value_map last_good ~default:"none" ~f:(fun summary ->
                Snapshot.Id.display_time summary.id))
         ; field "Native storage" (bytes native_storage)
-        ; field
-            "Legacy history"
-            [%string "%{legacy_count#Int} preserved · not written by tmux-recovery"]
         ]
         @ warning_lines catalog.warnings
     in
