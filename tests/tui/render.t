@@ -21,7 +21,7 @@
   │                                            │                                                       │
   │                                            │                                                       │
   │                                            │                                                       │
-  │ ↑/↓ move  ←/→ fold  enter open  tab focus  r refresh  q quit                                       │
+  │ ↑/↓ move  ← back/fold  → expand  enter open  r refresh  q quit                                     │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   
   --- MOVED ---
@@ -47,7 +47,7 @@
   │                                            │                                                       │
   │                                            │                                                       │
   │                                            │                                                       │
-  │ ↑/↓ move  ←/→ fold  enter open  tab focus  r refresh  q quit                                       │
+  │ ↑/↓ move  ← back/fold  → expand  enter open  r refresh  q quit                                     │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   
   --- WINDOW SELECTED ---
@@ -73,7 +73,7 @@
   │                                            │older output 12                                        │
   │                                            │$ printf 'latest pane output\n'                        │
   │                                            │latest btop output                                     │
-  │ ↑/↓ move  ←/→ fold  enter open  tab focus  r refresh  q quit                                       │
+  │ ↑/↓ move  ← back/fold  → expand  enter open  r refresh  q quit                                     │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   
   --- PANE SELECTED ---
@@ -99,7 +99,7 @@
   │                                            │older output 12                                        │
   │                                            │$ printf 'latest pane output\n'                        │
   │                                            │latest btop output                                     │
-  │ ↑/↓ move  ←/→ fold  enter open  tab focus  r refresh  q quit                                       │
+  │ ↑/↓ move  ← back/fold  → expand  enter open  r refresh  q quit                                     │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   
   --- STATUS ---
@@ -125,7 +125,7 @@
   │                                            │Save command: tmux-recovery snapshot --trigger timer --│
   │                                            │Next snapshot: 2026-07-21 01:42:39.000000000Z · estimat│
   │                                            │Login restore: PASS · loaded · at login                │
-  │ ↑/↓ move  ←/→ fold  enter open  tab focus  r refresh  q quit                                       │
+  │ ↑/↓ move  ← back/fold  → expand  enter open  r refresh  q quit                                     │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   
   --- STATUS WITH APPLICATION WARNING ---
@@ -151,7 +151,7 @@
   │                                            │Automation                                             │
   │                                            │Readiness: PASS · tmux-recovery manages save and login │
   │                                            │Periodic save: PASS · loaded · 600 seconds             │
-  │ ↑/↓ move  ←/→ fold  enter open  tab focus  r refresh  q quit                                       │
+  │ ↑/↓ move  ← back/fold  → expand  enter open  r refresh  q quit                                     │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   
   --- EMPTY STATUS ---
@@ -177,7 +177,7 @@
   │                                            │Next snapshot: waiting for the first timer save        │
   │                                            │Login restore: WARN · not installed                    │
   │                                            │Last restore run: not recorded yet                     │
-  │ ↑/↓ move  ←/→ fold  enter open  tab focus  r refresh  q quit                                       │
+  │ ↑/↓ move  ← back/fold  → expand  enter open  r refresh  q quit                                     │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   
   --- UNAVAILABLE STATUS ---
@@ -203,6 +203,6 @@
   │                                            │                                                       │
   │                                            │Mutation safety: PASS · destructive operations require │
   │                                            │Use the CLI for snapshot restore and automation changes│
-  │ ↑/↓ move  ←/→ fold  enter open  tab focus  r refresh  q quit                                       │
+  │ ↑/↓ move  ← back/fold  → expand  enter open  r refresh  q quit                                     │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   

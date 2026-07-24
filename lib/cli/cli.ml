@@ -12,7 +12,7 @@ module Snapshot = Tmux_recovery_domain.Snapshot
 module Workspace = Tmux_recovery_domain.Workspace
 
 let schema_version = "1"
-let version = "0.3.0-dev.13"
+let version = "0.3.0-dev.14"
 
 let envelope ~command ?(warnings = []) data =
   `Assoc

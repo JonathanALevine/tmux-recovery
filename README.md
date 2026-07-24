@@ -197,9 +197,8 @@ approval flags.
 Run `tmux-recovery` in an interactive terminal or use `tmux-recovery ui`.
 
 - Up/down arrows move.
-- Left/right arrows collapse and expand.
+- Left arrow returns or collapses; right arrow expands or opens details.
 - `Enter` opens or toggles a branch.
-- `Tab` switches panes on narrow terminals.
 - `r` refreshes sessions, combined status, and the selected live preview.
 - `q` or `Ctrl-C` exits.
 

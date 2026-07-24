@@ -208,7 +208,6 @@ type action =
   | Expand
   | Collapse_or_parent
   | Activate
-  | Toggle_focus
   | Refresh_started
   | Replace_data of
       Workspace.t Or_error.t
@@ -294,6 +293,8 @@ let apply_action _context model action =
      | Some { node = { children = _ :: _; page; _ }; _ } ->
        { model with expanded = Set.add model.expanded page }
      | _ -> { model with focus = Page })
+  | Collapse_or_parent when equal_focus model.focus Page ->
+    { model with focus = Navigation }
   | Collapse_or_parent ->
     (match current with
      | Some { node = { page; children = _ :: _; _ }; _ } when Set.mem model.expanded page
@@ -310,13 +311,6 @@ let apply_action _context model action =
        in
        { model with expanded }
      | _ -> { model with focus = Page })
-  | Toggle_focus ->
-    { model with
-      focus =
-        (match model.focus with
-         | Navigation -> Page
-         | Page -> Navigation)
-    }
   | Refresh_started -> { model with message = Some "refreshing recovery state…" }
   | Replace_data (workspace_result, recovery_result, snapshots, services) ->
     let workspace =
@@ -848,7 +842,7 @@ let render model { Dimensions.width; height } =
   let help =
     View.text
       ~attrs:[ Attr.fg muted; Attr.bg terminal_background ]
-      " ↑/↓ move  ←/→ fold  enter open  tab focus  r refresh  q quit "
+      " ↑/↓ move  ← back/fold  → expand  enter open  r refresh  q quit "
   in
   let body_height = Int.max 1 (height - 1) in
   let body =
@@ -957,7 +951,6 @@ let app
       | Key_press { key = Arrow `Right; mods = [] } -> inject Expand
       | Key_press { key = Arrow `Left; mods = [] } -> inject Collapse_or_parent
       | Key_press { key = Enter; mods = [] } -> inject Activate
-      | Key_press { key = Tab; mods = [] } -> inject Toggle_focus
       | Key_press { key = ASCII 'r' | ASCII 'R'; mods = [] } -> refresh
       | Key_press { key = ASCII 'q' | ASCII 'Q'; mods = [] } -> exit ()
       | Key_press { key = ASCII ('c' | 'C'); mods = [ Ctrl ] } -> exit ()
