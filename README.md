@@ -127,12 +127,14 @@ tmux-recovery service sync --approve
 tmux-recovery service enable --dry-run
 tmux-recovery service enable --approve
 tmux-recovery service disable --dry-run
+tmux-recovery service disable --approve
 tmux-recovery service rollback --approve
 ```
 
 Legacy cutover is intentionally separate:
 
 ```sh
+tmux-recovery migrate status
 tmux-recovery migrate plan
 tmux-recovery migrate apply --approve
 tmux-recovery migrate rollback --approve
@@ -140,6 +142,53 @@ tmux-recovery migrate rollback --approve
 
 Most inspection and planning commands also support a stable schema-1 `--json`
 envelope.
+
+### Complete command reference
+
+Running `tmux-recovery` with no arguments in an interactive terminal opens the
+TUI. `tmux-recovery help COMMAND` prints the flags and arguments for any command
+below.
+
+```text
+tmux-recovery
+tmux-recovery ui
+tmux-recovery status
+tmux-recovery tree
+tmux-recovery snapshot [--dry-run]
+tmux-recovery restore [last-good|latest|SNAPSHOT_ID] [--dry-run|--approve]
+tmux-recovery doctor
+tmux-recovery version
+tmux-recovery help [COMMAND ...]
+
+tmux-recovery processes plan
+
+tmux-recovery snapshots list
+tmux-recovery snapshots show SNAPSHOT_ID
+tmux-recovery snapshots save [--dry-run]
+tmux-recovery snapshots restore [last-good|latest|SNAPSHOT_ID] [--dry-run|--approve]
+tmux-recovery snapshots validate SELECTOR
+tmux-recovery snapshots prune [--dry-run|--apply]
+tmux-recovery snapshots import-resurrect LEGACY_ID (--dry-run|--approve)
+
+tmux-recovery service status
+tmux-recovery service plan
+tmux-recovery service sync (--dry-run|--approve)
+tmux-recovery service rollback --approve
+tmux-recovery service enable (--dry-run|--approve)
+tmux-recovery service disable (--dry-run|--approve)
+
+tmux-recovery migrate status
+tmux-recovery migrate plan
+tmux-recovery migrate apply --approve
+tmux-recovery migrate rollback --approve
+```
+
+`snapshot` is the preferred save command and `restore` is the preferred restore
+command. The plural `snapshots save` and `snapshots restore` forms remain
+available for compatibility. `restore` defaults to `last-good`; use `--dry-run`
+to inspect its plan and `--approve` to execute it. Mutating service, migration,
+import, restore, sync, and pruning operations retain their command-specific
+approval flags.
 
 ## TUI
 
