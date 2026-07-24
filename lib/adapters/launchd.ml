@@ -278,19 +278,12 @@ let managed_definitions config ~binary_path ~tmux_path ~log_directory =
   in
   [ definition
       "org.tmux-recovery.save"
-      [ binary_path; "snapshots"; "save"; "--trigger"; "timer"; "--quiet" ]
+      [ binary_path; "snapshot"; "--trigger"; "timer"; "--quiet" ]
       (`Interval 600)
       "save"
   ; definition
       "org.tmux-recovery.restore"
-      [ binary_path
-      ; "snapshots"
-      ; "restore"
-      ; "last-good"
-      ; "--approve"
-      ; "--if-empty"
-      ; "--quiet"
-      ]
+      [ binary_path; "restore"; "--approve"; "--if-empty"; "--quiet" ]
       `Login
       "restore"
   ]

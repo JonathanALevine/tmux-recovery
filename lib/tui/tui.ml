@@ -780,8 +780,9 @@ let detail_lines model ~height =
         ; field "Login restore" (component_health status.login_restore)
         ; field "Runtime version" (Option.value status.binary_version ~default:"unknown")
         ; field "Last result" (Option.value status.last_result ~default:"unavailable")
-        ; field "Next save" (Option.value status.next_run ~default:"unavailable")
         ]
+        @ Option.value_map status.next_run ~default:[] ~f:(fun next_run ->
+          [ field "Next save" next_run ])
         @ List.map status.conflicts ~f:(fun conflict ->
           plain ~color:amber ("Active conflict: " ^ conflict))
         @ warning_lines status.warnings

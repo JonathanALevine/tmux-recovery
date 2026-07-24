@@ -12,7 +12,7 @@ module Snapshot = Tmux_recovery_domain.Snapshot
 module Workspace = Tmux_recovery_domain.Workspace
 
 let schema_version = "1"
-let version = "0.3.0-dev.10"
+let version = "0.3.0-dev.11"
 
 let envelope ~command ?(warnings = []) data =
   `Assoc
@@ -375,7 +375,7 @@ let snapshots_save_command =
 let snapshots_restore_command =
   Command.async_or_error
     ~summary:"Plan or perform a guarded native snapshot restore"
-    (let%map_open.Command selector = anon ("SNAPSHOT|latest|last-good" %: string)
+    (let%map_open.Command selector = anon (maybe ("SNAPSHOT|latest|last-good" %: string))
      and socket_name = socket_param
      and native_directory = native_snapshot_directory_param
      and dry_run =
@@ -396,6 +396,7 @@ let snapshots_restore_command =
      and json = json_param in
      fun () ->
        let open Deferred.Or_error.Let_syntax in
+       let selector = Option.value selector ~default:"last-good" in
        let snapshots =
          App_snapshot.create ?native_directory ?socket_name ~tool_version:version ()
        in
@@ -982,6 +983,8 @@ let commands =
   [ "status", status_command
   ; "tree", tree_command
   ; "processes", processes_command
+  ; "snapshot", snapshots_save_command
+  ; "restore", snapshots_restore_command
   ; "snapshots", snapshots_command
   ; "service", service_command
   ; "migrate", migrate_command

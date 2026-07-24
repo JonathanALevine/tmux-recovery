@@ -96,8 +96,10 @@ tmux-recovery doctor
 Save, validate, import, and prune:
 
 ```sh
-tmux-recovery snapshots save --dry-run
-tmux-recovery snapshots save
+tmux-recovery snapshot --dry-run
+tmux-recovery snapshot
+tmux-recovery restore --dry-run
+tmux-recovery restore --approve
 tmux-recovery snapshots validate last-good
 tmux-recovery snapshots import-resurrect LEGACY_ID --dry-run
 tmux-recovery snapshots import-resurrect LEGACY_ID --approve
@@ -108,8 +110,8 @@ tmux-recovery snapshots prune --apply
 Restore first into a named disposable tmux socket:
 
 ```sh
-tmux-recovery snapshots restore last-good --socket recovery-test --dry-run
-tmux-recovery snapshots restore last-good --socket recovery-test --approve
+tmux-recovery restore --socket recovery-test --dry-run
+tmux-recovery restore --socket recovery-test --approve
 ```
 
 A real restore requires `--approve` and refuses a target that already contains

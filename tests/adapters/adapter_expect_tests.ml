@@ -556,7 +556,10 @@ let%test_unit "managed launchd definitions call only the stable binary" =
         ~substring:"<string>/managed/current/tmux-recovery</string>");
     assert (not (String.is_substring definition.contents ~substring:"tmux-resurrect")));
   let restore = List.last_exn definitions in
-  assert (String.is_substring restore.contents ~substring:"<string>--if-empty</string>")
+  assert (String.is_substring restore.contents ~substring:"<string>restore</string>");
+  assert (String.is_substring restore.contents ~substring:"<string>--if-empty</string>");
+  assert (
+    not (String.is_substring restore.contents ~substring:"<string>snapshots</string>"))
 ;;
 
 let unit ~name ~contents = { Systemd.name; path = "/fixtures/systemd/" ^ name; contents }
@@ -644,7 +647,12 @@ let%test_unit "managed systemd units use direct native entrypoints" =
   assert (
     String.is_substring
       contents
-      ~substring:"ExecStart=/managed/current/tmux-recovery snapshots save");
+      ~substring:"ExecStart=/managed/current/tmux-recovery snapshot");
+  assert (
+    String.is_substring
+      contents
+      ~substring:"ExecStart=/managed/current/tmux-recovery restore --approve");
+  assert (not (String.is_substring contents ~substring:"tmux-recovery snapshots"));
   assert (String.is_substring contents ~substring:"RandomizedDelaySec=30s");
   assert (not (String.is_substring contents ~substring:"tmux-resurrect-save-safe"))
 ;;

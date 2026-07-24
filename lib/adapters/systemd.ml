@@ -286,7 +286,7 @@ Description=Save the tmux-recovery workspace
 [Service]
 Type=oneshot
 Environment=TMUX_RECOVERY_TMUX=%{tmux_path}
-ExecStart=%{binary_path} snapshots save --trigger timer --quiet
+ExecStart=%{binary_path} snapshot --trigger timer --quiet
 |}]
   ; definition
       "tmux-recovery-save.timer"
@@ -312,7 +312,7 @@ Description=Restore the last good tmux-recovery workspace
 [Service]
 Type=oneshot
 Environment=TMUX_RECOVERY_TMUX=%{tmux_path}
-ExecStart=%{binary_path} snapshots restore last-good --approve --if-empty --quiet
+ExecStart=%{binary_path} restore --approve --if-empty --quiet
 RemainAfterExit=true
 
 [Install]

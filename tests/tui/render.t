@@ -123,7 +123,7 @@
   │                                            │Readiness: PASS · tmux-recovery manages save and login │
   │                                            │Periodic save: PASS · loaded · 600 seconds             │
   │                                            │Login restore: PASS · loaded · at login                │
-  │                                            │Runtime version: 0.3.0-dev.10                          │
+  │                                            │Runtime version: 0.3.0-dev.11                          │
   │                                            │Last result: launchctl exit status 0                   │
   │ ↑/↓ or j/k move  ←/→ or h/l fold  enter open  tab focus  r refresh  q quit                         │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
