@@ -559,7 +559,20 @@ let%test_unit "managed launchd definitions call only the stable binary" =
   assert (String.is_substring restore.contents ~substring:"<string>restore</string>");
   assert (String.is_substring restore.contents ~substring:"<string>--if-empty</string>");
   assert (
-    not (String.is_substring restore.contents ~substring:"<string>snapshots</string>"))
+    not (String.is_substring restore.contents ~substring:"<string>snapshots</string>"));
+  let status =
+    Launchd.status_from_inventory
+      { definitions
+      ; loaded = List.map definitions ~f:(fun definition -> definition.label, "0")
+      ; legacy_scripts = []
+      }
+  in
+  [%test_eq: string option]
+    status.periodic_save.command
+    (Some "tmux-recovery snapshot --trigger timer --quiet");
+  [%test_eq: string option]
+    status.login_restore.command
+    (Some "tmux-recovery restore --approve --if-empty --quiet")
 ;;
 
 let unit ~name ~contents = { Systemd.name; path = "/fixtures/systemd/" ^ name; contents }
@@ -588,7 +601,10 @@ let%test_unit "systemd fixtures normalize managed timer state" =
   in
   [%test_eq: Service.ownership] status.ownership Managed;
   [%test_eq: Service.activation] status.periodic_save.activation Loaded;
-  [%test_eq: string option] status.periodic_save.schedule (Some "10min")
+  [%test_eq: string option] status.periodic_save.schedule (Some "10min");
+  [%test_eq: string option]
+    status.periodic_save.command
+    (Some "tmux-recovery snapshots save")
 ;;
 
 let%test_unit "systemd prefers the timer over its inactive save service" =
@@ -596,13 +612,16 @@ let%test_unit "systemd prefers the timer over its inactive save service" =
     unit
       ~name:"tmux-recovery-save.service"
       ~contents:
-        "[Service]\nExecStart=/fixtures/bin/tmux-recovery snapshots save --trigger timer"
+        "[Service]\n\
+         ExecStart=/fixtures/bin/tmux-recovery snapshot --trigger timer --quiet"
   and save_timer =
     unit ~name:"tmux-recovery-save.timer" ~contents:"[Timer]\nOnUnitActiveSec=10min"
   and restore =
     unit
       ~name:"tmux-recovery-restore.service"
-      ~contents:"[Service]\nExecStart=/fixtures/bin/tmux-recovery snapshots restore"
+      ~contents:
+        "[Service]\n\
+         ExecStart=/fixtures/bin/tmux-recovery restore --approve --if-empty --quiet"
   in
   let status =
     Systemd.status_from_inventory
@@ -613,7 +632,13 @@ let%test_unit "systemd prefers the timer over its inactive save service" =
       }
   in
   [%test_eq: Service.activation] status.periodic_save.activation Loaded;
-  [%test_eq: string option] status.periodic_save.schedule (Some "10min")
+  [%test_eq: string option] status.periodic_save.schedule (Some "10min");
+  [%test_eq: string option]
+    status.periodic_save.command
+    (Some "tmux-recovery snapshot --trigger timer --quiet");
+  [%test_eq: string option]
+    status.login_restore.command
+    (Some "tmux-recovery restore --approve --if-empty --quiet")
 ;;
 
 let%test_unit "systemd recognizes legacy user units without adopting them" =
@@ -654,5 +679,19 @@ let%test_unit "managed systemd units use direct native entrypoints" =
       ~substring:"ExecStart=/managed/current/tmux-recovery restore --approve");
   assert (not (String.is_substring contents ~substring:"tmux-recovery snapshots"));
   assert (String.is_substring contents ~substring:"RandomizedDelaySec=30s");
-  assert (not (String.is_substring contents ~substring:"tmux-resurrect-save-safe"))
+  assert (not (String.is_substring contents ~substring:"tmux-resurrect-save-safe"));
+  let status =
+    Systemd.status_from_inventory
+      { definitions
+      ; active = [ "tmux-recovery-save.timer"; "tmux-recovery-restore.service" ]
+      ; enabled = [ "tmux-recovery-save.timer"; "tmux-recovery-restore.service" ]
+      ; legacy_scripts = []
+      }
+  in
+  [%test_eq: string option]
+    status.periodic_save.command
+    (Some "tmux-recovery snapshot --trigger timer --quiet");
+  [%test_eq: string option]
+    status.login_restore.command
+    (Some "tmux-recovery restore --approve --if-empty --quiet")
 ;;

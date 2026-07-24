@@ -7,6 +7,10 @@ type platform =
   | Linux
   | Other of string
 
+type restore_outcome =
+  | Restored of string
+  | Skipped_existing
+
 type t
 
 val create
@@ -15,10 +19,12 @@ val create
   -> ?systemd_unit_directory:string
   -> ?data_directory:string
   -> ?state_directory:string
+  -> ?now:(unit -> Time_ns.t)
   -> unit
   -> t
 
 val status : t -> Tmux_recovery_domain.Service.t Or_error.t Deferred.t
+val record_restore_run : t -> restore_outcome -> unit Or_error.t Deferred.t
 val plan : t -> Tmux_recovery_domain.Service.plan Or_error.t Deferred.t
 
 val sync_plan

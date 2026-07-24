@@ -122,9 +122,9 @@
   │                                            │Automation                                             │
   │                                            │Readiness: PASS · tmux-recovery manages save and login │
   │                                            │Periodic save: PASS · loaded · 600 seconds             │
+  │                                            │Save command: tmux-recovery snapshot --trigger timer --│
+  │                                            │Next snapshot: 2026-07-21 01:42:39.000000000Z · estimat│
   │                                            │Login restore: PASS · loaded · at login                │
-  │                                            │Runtime version: 0.3.0-dev.11                          │
-  │                                            │Last result: launchctl exit status 0                   │
   │ ↑/↓ or j/k move  ←/→ or h/l fold  enter open  tab focus  r refresh  q quit                         │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   
@@ -174,9 +174,9 @@
   │                                            │Automation                                             │
   │                                            │Readiness: WARN · absent; inspect conflicts below      │
   │                                            │Periodic save: WARN · not installed                    │
+  │                                            │Next snapshot: waiting for the first timer save        │
   │                                            │Login restore: WARN · not installed                    │
-  │                                            │Runtime version: unknown                               │
-  │                                            │Last result: unavailable                               │
+  │                                            │Last restore run: not recorded yet                     │
   │ ↑/↓ or j/k move  ←/→ or h/l fold  enter open  tab focus  r refresh  q quit                         │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   

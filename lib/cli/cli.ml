@@ -12,7 +12,7 @@ module Snapshot = Tmux_recovery_domain.Snapshot
 module Workspace = Tmux_recovery_domain.Workspace
 
 let schema_version = "1"
-let version = "0.3.0-dev.11"
+let version = "0.3.0-dev.12"
 
 let envelope ~command ?(warnings = []) data =
   `Assoc
@@ -400,6 +400,7 @@ let snapshots_restore_command =
        let snapshots =
          App_snapshot.create ?native_directory ?socket_name ~tool_version:version ()
        in
+       let service_history = App_service.create () in
        let%bind target_has_sessions =
          if if_empty && not dry_run
          then (
@@ -409,6 +410,9 @@ let snapshots_restore_command =
        in
        if target_has_sessions
        then (
+         let%bind () =
+           App_service.record_restore_run service_history App_service.Skipped_existing
+         in
          if json
          then
            envelope
@@ -458,8 +462,13 @@ let snapshots_restore_command =
            Deferred.Or_error.error_string
              "restore changes tmux state; review --dry-run and rerun with --approve"
          else (
-           let%map result =
+           let%bind result =
              App_snapshot.restore snapshots id ~launch_applications:(not no_applications)
+           in
+           let%map () =
+             App_service.record_restore_run
+               service_history
+               (App_service.Restored (Snapshot.Id.to_string result.snapshot_id))
            in
            if json
            then
@@ -642,11 +651,19 @@ let service_status_command =
            (Service.activation_label status.periodic_save.activation);
          Option.iter status.periodic_save.schedule ~f:(printf " · %s");
          print_newline ();
+         Option.iter status.periodic_save.command ~f:(printf "Save command:     %s\n");
+         printf
+           "Next snapshot:   %s\n"
+           (Option.value status.next_run ~default:"waiting for the first timer save");
          printf
            "Login restore:    %s"
            (Service.activation_label status.login_restore.activation);
          Option.iter status.login_restore.schedule ~f:(printf " · %s");
          print_newline ();
+         Option.iter status.login_restore.command ~f:(printf "Restore command:  %s\n");
+         printf
+           "Last restore run: %s\n"
+           (Option.value status.last_restore ~default:"not recorded yet");
          printf
            "Runtime binary:   %s\n"
            (Option.value status.binary_path ~default:"not detected");
@@ -656,9 +673,6 @@ let service_status_command =
          printf
            "Recent result:   %s\n"
            (Option.value status.last_result ~default:"unavailable");
-         printf
-           "Next run:        %s\n"
-           (Option.value status.next_run ~default:"unavailable");
          List.iter status.conflicts ~f:(printf "conflict: %s\n");
          List.iter status.warnings ~f:(printf "warning: %s\n")))
 ;;

@@ -777,12 +777,24 @@ let detail_lines model ~height =
                ^ Service.ownership_label status.ownership
                ^ "; inspect conflicts below")
         ; field "Periodic save" (component_health status.periodic_save)
-        ; field "Login restore" (component_health status.login_restore)
-        ; field "Runtime version" (Option.value status.binary_version ~default:"unknown")
-        ; field "Last result" (Option.value status.last_result ~default:"unavailable")
         ]
-        @ Option.value_map status.next_run ~default:[] ~f:(fun next_run ->
-          [ field "Next save" next_run ])
+        @ Option.value_map status.periodic_save.command ~default:[] ~f:(fun command ->
+          [ field "Save command" command ])
+        @ [ field
+              "Next snapshot"
+              (Option.value status.next_run ~default:"waiting for the first timer save")
+          ; field "Login restore" (component_health status.login_restore)
+          ]
+        @ Option.value_map status.login_restore.command ~default:[] ~f:(fun command ->
+          [ field "Restore command" command ])
+        @ [ field
+              "Last restore run"
+              (Option.value status.last_restore ~default:"not recorded yet")
+          ; field
+              "Runtime version"
+              (Option.value status.binary_version ~default:"unknown")
+          ; field "Last result" (Option.value status.last_result ~default:"unavailable")
+          ]
         @ List.map status.conflicts ~f:(fun conflict ->
           plain ~color:amber ("Active conflict: " ^ conflict))
         @ warning_lines status.warnings

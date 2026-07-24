@@ -90,17 +90,24 @@ let services : Service.t Or_error.t =
         { activation = Loaded
         ; schedule = Some "600 seconds"
         ; definition = Some "/Users/demo/Library/LaunchAgents/com.demo.tmux-save.plist"
+        ; command = Some "tmux-recovery snapshot --trigger timer --quiet"
         }
     ; login_restore =
         { activation = Loaded
         ; schedule = Some "at login"
         ; definition = Some "/Users/demo/Library/LaunchAgents/com.demo.tmux.plist"
+        ; command = Some "tmux-recovery restore --approve --if-empty --quiet"
         }
     ; binary_path =
         Some "/Users/demo/.local/share/tmux-recovery/bin/current/tmux-recovery"
-    ; binary_version = Some "0.3.0-dev.11"
+    ; binary_version = Some "0.3.0-dev.12"
     ; last_result = Some "launchctl exit status 0"
-    ; next_run = None
+    ; next_run =
+        Some "2026-07-21 01:42:39.000000000Z · estimated from the last timer save"
+    ; last_restore =
+        Some
+          "2026-07-21 01:30:00.000000000Z · restored \
+           tmux_recovery_1784597559000000000_0123abcd.snapshot"
     ; conflicts = []
     ; warnings = []
     }
@@ -182,6 +189,7 @@ let empty_app =
       ; binary_version = None
       ; last_result = None
       ; next_run = None
+      ; last_restore = None
       ; conflicts = []
       ; warnings = []
       }

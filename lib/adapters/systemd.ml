@@ -55,6 +55,15 @@ let binary contents =
     String.split command ~on:' ' |> List.find ~f:(Fn.non String.is_empty))
 ;;
 
+let command_line contents =
+  config_value contents "ExecStart"
+  |> Option.map ~f:(fun command ->
+    match String.split command ~on:' ' with
+    | [] -> command
+    | program :: arguments ->
+      String.concat ~sep:" " (Filename.basename program :: arguments))
+;;
+
 let schedule contents =
   config_value contents "OnCalendar"
   |> Option.first_some (config_value contents "OnUnitActiveSec")
@@ -72,9 +81,15 @@ let component definitions inventory ~kind ~prefer =
       then Installed
       else Disabled
     in
+    let command =
+      Option.first_some
+        (command_line definition.contents)
+        (List.find_map matching ~f:(fun candidate -> command_line candidate.contents))
+    in
     { Service.activation
     ; schedule = schedule definition.contents
     ; definition = Some definition.path
+    ; command
     }
 ;;
 
@@ -135,6 +150,7 @@ let status_from_inventory inventory =
   ; binary_version = None
   ; last_result = None
   ; next_run = None
+  ; last_restore = None
   ; conflicts =
       (if Service.equal_ownership ownership Legacy
        then

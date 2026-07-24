@@ -1,6 +1,8 @@
 open! Core
 open Async
+module Native_snapshot_domain = Tmux_recovery_domain.Native_snapshot
 module Service = Tmux_recovery_domain.Service
+module Snapshot = Tmux_recovery_domain.Snapshot
 
 type platform =
   | Auto
@@ -8,12 +10,17 @@ type platform =
   | Linux
   | Other of string
 
+type restore_outcome =
+  | Restored of string
+  | Skipped_existing
+
 type t =
   { platform : platform
   ; launchd : Launchd.config
   ; systemd : Systemd.config
   ; data_directory : string
   ; state_directory : string
+  ; now : unit -> Time_ns.t
   }
 
 let create
@@ -22,6 +29,7 @@ let create
   ?systemd_unit_directory
   ?data_directory
   ?state_directory
+  ?(now = Time_ns.now)
   ()
   =
   let home = Sys.getenv "HOME" |> Option.value ~default:"." in
@@ -49,6 +57,7 @@ let create
       Option.value data_directory ~default:(Filename.concat data_home "tmux-recovery")
   ; state_directory =
       Option.value state_directory ~default:(Filename.concat state_home "tmux-recovery")
+  ; now
   }
 ;;
 
@@ -69,9 +78,56 @@ let unsupported name =
   ; binary_version = None
   ; last_result = None
   ; next_run = None
+  ; last_restore = None
   ; conflicts = []
   ; warnings = [ "background service inspection is unavailable on this platform" ]
   }
+;;
+
+let restore_run_path t = Filename.concat t.state_directory "restore-run.json"
+
+let read_restore_run t =
+  In_thread.run (fun () ->
+    Option.try_with (fun () ->
+      let open Yojson.Safe.Util in
+      let json = In_channel.read_all (restore_run_path t) |> Yojson.Safe.from_string in
+      let at = json |> member "at" |> to_string
+      and outcome = json |> member "outcome" |> to_string in
+      match outcome with
+      | "restored" ->
+        let snapshot = json |> member "snapshot" |> to_string in
+        [%string "%{at} · restored %{snapshot}"]
+      | "skipped-existing" -> [%string "%{at} · skipped; tmux already contained sessions"]
+      | _ -> failwith "unknown restore-run outcome"))
+;;
+
+let native_snapshot_config t =
+  let defaults = Native_snapshot.default_config () in
+  { defaults with directory = Filename.concat t.data_directory "snapshots" }
+;;
+
+let last_timer_run t =
+  let config = native_snapshot_config t in
+  let%bind catalog = Native_snapshot.list config in
+  match catalog with
+  | Error _ -> return None
+  | Ok catalog ->
+    let rec find = function
+      | [] -> return None
+      | summary :: remaining ->
+        if summary.Snapshot.legacy || not (Snapshot.is_valid summary)
+        then find remaining
+        else (
+          let%bind snapshot = Native_snapshot.load config summary.id in
+          match snapshot with
+          | Ok snapshot
+            when Native_snapshot_domain.Trigger.equal
+                   snapshot.Native_snapshot_domain.trigger
+                   Native_snapshot_domain.Trigger.Timer ->
+            return (Some snapshot.created_at)
+          | Ok _ | Error _ -> find remaining)
+    in
+    find catalog.snapshots
 ;;
 
 let status t =
@@ -88,14 +144,33 @@ let status t =
   in
   match result with
   | Error _ as error -> return error
-  | Ok status when Service.equal_ownership status.ownership Managed ->
-    (match status.binary_path with
-     | None -> return (Ok status)
-     | Some binary ->
-       let%map reported = Process.run ~prog:binary ~args:[ "--version" ] () in
-       let binary_version = Result.ok reported |> Option.map ~f:String.strip in
-       Ok { status with binary_version })
-  | Ok status -> return (Ok status)
+  | Ok status ->
+    let%bind binary_version =
+      if Service.equal_ownership status.ownership Managed
+      then (
+        match status.binary_path with
+        | None -> return status.binary_version
+        | Some binary ->
+          let%map reported = Process.run ~prog:binary ~args:[ "--version" ] () in
+          Result.ok reported |> Option.map ~f:String.strip)
+      else return status.binary_version
+    and last_restore = read_restore_run t
+    and timer_run =
+      if Service.equal_ownership status.ownership Managed
+         && Service.equal_activation status.periodic_save.activation Loaded
+         && Option.is_none status.next_run
+      then last_timer_run t
+      else return None
+    in
+    let next_run =
+      Option.first_some
+        status.next_run
+        (Option.bind timer_run ~f:(fun last_run ->
+           Service.estimate_next_run ~now:(t.now ()) ~last_run ~interval_seconds:600
+           |> Option.map ~f:(fun next ->
+             Time_ns.to_string_utc next ^ " · estimated from the last timer save")))
+    in
+    return (Ok { status with binary_version; next_run; last_restore })
 ;;
 
 let selected_platform t =
@@ -241,6 +316,20 @@ let write_file_atomic (file : Service.managed_file) =
       match Sys_unix.file_exists temporary with
       | `Yes -> Core_unix.unlink temporary
       | `No | `Unknown -> ())
+;;
+
+let record_restore_run t outcome =
+  let at = Time_ns.to_string_utc (t.now ()) in
+  let outcome_fields =
+    match outcome with
+    | Restored snapshot -> [ "outcome", `String "restored"; "snapshot", `String snapshot ]
+    | Skipped_existing -> [ "outcome", `String "skipped-existing" ]
+  in
+  let contents = `Assoc (("at", `String at) :: outcome_fields) |> Yojson.Safe.to_string in
+  In_thread.run (fun () ->
+    Or_error.try_with (fun () ->
+      Core_unix.mkdir_p ~perm:0o700 t.state_directory;
+      write_file_atomic { Service.path = restore_run_path t; contents = contents ^ "\n" }))
 ;;
 
 let backup_files files =

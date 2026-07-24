@@ -205,3 +205,13 @@ let%test_unit "service vocabulary stays manager-neutral" =
   [%test_eq: string] (Service.ownership_label Managed) "tmux-recovery-managed";
   [%test_eq: string] (Service.activation_label Loaded) "loaded"
 ;;
+
+let%test_unit "the next periodic run advances beyond the current time" =
+  let last_run = Time_ns.epoch in
+  let now = Time_ns.add last_run (Time_ns.Span.of_int_sec 1250) in
+  let next =
+    Service.estimate_next_run ~now ~last_run ~interval_seconds:600 |> Option.value_exn
+  in
+  [%test_eq: Time_ns.t] next (Time_ns.add last_run (Time_ns.Span.of_int_sec 1800));
+  assert (Option.is_none (Service.estimate_next_run ~now ~last_run ~interval_seconds:0))
+;;

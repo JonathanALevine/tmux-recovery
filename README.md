@@ -36,6 +36,8 @@ ID; conversation content and arbitrary database rows are never copied.
 - Stable versioned service runtime with atomic sync and rollback.
 - Native launchd and systemd user definitions. Service files call the stable
   binary directly; there is no resident daemon or shell wrapper.
+- The Automation section shows the exact snapshot and login-restore commands,
+  the next scheduled snapshot, and the most recent restore outcome.
 - Reversible legacy migration with checksummed rollback bundles.
 - Keyboard-only TUI with terminal-theme colors, bottom-of-pane live previews,
   and one combined Status page for recovery, snapshots, and automation.
@@ -204,7 +206,9 @@ Run `tmux-recovery` in an interactive terminal or use `tmux-recovery ui`.
 The TUI inherits the terminal foreground/background, disables mouse reporting,
 starts individual sessions collapsed, and shows the newest visible lines from
 the active pane of a selected window. Safe SGR colors such as btop's palette are
-preserved; other terminal controls are neutralized.
+preserved; other terminal controls are neutralized. systemd supplies an exact
+next timer event; launchd does not expose one, so macOS labels its next-snapshot
+time as an estimate derived from the latest timer-triggered save.
 
 ## Development and tests
 

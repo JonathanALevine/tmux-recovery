@@ -56,12 +56,44 @@ let xml_value contents tag =
       String.sub contents ~pos:value_start ~len:(finish - value_start) |> String.strip))
 ;;
 
-let first_program contents =
+let program_arguments contents =
   match String.substr_index contents ~pattern:"<key>ProgramArguments</key>" with
-  | None -> None
+  | None -> []
   | Some position ->
-    String.sub contents ~pos:position ~len:(String.length contents - position)
-    |> fun remainder -> xml_value remainder "string"
+    let remainder =
+      String.sub contents ~pos:position ~len:(String.length contents - position)
+    in
+    let array =
+      match String.substr_index remainder ~pattern:"</array>" with
+      | None -> remainder
+      | Some finish -> String.prefix remainder finish
+    in
+    let rec values remainder collected =
+      match String.substr_index remainder ~pattern:"<string>" with
+      | None -> List.rev collected
+      | Some start ->
+        let value_start = start + String.length "<string>" in
+        (match String.substr_index remainder ~pos:value_start ~pattern:"</string>" with
+         | None -> List.rev collected
+         | Some finish ->
+           let value =
+             String.sub remainder ~pos:value_start ~len:(finish - value_start)
+           in
+           let next = finish + String.length "</string>" in
+           values
+             (String.sub remainder ~pos:next ~len:(String.length remainder - next))
+             (String.strip value :: collected))
+    in
+    values array []
+;;
+
+let first_program contents = List.hd (program_arguments contents)
+
+let command_line contents =
+  match program_arguments contents with
+  | [] -> None
+  | program :: arguments ->
+    Some (String.concat ~sep:" " (Filename.basename program :: arguments))
 ;;
 
 let schedule contents =
@@ -84,6 +116,7 @@ let component definitions loaded ~kind =
     { Service.activation = (if is_loaded then Loaded else Installed)
     ; schedule = schedule definition.contents
     ; definition = Some definition.path
+    ; command = command_line definition.contents
     }
 ;;
 
@@ -153,6 +186,7 @@ let status_from_inventory inventory =
   ; binary_version = None
   ; last_result
   ; next_run = None
+  ; last_restore = None
   ; conflicts
   ; warnings =
       (match ownership with
