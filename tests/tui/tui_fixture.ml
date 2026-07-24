@@ -100,7 +100,7 @@ let services : Service.t Or_error.t =
         }
     ; binary_path =
         Some "/Users/demo/.local/share/tmux-recovery/bin/current/tmux-recovery"
-    ; binary_version = Some "0.3.0-dev.12"
+    ; binary_version = Some "0.3.0-dev.13"
     ; last_result = Some "launchctl exit status 0"
     ; next_run =
         Some "2026-07-21 01:42:39.000000000Z · estimated from the last timer save"

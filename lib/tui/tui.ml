@@ -848,7 +848,7 @@ let render model { Dimensions.width; height } =
   let help =
     View.text
       ~attrs:[ Attr.fg muted; Attr.bg terminal_background ]
-      " ↑/↓ or j/k move  ←/→ or h/l fold  enter open  tab focus  r refresh  q quit "
+      " ↑/↓ move  ←/→ fold  enter open  tab focus  r refresh  q quit "
   in
   let body_height = Int.max 1 (height - 1) in
   let body =
@@ -952,11 +952,10 @@ let app
     let%arr inject and refresh in
     fun (event : Event.t) ->
       match event with
-      | Key_press { key = Arrow `Down | ASCII 'j'; mods = [] } -> inject (Move 1)
-      | Key_press { key = Arrow `Up | ASCII 'k'; mods = [] } -> inject (Move (-1))
-      | Key_press { key = Arrow `Right | ASCII 'l'; mods = [] } -> inject Expand
-      | Key_press { key = Arrow `Left | ASCII 'h'; mods = [] } ->
-        inject Collapse_or_parent
+      | Key_press { key = Arrow `Down; mods = [] } -> inject (Move 1)
+      | Key_press { key = Arrow `Up; mods = [] } -> inject (Move (-1))
+      | Key_press { key = Arrow `Right; mods = [] } -> inject Expand
+      | Key_press { key = Arrow `Left; mods = [] } -> inject Collapse_or_parent
       | Key_press { key = Enter; mods = [] } -> inject Activate
       | Key_press { key = Tab; mods = [] } -> inject Toggle_focus
       | Key_press { key = ASCII 'r' | ASCII 'R'; mods = [] } -> refresh
