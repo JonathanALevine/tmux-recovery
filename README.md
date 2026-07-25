@@ -19,19 +19,6 @@ It remembers sessions, windows, panes, layouts, titles, working directories,
 and the active pane. It can also safely restart a small set of known programs
 and resume Codex panes when a durable thread ID is available.
 
-## What it does
-
-- Saves atomic, hashed snapshots with `latest` and `last-good` recovery points.
-- Restores tmux structure only into an empty target, after explicit approval.
-- Shows sessions, panes, recovery decisions, snapshot health, and automation in
-  a keyboard-driven TUI.
-- Installs optional launchd or systemd user services for periodic snapshots and
-  restore-on-login.
-- Imports compatible tmux-resurrect snapshots without running plugin scripts.
-
-Saved command strings and captured pane contents are never evaluated as shell
-commands. Unknown applications recover as ordinary shells.
-
 ## Install from source
 
 The TUI currently requires the public OxCaml 5.2 toolchain used by
@@ -111,7 +98,3 @@ opam exec -- dune runtest --force
 
 Snapshots are stored under
 `~/.local/share/tmux-recovery/snapshots/` by default.
-
-## License
-
-[MIT](LICENSE)
