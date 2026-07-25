@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="tmux-recovery logo" width="160">
+  <img src="assets/logo.svg" alt="tmux-recovery logo" width="200">
 </p>
 
 <h1 align="center">tmux-recovery</h1>
