@@ -289,10 +289,22 @@ let status config =
     return (Ok { status with last_result; next_run })
 ;;
 
-let managed_definitions config ~binary_path ~tmux_path =
+let escape_environment_value value =
+  String.concat_map value ~f:(function
+    | '\\' -> "\\\\"
+    | '"' -> "\\\""
+    | '%' -> "%%"
+    | '\n' -> "\\n"
+    | '\r' -> "\\r"
+    | '\t' -> "\\t"
+    | character -> Char.to_string character)
+;;
+
+let managed_definitions config ~binary_path ~tmux_path ~runtime_path =
   let definition name contents =
     { name; path = Filename.concat config.unit_directory name; contents }
   in
+  let runtime_path = escape_environment_value runtime_path in
   [ definition
       "tmux-recovery-save.service"
       [%string
@@ -302,6 +314,7 @@ Description=Save the tmux-recovery workspace
 [Service]
 Type=oneshot
 Environment=TMUX_RECOVERY_TMUX=%{tmux_path}
+Environment="PATH=%{runtime_path}"
 ExecStart=%{binary_path} snapshot --trigger timer --quiet
 |}]
   ; definition
@@ -328,6 +341,7 @@ Description=Restore the last good tmux-recovery workspace
 [Service]
 Type=oneshot
 Environment=TMUX_RECOVERY_TMUX=%{tmux_path}
+Environment="PATH=%{runtime_path}"
 ExecStart=%{binary_path} restore --approve --if-empty --quiet
 RemainAfterExit=true
 

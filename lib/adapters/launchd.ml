@@ -258,7 +258,7 @@ let xml_escape value =
     | character -> Char.to_string character)
 ;;
 
-let managed_plist ~label ~arguments ~tmux_path ~schedule ~stdout ~stderr =
+let managed_plist ~label ~arguments ~tmux_path ~runtime_path ~schedule ~stdout ~stderr =
   let argument_xml =
     List.map arguments ~f:(fun value ->
       [%string "    <string>%{xml_escape value}</string>"])
@@ -285,6 +285,8 @@ let managed_plist ~label ~arguments ~tmux_path ~schedule ~stdout ~stderr =
   <dict>
     <key>TMUX_RECOVERY_TMUX</key>
     <string>%{xml_escape tmux_path}</string>
+    <key>PATH</key>
+    <string>%{xml_escape runtime_path}</string>
   </dict>
 %{schedule_xml}
   <key>StandardOutPath</key>
@@ -296,7 +298,7 @@ let managed_plist ~label ~arguments ~tmux_path ~schedule ~stdout ~stderr =
 |}]
 ;;
 
-let managed_definitions config ~binary_path ~tmux_path ~log_directory =
+let managed_definitions config ~binary_path ~tmux_path ~runtime_path ~log_directory =
   let definition label arguments schedule log_name =
     { label
     ; path = Filename.concat config.launch_agents_directory (label ^ ".plist")
@@ -305,6 +307,7 @@ let managed_definitions config ~binary_path ~tmux_path ~log_directory =
           ~label
           ~arguments
           ~tmux_path
+          ~runtime_path
           ~schedule
           ~stdout:(Filename.concat log_directory (log_name ^ ".log"))
           ~stderr:(Filename.concat log_directory (log_name ^ ".error.log"))

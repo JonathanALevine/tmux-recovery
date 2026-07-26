@@ -213,6 +213,10 @@ let plan t =
     |> Deferred.return
   in
   let binary_path = stable_binary t in
+  let runtime_path =
+    Sys.getenv "PATH"
+    |> Option.value ~default:"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+  in
   match selected_platform t with
   | Macos ->
     let definitions =
@@ -220,6 +224,7 @@ let plan t =
         t.launchd
         ~binary_path
         ~tmux_path
+        ~runtime_path
         ~log_directory:t.state_directory
     in
     let domain = [%string "gui/%{Core_unix.getuid ()#Int}"] in
@@ -238,7 +243,9 @@ let plan t =
       ; conflicts = current.conflicts
       }
   | Linux ->
-    let definitions = Systemd.managed_definitions t.systemd ~binary_path ~tmux_path in
+    let definitions =
+      Systemd.managed_definitions t.systemd ~binary_path ~tmux_path ~runtime_path
+    in
     return
       { Service.manager = Systemd
       ; stable_binary = binary_path

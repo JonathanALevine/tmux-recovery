@@ -546,6 +546,7 @@ let%test_unit "managed launchd definitions call only the stable binary" =
       config
       ~binary_path:"/managed/current/tmux-recovery"
       ~tmux_path:"/usr/bin/tmux"
+      ~runtime_path:"/fixtures/node/bin:/usr/bin"
       ~log_directory:"/fixtures/log"
   in
   [%test_eq: int] (List.length definitions) 2;
@@ -560,6 +561,10 @@ let%test_unit "managed launchd definitions call only the stable binary" =
   assert (String.is_substring restore.contents ~substring:"<string>--if-empty</string>");
   assert (
     not (String.is_substring restore.contents ~substring:"<string>snapshots</string>"));
+  assert (
+    String.is_substring
+      restore.contents
+      ~substring:"<key>PATH</key>\n    <string>/fixtures/node/bin:/usr/bin</string>");
   let status =
     Launchd.status_from_inventory
       { definitions
@@ -666,6 +671,7 @@ let%test_unit "managed systemd units use direct native entrypoints" =
       config
       ~binary_path:"/managed/current/tmux-recovery"
       ~tmux_path:"/usr/bin/tmux"
+      ~runtime_path:"/fixtures/node/bin:/usr/bin"
   in
   [%test_eq: int] (List.length definitions) 3;
   let contents = List.map definitions ~f:(fun item -> item.contents) |> String.concat in
@@ -679,6 +685,10 @@ let%test_unit "managed systemd units use direct native entrypoints" =
       ~substring:"ExecStart=/managed/current/tmux-recovery restore --approve");
   assert (not (String.is_substring contents ~substring:"tmux-recovery snapshots"));
   assert (String.is_substring contents ~substring:"RandomizedDelaySec=30s");
+  assert (
+    String.is_substring
+      contents
+      ~substring:"Environment=\"PATH=/fixtures/node/bin:/usr/bin\"");
   assert (not (String.is_substring contents ~substring:"tmux-resurrect-save-safe"));
   let status =
     Systemd.status_from_inventory

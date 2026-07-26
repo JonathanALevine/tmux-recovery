@@ -12,7 +12,7 @@ module Snapshot = Tmux_recovery_domain.Snapshot
 module Workspace = Tmux_recovery_domain.Workspace
 
 let schema_version = "1"
-let version = "0.3.0-dev.14"
+let version = "0.3.0-dev.16"
 
 let envelope ~command ?(warnings = []) data =
   `Assoc
@@ -26,6 +26,55 @@ let envelope ~command ?(warnings = []) data =
 ;;
 
 let print_json json = Yojson.Safe.pretty_to_string json |> print_endline
+
+type completion_shell =
+  | Bash
+  | Zsh
+
+let completion_shell = Command.Arg_type.of_alist_exn [ "bash", Bash; "zsh", Zsh ]
+
+let bash_completion =
+  {|_tmux_recovery_complete() {
+  local completion
+  COMPREPLY=()
+  export COMP_CWORD
+  COMP_WORDS[0]=tmux-recovery
+  while IFS= read -r completion; do
+    COMPREPLY+=("$completion")
+  done < <("${COMP_WORDS[@]}")
+}
+complete -F _tmux_recovery_complete tmux-recovery
+|}
+;;
+
+let zsh_completion =
+  {|autoload -Uz compinit
+(( $+functions[compdef] )) || compinit
+
+_tmux_recovery_complete() {
+  local -a command_words completions
+  command_words=("${words[@]}")
+  command_words[1]=tmux-recovery
+  completions=("${(@f)$(COMP_CWORD=$((CURRENT - 1)) command "${command_words[@]}")}")
+  compadd -- "${completions[@]}"
+}
+compdef _tmux_recovery_complete tmux-recovery
+|}
+;;
+
+let completion_command =
+  Command.basic
+    ~summary:"Print shell code that enables dynamic tab completion"
+    (let%map_open.Command shell = anon ("SHELL" %: completion_shell) in
+     fun () ->
+       let script =
+         match shell with
+         | Bash -> bash_completion
+         | Zsh -> zsh_completion
+       in
+       Stdlib.print_string script;
+       Stdlib.flush Stdlib.stdout)
+;;
 
 let socket_param =
   Command.Param.flag
@@ -994,7 +1043,8 @@ let doctor_command =
 ;;
 
 let commands =
-  [ "status", status_command
+  [ "completion", completion_command
+  ; "status", status_command
   ; "tree", tree_command
   ; "processes", processes_command
   ; "snapshot", snapshots_save_command

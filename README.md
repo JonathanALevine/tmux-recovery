@@ -19,6 +19,10 @@ It remembers sessions, windows, panes, layouts, titles, working directories,
 and the active pane. It can also safely restart a small set of known programs
 and resume Codex panes when a durable thread ID is available.
 
+<p align="center">
+  <img src="assets/tmux-recovery-demo.gif" alt="tmux-recovery TUI navigating sessions, pane previews, and recovery status" width="100%">
+</p>
+
 ## Install from source
 
 The TUI currently requires the public OxCaml 5.2 toolchain used by
@@ -41,6 +45,21 @@ Open the TUI:
 ```sh
 opam exec -- tmux-recovery
 ```
+
+## Shell completion
+
+Add the line for your shell to its startup file:
+
+```sh
+# ~/.zshrc
+eval "$(tmux-recovery completion zsh)"
+
+# ~/.bashrc
+eval "$(tmux-recovery completion bash)"
+```
+
+Completion includes subcommands and their flags, so `tmux-recovery snap<Tab>`
+offers `snapshot` and `snapshots`.
 
 ## TUI commands
 

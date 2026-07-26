@@ -27,5 +27,6 @@ val managed_definitions
   :  config
   -> binary_path:string
   -> tmux_path:string
+  -> runtime_path:string
   -> log_directory:string
   -> definition list
