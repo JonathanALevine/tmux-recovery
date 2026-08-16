@@ -10,7 +10,7 @@ let () =
   let argv = Sys.get_argv () in
   let run ?argv () =
     Command_unix.run
-      ~version:Cli.version
+      ~version:(Cli.version ^ "+built-" ^ Cli.build_time)
       ~build_info:"OxCaml 5.2 · native snapshot schema 2 · guarded recovery build"
       ?argv
       command

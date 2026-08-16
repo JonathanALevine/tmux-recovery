@@ -13,6 +13,7 @@ module Workspace = Tmux_recovery_domain.Workspace
 
 let schema_version = "1"
 let version = "0.3.0-dev.19"
+let build_time = Build_stamp.build_time
 
 let envelope ~command ?(warnings = []) data =
   `Assoc

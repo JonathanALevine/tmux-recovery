@@ -1,3 +1,10 @@
+(rule
+ (targets build_stamp.ml)
+ (deps (source_tree ..))
+ (action
+  (with-stdout-to build_stamp.ml
+   (bash "printf 'let build_time = \"%s\"\\n' \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\""))))
+
 (library
  (name tmux_recovery_cli)
  (public_name tmux-recovery.cli)
