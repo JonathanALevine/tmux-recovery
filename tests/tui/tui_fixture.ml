@@ -147,6 +147,28 @@ let make_app ~initial_recovery ~snapshots ~services =
       graph
 ;;
 
+type reload_result =
+  Workspace.t Or_error.t
+  * Recovery.plan Or_error.t
+  * Snapshot.catalog Or_error.t
+  * Service.t Or_error.t
+
+let make_app_with_reload ~reload =
+  let service = App_recovery.create ~socket_name:"tmux-recovery-golden-test" () in
+  let capture_pane ~pane_id:_ = Effect.return (Ok []) in
+  fun ~dimensions graph ->
+    Tui.app
+      ~capture_pane
+      ~reload
+      ~service
+      ~initial:workspace
+      ~initial_snapshots:snapshots
+      ~initial_services:services
+      ~exit:(fun () -> Effect.Ignore)
+      ~dimensions
+      graph
+;;
+
 let app = make_app ~initial_recovery:None ~snapshots ~services
 
 let warning_app =

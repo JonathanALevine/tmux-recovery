@@ -12,6 +12,20 @@
  (preprocess
   (pps ppx_jane bonsai.ppx_bonsai)))
 
+(library
+ (name tui_refresh_spam_tests)
+ (modules refresh_spam_test)
+ (libraries
+  async
+  bonsai_test
+  bonsai_term
+  bonsai_term_test
+  core
+  tmux_recovery_tui_fixture)
+ (inline_tests)
+ (preprocess
+  (pps ppx_jane bonsai.ppx_bonsai)))
+
 (executable
  (name render_fixture)
  (modules render_fixture)
