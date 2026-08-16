@@ -932,11 +932,15 @@ let app
          let%bind.Effect result = capture_pane ~pane_id in
          inject (Preview_finished (request, result)))
     graph;
+  let refreshing = ref false in
   let refresh =
     let%arr inject in
-    let%bind.Effect () = inject Refresh_started in
-    let%bind.Effect workspace, recovery, snapshots, services = reload () in
-    inject (Replace_data (workspace, recovery, snapshots, services))
+    (let%bind.Effect () = inject Refresh_started in
+     let%bind.Effect workspace, recovery, snapshots, services = reload () in
+     let%bind.Effect () =
+       inject (Replace_data (workspace, recovery, snapshots, services))
+     in
+     (refreshing := false; Effect.Ignore))
   in
   let view =
     let%arr model and dimensions in
@@ -951,7 +955,10 @@ let app
       | Key_press { key = Arrow `Right; mods = [] } -> inject Expand
       | Key_press { key = Arrow `Left; mods = [] } -> inject Collapse_or_parent
       | Key_press { key = Enter; mods = [] } -> inject Activate
-      | Key_press { key = ASCII 'r' | ASCII 'R'; mods = [] } -> refresh
+      | Key_press { key = ASCII 'r' | ASCII 'R'; mods = [] } ->
+        (if !refreshing
+         then Effect.Ignore
+         else (refreshing := true; refresh))
       | Key_press { key = ASCII 'q' | ASCII 'Q'; mods = [] } -> exit ()
       | Key_press { key = ASCII ('c' | 'C'); mods = [ Ctrl ] } -> exit ()
       | _ -> Effect.Ignore
