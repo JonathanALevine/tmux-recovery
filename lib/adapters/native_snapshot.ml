@@ -146,7 +146,14 @@ let summary_of_snapshot config ~latest ~last_good (snapshot : Domain.t) =
   ; latest
   ; last_good
   ; validity = Valid
-  ; warnings = []
+  ; warnings =
+      (if Set.is_empty snapshot.codex_unresolved
+       then []
+       else
+         [ [%string
+             "%{Set.length snapshot.codex_unresolved#Int} Codex pane(s) lack a durable \
+              thread reference"]
+         ])
   ; session_count = Map.length snapshot.workspace.sessions
   ; window_count = Map.length snapshot.workspace.windows
   ; pane_count = Map.length snapshot.workspace.panes
@@ -305,11 +312,19 @@ let save_sync config ~socket_name (snapshot : Domain.t) =
         ignore temporary_id;
         fsync_directory temporary_directory;
         Core_unix.rename ~src:temporary_directory ~dst:final_directory;
+        let valid_last_good_exists =
+          match pointer_id config.directory "last-good" with
+          | Ok (Some previous) -> Result.is_ok (load_sync config previous)
+          | Ok None | Error _ -> false
+        in
+        let promote_to_last_good =
+          Set.is_empty snapshot.codex_unresolved || not valid_last_good_exists
+        in
         replace_pointer config.directory "latest" id;
-        replace_pointer config.directory "last-good" id;
+        if promote_to_last_good then replace_pointer config.directory "last-good" id;
         fsync_directory config.directory;
         let committed = load_sync config id |> Or_error.ok_exn in
-        summary_of_snapshot config ~latest:true ~last_good:true committed)
+        summary_of_snapshot config ~latest:true ~last_good:promote_to_last_good committed)
       ~finally:(fun () -> remove_temp temporary_directory))
 ;;
 

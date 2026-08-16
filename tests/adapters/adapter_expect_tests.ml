@@ -185,7 +185,43 @@ let%test_unit "cwd fallback can be disabled when same-cwd Codex panes are ambigu
     assert (Option.is_none resume))
 ;;
 
-let native_fixture ~id ~created_at =
+let%test_unit "a Codex-named window remains detected after its process exits" =
+  with_codex_databases (fun config ->
+    let session : Workspace.Session.t = { id = "$1"; name = "work"; attached = false }
+    and window : Workspace.Window.t = { id = "@1"; name = "codex"; layout = "" }
+    and link : Workspace.Window_link.t =
+      { id = "$1/@1"; session_id = "$1"; window_id = "@1"; index = 0; active = true }
+    and pane : Workspace.Pane.t =
+      { id = "%1"
+      ; window_id = "@1"
+      ; index = 0
+      ; active = true
+      ; title = "shell"
+      ; cwd = "/tmp/project"
+      ; current_command = "zsh"
+      ; pid = None
+      ; tty = None
+      }
+    in
+    let workspace =
+      Workspace.create
+        ~source:Live
+        ~server:{ available = true; socket = Some "test"; version = Some "tmux test" }
+        [ session ]
+        [ window ]
+        [ link ]
+        [ pane ]
+      |> Result.map_error ~f:(String.concat ~sep:"; ")
+      |> Result.ok_or_failwith
+    in
+    let capture =
+      Thread_safe.block_on_async_exn (fun () -> Codex.capture config workspace)
+    in
+    assert (Set.mem capture.detected_panes "%1");
+    [%test_eq: int] (Map.length capture.resumes) 1)
+;;
+
+let native_fixture ~codex_unresolved ~id ~created_at =
   let session : Workspace.Session.t = { id = "$1"; name = "work"; attached = false }
   and window : Workspace.Window.t = { id = "@1"; name = "main"; layout = "" }
   and link : Workspace.Window_link.t =
@@ -213,7 +249,13 @@ let native_fixture ~id ~created_at =
     |> Result.map_error ~f:(String.concat ~sep:"; ")
     |> Result.ok_or_failwith
   in
-  Native_domain.create ~id ~created_at ~trigger:Manual ~tool_version:"test" workspace
+  Native_domain.create
+    ~codex_unresolved
+    ~id
+    ~created_at
+    ~trigger:Manual
+    ~tool_version:"test"
+    workspace
   |> Or_error.ok_exn
 ;;
 
@@ -232,7 +274,7 @@ let%test_unit "native bundles commit atomically and reject hash corruption" =
         ; maximum_snapshots = 10
         }
       in
-      let snapshot = native_fixture ~id ~created_at in
+      let snapshot = native_fixture ~codex_unresolved:String.Set.empty ~id ~created_at in
       let summary =
         Thread_safe.block_on_async_exn (fun () ->
           Native_snapshot.save config ~socket_name:(Some "test") snapshot)
@@ -255,6 +297,41 @@ let%test_unit "native bundles commit atomically and reject hash corruption" =
         Thread_safe.block_on_async_exn (fun () -> Native_snapshot.load config id)
       in
       assert (Result.is_error loaded))
+;;
+
+let%test_unit "an unresolved Codex snapshot cannot replace a valid last-good" =
+  let root = Core_unix.mkdtemp "/tmp/tmux-recovery-store-XXXXXX" in
+  Exn.protect
+    ~finally:(fun () -> remove_tree root)
+    ~f:(fun () ->
+      let config : Native_snapshot.config =
+        { directory = Filename.concat root "snapshots"
+        ; runtime_directory = Filename.concat root "run"
+        ; maximum_snapshots = 10
+        }
+      in
+      let save nonce seconds unresolved =
+        let created_at = Time_ns.add Time_ns.epoch (Time_ns.Span.of_sec seconds) in
+        let id = Snapshot.Id.create_native ~created_at ~nonce |> Or_error.ok_exn in
+        let snapshot = native_fixture ~codex_unresolved:unresolved ~id ~created_at in
+        let summary =
+          Thread_safe.block_on_async_exn (fun () ->
+            Native_snapshot.save config ~socket_name:(Some "test") snapshot)
+          |> Or_error.ok_exn
+        in
+        id, summary
+      in
+      let good_id, good = save "11111111" 1. String.Set.empty in
+      let degraded_id, degraded = save "22222222" 2. (String.Set.singleton "%1") in
+      assert good.last_good;
+      assert degraded.latest;
+      assert (not degraded.last_good);
+      [%test_eq: string]
+        (Core_unix.readlink (Filename.concat config.directory "latest"))
+        (Snapshot.Id.to_string degraded_id);
+      [%test_eq: string]
+        (Core_unix.readlink (Filename.concat config.directory "last-good"))
+        (Snapshot.Id.to_string good_id))
 ;;
 
 let%test_unit "stable runtime sync retains a rollback pointer" =

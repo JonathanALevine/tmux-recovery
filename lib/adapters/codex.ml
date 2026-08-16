@@ -70,20 +70,17 @@ let with_readonly_database path f =
     |> Or_error.join
 ;;
 
-let query_one database sql bindings row =
+let sql_text value = "'" ^ String.substr_replace_all value ~pattern:"'" ~with_:"''" ^ "'"
+
+let query_one database sql row =
   Or_error.try_with (fun () ->
-    let statement = Sqlite3.prepare database sql in
-    Exn.protect
-      ~f:(fun () ->
-        List.iteri bindings ~f:(fun index value ->
-          Sqlite3.bind statement (index + 1) value |> Sqlite3.Rc.check);
-        match Sqlite3.step statement with
-        | ROW -> Some (row statement)
-        | DONE -> None
-        | code ->
-          Sqlite3.Rc.check code;
-          None)
-      ~finally:(fun () -> ignore (Sqlite3.finalize statement : Sqlite3.Rc.t)))
+    let result = ref None in
+    Sqlite3.exec_not_null_no_headers
+      database
+      ~cb:(fun columns -> if Option.is_none !result then result := Some (row columns))
+      sql
+    |> Sqlite3.Rc.check;
+    !result)
 ;;
 
 let unrestricted_policy policy =
@@ -95,11 +92,11 @@ let unrestricted_policy policy =
   |> Option.value ~default:false
 ;;
 
-let resume_of_statement statement =
-  let thread_id = Sqlite3.column_text statement 0
-  and cwd = Sqlite3.column_text statement 1
-  and approval_mode = Sqlite3.column_text statement 2
-  and sandbox_policy = Sqlite3.column_text statement 3 in
+let resume_of_row columns =
+  let thread_id = columns.(0)
+  and cwd = columns.(1)
+  and approval_mode = columns.(2)
+  and sandbox_policy = columns.(3) in
   Recovery.Codex_resume.create
     ~thread_id
     ~cwd
@@ -111,10 +108,10 @@ let resume_of_statement statement =
 let state_by_thread database thread_id =
   query_one
     database
-    "SELECT id, cwd, approval_mode, sandbox_policy FROM threads WHERE id = ? AND \
-     archived = 0 LIMIT 1"
-    [ Sqlite3.Data.TEXT thread_id ]
-    resume_of_statement
+    [%string
+      "SELECT id, cwd, approval_mode, sandbox_policy FROM threads WHERE id = %{sql_text \
+       thread_id} AND archived = 0 LIMIT 1"]
+    resume_of_row
 ;;
 
 let latest_state_by_cwd database cwd =
@@ -125,9 +122,15 @@ let latest_state_by_cwd database cwd =
     "SELECT id, cwd, approval_mode, sandbox_policy FROM threads WHERE cwd = ? AND \
      archived = 0 ORDER BY updated_at DESC, id DESC LIMIT 1"
   in
-  match query_one database current [ Sqlite3.Data.TEXT cwd ] resume_of_statement with
+  let query sql =
+    query_one
+      database
+      (String.substr_replace_all sql ~pattern:"?" ~with_:(sql_text cwd))
+      resume_of_row
+  in
+  match query current with
   | Ok _ as result -> result
-  | Error _ -> query_one database legacy [ Sqlite3.Data.TEXT cwd ] resume_of_statement
+  | Error _ -> query legacy
 ;;
 
 let lookup_latest_for_cwd config ~cwd =
@@ -138,10 +141,10 @@ let lookup_latest_for_cwd config ~cwd =
 let thread_for_pid database pid =
   query_one
     database
-    "SELECT thread_id FROM logs WHERE process_uuid LIKE ? AND thread_id IS NOT NULL \
-     ORDER BY ts DESC, ts_nanos DESC, id DESC LIMIT 1"
-    [ Sqlite3.Data.TEXT [%string "pid:%{pid#Int}:%"] ]
-    (fun statement -> Sqlite3.column_text statement 0)
+    [%string
+      "SELECT thread_id FROM logs WHERE process_uuid LIKE 'pid:%{pid#Int}:%' AND \
+       thread_id IS NOT NULL ORDER BY ts DESC, ts_nanos DESC, id DESC LIMIT 1"]
+    (fun columns -> columns.(0))
 ;;
 
 let thread_for_processes config pids =
@@ -266,6 +269,9 @@ let capture config workspace =
         String.equal
           (pane.current_command |> Filename.basename |> String.lowercase)
           "codex"
+        || Map.find workspace.windows pane.window_id
+           |> Option.exists ~f:(fun window ->
+             String.equal (String.lowercase window.Workspace.Window.name) "codex")
         || List.exists related_processes ~f:(fun (_, process) ->
           command_is_codex process.command)
       in
