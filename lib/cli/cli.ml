@@ -1,6 +1,8 @@
 open! Core
 open Async
 module App_recovery = Tmux_recovery_application.Recovery
+module Autonomy_runner = Tmux_recovery_application.Autonomy
+module Domain_autonomy = Tmux_recovery_domain.Autonomy
 module App_migrate = Tmux_recovery_application.Migrate
 module App_service = Tmux_recovery_application.Service
 module App_snapshot = Tmux_recovery_application.Snapshot
@@ -12,7 +14,7 @@ module Snapshot = Tmux_recovery_domain.Snapshot
 module Workspace = Tmux_recovery_domain.Workspace
 
 let schema_version = "1"
-let version = "0.3.0-dev.20"
+let version = "0.3.0-dev.21"
 let build_time = Build_stamp.build_time
 
 let envelope ~command ?(warnings = []) data =
@@ -706,6 +708,12 @@ let service_status_command =
            "Next snapshot:   %s\n"
            (Option.value status.next_run ~default:"waiting for the first timer save");
          printf
+           "Autonomy tick:    %s"
+           (Service.activation_label status.autonomy.activation);
+         Option.iter status.autonomy.schedule ~f:(printf " · %s");
+         print_newline ();
+         Option.iter status.autonomy.command ~f:(printf "Tick command:     %s\n");
+         printf
            "Login restore:    %s"
            (Service.activation_label status.login_restore.activation);
          Option.iter status.login_restore.schedule ~f:(printf " · %s");
@@ -1043,6 +1051,210 @@ let doctor_command =
        return ())
 ;;
 
+(** Reconcile the autonomous pipeline once (one tick under the store lock) and
+    report the outcome. This is the same entry point the autonomy timer service
+    runs; the TUI also reconciles on refresh. *)
+let autonomy_tick_command =
+  Command.async_or_error
+    ~summary:"Run one autonomous-cleanup reconcile cycle"
+    (let%map_open.Command socket_name = socket_param
+     and quiet =
+       Command.Param.flag
+         "--quiet"
+         Command.Param.no_arg
+         ~doc:" print nothing on success (for the timer service)"
+     in
+     fun () ->
+       let runner = Autonomy_runner.create ?socket_name () |> Or_error.ok_exn in
+       Deferred.Or_error.bind (Autonomy_runner.tick runner) ~f:(fun result ->
+         Deferred.Or_error.bind (Autonomy_runner.status runner) ~f:(fun status ->
+           let () =
+             match result with
+             | Autonomy_runner.Skipped reason ->
+               if not quiet then printf "skipped: %s\n" reason
+             | Autonomy_runner.Reconciled r ->
+               (match r.fired with
+                | None ->
+                  (if not quiet
+                   then
+                     printf
+                       "no due actions (%d candidate(s) in funnel; policy: %s)\n"
+                       (List.length status.candidates)
+                       (Domain_autonomy.Mode.label r.policy.mode);
+                  ())
+                | Some id ->
+                  (if not quiet then printf "processed %s\n" id;
+                  ()))
+           in
+           Deferred.return (Ok ())
+         )))
+;;
+
+let autonomy_status_command =
+  Command.async_or_error
+    ~summary:"Show the persistent autonomy policy, funnel, and audit"
+    (let%map_open.Command socket_name = socket_param and json = json_param in
+     fun () ->
+       let runner = Autonomy_runner.create ?socket_name () |> Or_error.ok_exn in
+       Deferred.Or_error.bind (Autonomy_runner.status runner) ~f:(fun status ->
+         Deferred.return
+           (Ok
+              (if json
+               then
+                 envelope
+                   ~command:"autonomy status"
+                   (`Assoc
+                     [ "policy", Domain_autonomy.config_to_yojson status.policy
+                     ; "paused", `Bool status.paused
+                     ; "active",
+                         `List (List.map status.active ~f:(fun _action -> `Null))
+                     ; "audit", `List (List.map status.audit ~f:(fun line -> `String line))
+                     ])
+                 |> print_json
+               else (
+                 let mode =
+                   (match status.policy.mode with
+                    | Domain_autonomy.Mode.Off -> "off"
+                    | Domain_autonomy.Mode.Dry_run -> "dry-run"
+                    | Domain_autonomy.Mode.Live -> "live")
+                 in
+                 printf "policy:   %s · grace %ds · persistence %ds · snapshot %s%s\n"
+                   mode
+                   status.policy.grace_seconds
+                   status.policy.persistence_seconds
+                   (if status.policy.snapshot_before_fire then "before fire" else "disabled")
+                   (if status.paused then " · PAUSED" else "");
+                 if List.is_empty status.active
+                 then print_endline "pending:  (none)"
+                 else
+                   List.iter status.active ~f:(fun action ->
+                     printf "pending:  %s %s (deadline %s)\n"
+                       action.id
+                       action.window_id
+                       (Time_ns.to_string_utc action.deadline));
+                 if List.is_empty status.candidates
+                 then print_endline "funnel:   (empty)"
+                 else
+                   List.iter
+                     status.candidates
+                     ~f:(fun (window_id, since, suppressed) ->
+                       printf
+                         "funnel:   %s %s%s\n"
+                         window_id
+                         (match since with
+                          | Some t -> "eligible since " ^ Time_ns.to_string_utc t
+                          | None -> "observing")
+                         (if suppressed then " (suppressed this cycle)" else ""));
+                 if List.is_empty status.audit
+                 then print_endline "audit:    (no entries)";
+                 List.iter (List.take status.audit 10) ~f:(fun line ->
+                   printf "audit:    %s\n" line))))))
+;;
+
+let autonomy_cancel_command =
+  Command.async_or_error
+    ~summary:"Cancel one scheduled autonomous close by action ID"
+    (let%map_open.Command socket_name = socket_param
+     and id = anon ("ID" %: string) in
+     fun () ->
+       let runner = Autonomy_runner.create ?socket_name () |> Or_error.ok_exn in
+       Deferred.Or_error.bind (Autonomy_runner.cancel runner ~id) ~f:(fun () ->
+         Deferred.return (Ok (printf "cancelled %s\n" id))))
+;;
+
+let autonomy_pause_command =
+  Command.async_or_error
+    ~summary:"Pause the autonomous pipeline (cancels pending, clears the funnel)"
+    (let%map_open.Command socket_name = socket_param in
+     fun () ->
+       let runner = Autonomy_runner.create ?socket_name () |> Or_error.ok_exn in
+       Deferred.Or_error.bind (Autonomy_runner.pause runner) ~f:(fun () ->
+         Deferred.return (Ok (print_endline "paused"))))
+;;
+
+let autonomy_resume_command =
+  Command.async_or_error
+    ~summary:"Resume the autonomous pipeline (a fresh persistence period starts)"
+    (let%map_open.Command socket_name = socket_param in
+     fun () ->
+       let runner = Autonomy_runner.create ?socket_name () |> Or_error.ok_exn in
+       Deferred.Or_error.bind (Autonomy_runner.resume runner) ~f:(fun () ->
+         Deferred.return (Ok (print_endline "resumed"))))
+;;
+
+(** Configure the persistent autonomy policy. Live mode requires an explicit
+    --approve: everything before that is dry-run. *)
+let autonomy_configure_command =
+  Command.async_or_error
+    ~summary:"Configure the persistent autonomy policy"
+    (let%map_open.Command socket_name = socket_param
+     and mode =
+       Command.Param.flag
+         "--mode"
+         (Command.Param.optional Command.Param.string)
+         ~doc:"MODE off, dry-run, or live (live requires --approve)"
+     and grace =
+       Command.Param.flag
+         "--grace"
+         (Command.Param.optional Command.Param.int)
+         ~doc:"SECONDS grace countdown before a scheduled close fires"
+     and persistence =
+       Command.Param.flag
+         "--persistence"
+         (Command.Param.optional Command.Param.int)
+         ~doc:"SECONDS a window must stay an idle, unrecoverable candidate"
+     and snapshot =
+       Command.Param.flag
+         "--snapshot-before-fire"
+         (Command.Param.optional Command.Param.bool)
+         ~doc:"YES|NO take a native snapshot just before a live close"
+     and approve =
+       Command.Param.flag
+         "--approve"
+         Command.Param.no_arg
+         ~doc:" approve live mode (without it, live is rejected)"
+     in
+     fun () ->
+       (match mode with
+        | None -> Deferred.return (Ok ())
+        | Some mode ->
+          (match Domain_autonomy.Mode.of_string (String.lowercase mode) with
+           | Error _ ->
+             Deferred.return
+               (Error
+                  (Error.of_string
+                     ("invalid --mode " ^ mode ^ " (expected off, dry-run, or live)")))
+           | Ok mode ->
+             if (match mode with Domain_autonomy.Mode.Live -> true | _ -> false) && not approve
+             then
+               Deferred.return
+                 (Error
+                    (Error.of_string
+                       "refusing live mode without --approve; the pipeline closes                         tmux windows when live"))
+             else (
+               let runner = Autonomy_runner.create ?socket_name () |> Or_error.ok_exn in
+               Deferred.Or_error.bind
+                 (Autonomy_runner.configure runner ~mode ?grace_seconds:grace
+                        ?persistence_seconds:persistence ?snapshot_before_fire:snapshot ())
+                     ~f:(fun () ->
+                       Deferred.return
+                         (Ok
+                            (printf "autonomy policy updated (mode: %s)\n"
+                               (Domain_autonomy.Mode.label mode))))))))
+;;
+
+let autonomy_command =
+  Command.group
+    ~summary:"Manage autonomous cleanup of idle, unrecoverable windows"
+    [ "status", autonomy_status_command
+    ; "tick", autonomy_tick_command
+    ; "configure", autonomy_configure_command
+    ; "cancel", autonomy_cancel_command
+    ; "pause", autonomy_pause_command
+    ; "resume", autonomy_resume_command
+    ]
+;;
+
 let commands =
   [ "completion", completion_command
   ; "status", status_command
@@ -1052,6 +1264,7 @@ let commands =
   ; "restore", snapshots_restore_command
   ; "snapshots", snapshots_command
   ; "service", service_command
+  ; "autonomy", autonomy_command
   ; "migrate", migrate_command
   ; "doctor", doctor_command
   ]

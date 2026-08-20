@@ -10,3 +10,4 @@ state/
 /_opam/
 /.direnv/
 *.install
+PLAN.md

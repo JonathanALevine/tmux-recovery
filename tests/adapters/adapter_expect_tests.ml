@@ -626,7 +626,7 @@ let%test_unit "managed launchd definitions call only the stable binary" =
       ~runtime_path:"/fixtures/node/bin:/usr/bin"
       ~log_directory:"/fixtures/log"
   in
-  [%test_eq: int] (List.length definitions) 2;
+  [%test_eq: int] (List.length definitions) 3;
   List.iter definitions ~f:(fun definition ->
     assert (
       String.is_substring
@@ -649,9 +649,13 @@ let%test_unit "managed launchd definitions call only the stable binary" =
       ; legacy_scripts = []
       }
   in
+  [%test_eq: Service.ownership] status.ownership Managed;
   [%test_eq: string option]
     status.periodic_save.command
     (Some "tmux-recovery snapshot --trigger timer --quiet");
+  [%test_eq: string option]
+    status.autonomy.command
+    (Some "tmux-recovery autonomy tick --quiet");
   [%test_eq: string option]
     status.login_restore.command
     (Some "tmux-recovery restore --approve --if-empty --quiet")
@@ -672,12 +676,20 @@ let%test_unit "systemd fixtures normalize managed timer state" =
     unit
       ~name:"tmux-recovery-restore.service"
       ~contents:"[Service]\nExecStart=/fixtures/bin/tmux-recovery snapshots restore"
+  and autonomy_timer =
+    unit
+      ~name:"tmux-recovery-autonomy.timer"
+      ~contents:
+        "[Timer]\n\
+         OnUnitActiveSec=45s\n\
+         [Service]\n\
+         ExecStart=/fixtures/bin/tmux-recovery autonomy tick --quiet"
   in
   let status =
     Systemd.status_from_inventory
-      { definitions = [ save; restore ]
+      { definitions = [ save; restore; autonomy_timer ]
       ; active = [ save.name ]
-      ; enabled = [ save.name; restore.name ]
+      ; enabled = [ save.name; restore.name; autonomy_timer.name ]
       ; legacy_scripts = []
       }
   in
@@ -750,12 +762,16 @@ let%test_unit "managed systemd units use direct native entrypoints" =
       ~tmux_path:"/usr/bin/tmux"
       ~runtime_path:"/fixtures/node/bin:/usr/bin"
   in
-  [%test_eq: int] (List.length definitions) 3;
+  [%test_eq: int] (List.length definitions) 5;
   let contents = List.map definitions ~f:(fun item -> item.contents) |> String.concat in
   assert (
     String.is_substring
       contents
       ~substring:"ExecStart=/managed/current/tmux-recovery snapshot");
+  assert (
+    String.is_substring
+      contents
+      ~substring:"ExecStart=/managed/current/tmux-recovery autonomy tick --quiet");
   assert (
     String.is_substring
       contents
@@ -770,14 +786,23 @@ let%test_unit "managed systemd units use direct native entrypoints" =
   let status =
     Systemd.status_from_inventory
       { definitions
-      ; active = [ "tmux-recovery-save.timer"; "tmux-recovery-restore.service" ]
-      ; enabled = [ "tmux-recovery-save.timer"; "tmux-recovery-restore.service" ]
+      ; active =
+          [ "tmux-recovery-save.timer"; "tmux-recovery-restore.service"
+          ; "tmux-recovery-autonomy.timer"
+          ]
+      ; enabled =
+          [ "tmux-recovery-save.timer"; "tmux-recovery-restore.service"
+          ; "tmux-recovery-autonomy.timer"
+          ]
       ; legacy_scripts = []
       }
   in
+  [%test_eq: Service.ownership] status.ownership Managed;
   [%test_eq: string option]
     status.periodic_save.command
     (Some "tmux-recovery snapshot --trigger timer --quiet");
+  [%test_eq: string option]
+    status.autonomy.command (Some "tmux-recovery autonomy tick --quiet");
   [%test_eq: string option]
     status.login_restore.command
     (Some "tmux-recovery restore --approve --if-empty --quiet")

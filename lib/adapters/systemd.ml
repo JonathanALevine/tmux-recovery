@@ -42,6 +42,9 @@ let restore_definition definition =
   contains_any definition.name [ "restore"; "bootstrap" ]
 ;;
 
+let autonomy_definition definition = contains_any definition.name [ "autonomy" ]
+;;
+
 let config_value contents key =
   String.split_lines contents
   |> List.find_map ~f:(fun line ->
@@ -103,6 +106,9 @@ let status_from_inventory inventory =
   in
   let has_managed_save = List.exists managed_definitions ~f:save_definition in
   let has_managed_restore = List.exists managed_definitions ~f:restore_definition in
+  let has_managed_autonomy =
+    List.exists managed_definitions ~f:autonomy_definition
+  in
   let has_legacy_assets =
     (not (List.is_empty legacy)) || not (List.is_empty inventory.legacy_scripts)
   and has_active_legacy =
@@ -114,7 +120,7 @@ let status_from_inventory inventory =
     match
       ( List.is_empty managed_definitions
       , has_legacy_assets
-      , has_managed_save && has_managed_restore
+      , has_managed_save && has_managed_restore && has_managed_autonomy
       , has_active_legacy )
     with
     | true, false, _, _ -> Service.Absent
@@ -139,6 +145,12 @@ let status_from_inventory inventory =
         active_definitions
         inventory
         ~kind:save_definition
+        ~prefer:(fun definition -> String.is_suffix definition.name ~suffix:".timer")
+  ; autonomy =
+      component
+        active_definitions
+        inventory
+        ~kind:autonomy_definition
         ~prefer:(fun definition -> String.is_suffix definition.name ~suffix:".timer")
   ; login_restore =
       component
@@ -328,6 +340,33 @@ OnUnitActiveSec=10min
 RandomizedDelaySec=30s
 Persistent=true
 Unit=tmux-recovery-save.service
+
+[Install]
+WantedBy=timers.target
+|}
+  ; definition
+      "tmux-recovery-autonomy.service"
+      [%string
+        {|[Unit]
+Description=Reconcile autonomous tmux-recovery cleanup
+
+[Service]
+Type=oneshot
+Environment=TMUX_RECOVERY_TMUX=%{tmux_path}
+Environment="PATH=%{runtime_path}"
+ExecStart=%{binary_path} autonomy tick --quiet
+|}]
+  ; definition
+      "tmux-recovery-autonomy.timer"
+      {|[Unit]
+Description=Reconcile autonomous tmux-recovery cleanup every 45 seconds
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=45s
+RandomizedDelaySec=5s
+Persistent=true
+Unit=tmux-recovery-autonomy.service
 
 [Install]
 WantedBy=timers.target

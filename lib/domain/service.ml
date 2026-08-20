@@ -33,6 +33,7 @@ type t =
   { manager : manager
   ; ownership : ownership
   ; periodic_save : component
+  ; autonomy : component
   ; login_restore : component
   ; binary_path : string option
   ; binary_version : string option
@@ -137,6 +138,7 @@ let to_yojson (status : t) =
     [ "manager", `String (manager_label status.manager)
     ; "ownership", `String (ownership_label status.ownership)
     ; "periodic_save", component_to_yojson status.periodic_save
+    ; "autonomy", component_to_yojson status.autonomy
     ; "login_restore", component_to_yojson status.login_restore
     ; "binary_path", string_option_json status.binary_path
     ; "binary_version", string_option_json status.binary_version

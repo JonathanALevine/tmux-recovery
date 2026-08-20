@@ -42,6 +42,8 @@ let save_definition definition =
 
 let restore_definition definition =
   contains_any definition.label [ "restore"; "bootstrap" ]
+
+let autonomy_definition definition = contains_any definition.label [ "autonomy" ]
   || String.equal definition.label "com.jonathan.tmux"
 ;;
 
@@ -131,7 +133,8 @@ let status_from_inventory inventory =
   in
   let has_managed_save = List.exists managed ~f:save_definition in
   let has_managed_restore = List.exists managed ~f:restore_definition in
-  let has_legacy_assets =
+  let has_managed_autonomy = List.exists managed ~f:autonomy_definition
+  and has_legacy_assets =
     (not (List.is_empty legacy)) || not (List.is_empty inventory.legacy_scripts)
   and has_active_legacy =
     List.exists legacy ~f:(fun definition ->
@@ -141,7 +144,7 @@ let status_from_inventory inventory =
     match
       ( List.is_empty managed
       , has_legacy_assets
-      , has_managed_save && has_managed_restore
+      , has_managed_save && has_managed_restore && has_managed_autonomy
       , has_active_legacy )
     with
     | true, false, _, _ -> Service.Absent
@@ -153,7 +156,8 @@ let status_from_inventory inventory =
   let periodic_save =
     component active_definitions inventory.loaded ~kind:save_definition
   in
-  let login_restore =
+  let autonomy = component active_definitions inventory.loaded ~kind:autonomy_definition
+  and login_restore =
     component active_definitions inventory.loaded ~kind:restore_definition
   in
   let primary =
@@ -180,6 +184,7 @@ let status_from_inventory inventory =
   { Service.manager = Launchd
   ; ownership
   ; periodic_save
+  ; autonomy
   ; login_restore
   ; binary_path =
       Option.bind primary ~f:(fun definition -> first_program definition.contents)
@@ -318,6 +323,11 @@ let managed_definitions config ~binary_path ~tmux_path ~runtime_path ~log_direct
       [ binary_path; "snapshot"; "--trigger"; "timer"; "--quiet" ]
       (`Interval 600)
       "save"
+  ; definition
+      "org.tmux-recovery.autonomy"
+      [ binary_path; "autonomy"; "tick"; "--quiet" ]
+      (`Interval 45)
+      "autonomy"
   ; definition
       "org.tmux-recovery.restore"
       [ binary_path; "restore"; "--approve"; "--if-empty"; "--quiet" ]
