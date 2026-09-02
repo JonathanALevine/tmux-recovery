@@ -261,6 +261,9 @@ let plan t =
           ; command
               "systemctl"
               [ "--user"; "enable"; "--now"; "tmux-recovery-restore.service" ]
+          ; command
+              "systemctl"
+              [ "--user"; "enable"; "--now"; "tmux-recovery-autonomy.timer" ]
           ]
       ; disable_commands =
           [ command
@@ -269,6 +272,9 @@ let plan t =
           ; command
               "systemctl"
               [ "--user"; "disable"; "--now"; "tmux-recovery-save.timer" ]
+          ; command
+              "systemctl"
+              [ "--user"; "disable"; "--now"; "tmux-recovery-autonomy.timer" ]
           ; command "systemctl" [ "--user"; "daemon-reload" ]
           ]
       ; conflicts = current.conflicts
