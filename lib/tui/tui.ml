@@ -3,8 +3,10 @@ open Async
 open Bonsai_term
 open Bonsai.Let_syntax
 module App_recovery = Tmux_recovery_application.Recovery
+module Autonomy_runner = Tmux_recovery_application.Autonomy
 module App_service = Tmux_recovery_application.Service
 module App_snapshot = Tmux_recovery_application.Snapshot
+module Autonomy = Tmux_recovery_domain.Autonomy
 module Ansi_renderer = Bonsai_term_ansi_text_renderer
 module Recovery = Tmux_recovery_domain.Recovery
 module Service = Tmux_recovery_domain.Service
@@ -201,6 +203,7 @@ type model =
   ; message : string option
   ; preview_generation : int
   ; pane_preview : pane_preview
+  ; autonomy : Autonomy_runner.status_info
   }
 
 type action =
@@ -217,6 +220,7 @@ type action =
   | Preview_started of preview_request
   | Preview_finished of preview_request * string list Or_error.t
   | Clear_preview
+  | Autonomy_updated of Autonomy_runner.status_info * string option
 
 let pane_for_window_link workspace link_id =
   let open Workspace in
@@ -365,6 +369,9 @@ let apply_action _context model action =
           })
      | No_preview | Loading _ | Ready _ | Failed _ -> model)
   | Clear_preview -> { model with pane_preview = No_preview }
+  | Autonomy_updated (autonomy, note) ->
+    { model with autonomy
+    ; message = (match note with Some n -> Some n | None -> model.message) }
 ;;
 
 let terminal_foreground = Attr.Color.Expert.default
@@ -777,8 +784,11 @@ let detail_lines model ~height =
         @ [ field
               "Next snapshot"
               (Option.value status.next_run ~default:"waiting for the first timer save")
-          ; field "Login restore" (component_health status.login_restore)
+          ; field "Autonomy tick" (component_health status.autonomy)
           ]
+        @ Option.value_map status.autonomy.command ~default:[] ~f:(fun command ->
+          [ field "Tick command" command ])
+        @ [ field "Login restore" (component_health status.login_restore) ]
         @ Option.value_map status.login_restore.command ~default:[] ~f:(fun command ->
           [ field "Restore command" command ])
         @ [ field
@@ -792,6 +802,77 @@ let detail_lines model ~height =
         @ List.map status.conflicts ~f:(fun conflict ->
           plain ~color:amber ("Active conflict: " ^ conflict))
         @ warning_lines status.warnings
+    in
+    let format_span (span : Time_ns.Span.t) =
+      let total_sec = Time_ns.Span.to_int_sec span in
+      let sec = total_sec mod 60 in
+      let min = total_sec / 60 mod 60 in
+      let hr = total_sec / 3600 in
+      if hr > 0
+      then sprintf "%dh %dm" hr min
+      else if min > 0
+      then sprintf "%dm %ds" min sec
+      else sprintf "%ds" sec
+    in
+    let autonomy_lines =
+      let info = model.autonomy in
+      let policy = info.policy in
+      let mode_label =
+        match policy.mode with
+        | Autonomy.Mode.Off -> "off (no autonomous cleanup)"
+        | Autonomy.Mode.Dry_run -> "dry-run (would close; no action taken)"
+        | Autonomy.Mode.Live -> "live (closes idle, unrecoverable windows)"
+      in
+      let paused_label = if info.paused then " · PAUSED (p to resume)" else "" in
+      let snapshot_label = if policy.snapshot_before_fire then "yes" else "no" in
+      let now = Time_ns.now () in
+      let pending_lines =
+        if List.is_empty info.active
+        then
+          [ plain ~color:muted "No windows are currently scheduled for autonomous close."
+          ]
+        else
+          List.map info.active ~f:(fun pending_action ->
+            let window_id = pending_action.Autonomy.window_id in
+            let remaining = Autonomy.remaining ~now pending_action in
+            plain
+              ~color:amber
+              [%string
+                "· %{pending_action.id} %{window_id} closes in %{format_span                  remaining} · press c to cancel"])
+      in
+      let funnel_lines =
+        if List.is_empty info.candidates
+        then [ plain ~color:muted "Eligibility funnel: empty." ]
+        else
+          List.map info.candidates ~f:(fun (window_id, since, suppressed) ->
+            let since_label =
+              (match since with
+               | Some t -> "eligible since " ^ Time_ns.to_string_utc t
+               | None -> "observing")
+            in
+            let suppressed_label = if suppressed then " · suppressed this cycle" else "" in
+            plain ~color:muted
+              ([%string "· %{window_id} %{since_label}%{suppressed_label}"]))
+      in
+      let audit_lines =
+        match info.audit with
+        | [] -> [ plain ~color:muted "No autonomous actions recorded yet." ]
+        | entries ->
+          List.take entries 3
+          |> List.map ~f:(fun line -> plain ~color:muted ("· " ^ line))
+      in
+      [ heading "Autonomous cleanup"
+      ; field
+          "Policy"
+          [%string
+            "%{mode_label} · grace %{format_span (Time_ns.Span.of_int_sec              policy.grace_seconds)} · candidate for ≥ %{format_span              (Time_ns.Span.of_int_sec policy.persistence_seconds)} · snapshot before              fire: %{snapshot_label}%{paused_label}"]
+      ; field "Pending actions" (string_of_int (List.length info.active))
+      ]
+      @ pending_lines
+      @ [ plain "" ]
+      @ funnel_lines
+      @ audit_lines
+      @ [ plain ~color:muted "p pauses or resumes the pipeline." ]
     in
     [ heading "Status"
     ; plain ~color:muted "Recovery readiness, snapshot history, and automation."
@@ -814,6 +895,8 @@ let detail_lines model ~height =
     @ snapshot_lines
     @ [ plain "" ]
     @ automation_lines
+    @ [ plain "" ]
+    @ autonomy_lines
     @ [ plain ""
       ; field "Mutation safety" "PASS · destructive operations require explicit approval"
       ; plain ~color:muted "Use the CLI for snapshot restore and automation changes."
@@ -842,7 +925,7 @@ let render model { Dimensions.width; height } =
   let help =
     View.text
       ~attrs:[ Attr.fg muted; Attr.bg terminal_background ]
-      " ↑/↓ move  ← back/fold  → expand  enter open  r refresh  q quit "
+      " ↑/↓ move  ← back/fold  → expand  enter open  r refresh  c cancel  p pause  q quit "
   in
   let body_height = Int.max 1 (height - 1) in
   let body =
@@ -873,6 +956,8 @@ let render model { Dimensions.width; height } =
 let app
   ?capture_pane
   ?reload
+  ~autonomy_runner
+  ~initial_autonomy
   ~service
   ~initial
   ?initial_recovery
@@ -911,6 +996,7 @@ let app
         ; message = None
         ; preview_generation = 0
         ; pane_preview = No_preview
+        ; autonomy = initial_autonomy
         }
       ~apply_action
       graph
@@ -934,21 +1020,68 @@ let app
     graph;
   let refreshing = ref false in
   let refresh =
-    let%arr inject in
-    (let%bind.Effect () = inject Refresh_started in
-     let%bind.Effect workspace, recovery, snapshots, services = reload () in
-     let%bind.Effect () =
-       inject (Replace_data (workspace, recovery, snapshots, services))
-     in
-     (refreshing := false; Effect.Ignore))
+    let%arr model and inject in
+    let%bind.Effect () = inject Refresh_started in
+    let%bind.Effect workspace, recovery, snapshots, services = reload () in
+    let%bind.Effect () =
+      inject (Replace_data (workspace, recovery, snapshots, services))
+    in
+    let%bind.Effect autonomy_status =
+      match workspace, recovery with
+      | Ok _, Ok _ ->
+        (* One reconcile cycle under the store lock: advance the funnel, fire any
+           due action (dry-run or live per the persisted policy), persist state,
+           and sync the durable audit log. *)
+        Effect.of_deferred_thunk (fun () ->
+          Deferred.Or_error.bind (Autonomy_runner.tick autonomy_runner) ~f:(fun _tick ->
+            Autonomy_runner.status autonomy_runner))
+      | _ -> Effect.of_deferred_thunk (fun () -> Autonomy_runner.status autonomy_runner)
+    in
+    let%bind.Effect () =
+      (match autonomy_status with
+       | Ok status -> inject (Autonomy_updated (status, None))
+       | Error error ->
+         inject (Autonomy_updated (model.autonomy, Some (Error.to_string_hum error |> String.strip))))
+    in
+    refreshing := false;
+    Effect.Ignore
   in
   let view =
     let%arr model and dimensions in
     render model dimensions
   in
   let handler =
-    let%arr inject and refresh in
+    let%arr model and inject and refresh in
     fun (event : Event.t) ->
+      let cancel_oldest () =
+        (match model.autonomy.active with
+         | [] -> Effect.Ignore
+         | oldest :: _ ->
+           Effect.of_deferred_thunk (fun () ->
+             Deferred.Or_error.bind (Autonomy_runner.cancel autonomy_runner ~id:oldest.id) ~f:(fun () ->
+               Autonomy_runner.status autonomy_runner))
+           |> Effect.bind
+                ~f:(function
+                  | Ok status ->
+                    inject (Autonomy_updated (status, Some ("cancelled " ^ oldest.id)))
+                  | Error error ->
+                    inject
+                      (Autonomy_updated (model.autonomy, Some (Error.to_string_hum error |> String.strip)))))
+      in
+      let toggle_pause () =
+        let paused = model.autonomy.paused in
+        let action = if paused then Autonomy_runner.resume autonomy_runner else Autonomy_runner.pause autonomy_runner in
+        let note = if paused then "resumed; a fresh persistence period is required" else "paused" in
+        Effect.of_deferred_thunk (fun () ->
+          Deferred.Or_error.bind action ~f:(fun () -> Autonomy_runner.status autonomy_runner))
+        |> Effect.bind
+             ~f:(function
+               | Ok status -> inject (Autonomy_updated (status, Some note))
+               | Error error ->
+                 inject
+                   (Autonomy_updated
+                      (model.autonomy, Some (Error.to_string_hum error |> String.strip))))
+      in
       match event with
       | Key_press { key = Arrow `Down; mods = [] } -> inject (Move 1)
       | Key_press { key = Arrow `Up; mods = [] } -> inject (Move (-1))
@@ -956,14 +1089,32 @@ let app
       | Key_press { key = Arrow `Left; mods = [] } -> inject Collapse_or_parent
       | Key_press { key = Enter; mods = [] } -> inject Activate
       | Key_press { key = ASCII 'r' | ASCII 'R'; mods = [] } ->
-        (if !refreshing
-         then Effect.Ignore
-         else (refreshing := true; refresh))
+        if !refreshing
+        then Effect.Ignore
+        else (
+          refreshing := true;
+          refresh)
       | Key_press { key = ASCII 'q' | ASCII 'Q'; mods = [] } -> exit ()
+      | Key_press { key = ASCII 'c' | ASCII 'C'; mods = [] } -> cancel_oldest ()
+      | Key_press { key = ASCII 'p' | ASCII 'P'; mods = [] } -> toggle_pause ()
       | Key_press { key = ASCII ('c' | 'C'); mods = [ Ctrl ] } -> exit ()
       | _ -> Effect.Ignore
   in
   ~view, ~handler
+;;
+
+
+(** Reconcile the autonomous pipeline periodically while the TUI is open, so the
+    view stays current without any key press. The pipeline is service-owned; this
+    is merely an additional, coalescing observer. *)
+let periodic_refresh driver =
+  let rec loop () =
+    Clock_ns.after (Time_ns.Span.of_int_sec 15)
+    >>= (fun () ->
+      Driver.send_event driver (Key_press { key = ASCII 'r'; mods = [] });
+      loop ())
+  in
+  loop ()
 ;;
 
 let command =
@@ -981,25 +1132,50 @@ let command =
        let snapshots = App_snapshot.create () in
        let services = App_service.create () in
        let%bind initial = App_recovery.workspace service in
-       match initial with
-       | Error _ as error -> return error
-       | Ok initial ->
-         let%bind initial_recovery = App_recovery.plan service in
-         (match initial_recovery with
-          | Error _ as error -> return error
-          | Ok initial_recovery ->
-            let%bind initial_snapshots = App_snapshot.list snapshots in
-            let%bind initial_services = App_service.status services in
-            Bonsai_term.start_with_exit
-              ~mouse:No_mouse_events
-              (fun ~exit ~dimensions graph ->
-                 app
-                   ~service
-                   ~initial
-                   ~initial_recovery
-                   ~initial_snapshots
-                   ~initial_services
-                   ~exit
-                   ~dimensions
-                   graph)))
+       (match initial with
+        | Error _ as error -> return error
+        | Ok initial ->
+          let%bind initial_recovery = App_recovery.plan service in
+          (match initial_recovery with
+           | Error _ as error -> return error
+           | Ok initial_recovery ->
+             let%bind initial_snapshots = App_snapshot.list snapshots in
+             (match initial_snapshots with
+              | Error _ as error -> return error
+              | Ok initial_snapshots ->
+                let%bind initial_services = App_service.status services in
+                (match initial_services with
+                 | Error _ as error -> return error
+                 | Ok initial_services ->
+                   (* The autonomy policy lives in the persistent store, never in
+                      CLI flags: the TUI is a viewer and controller for it. *)
+                   Deferred.Or_error.bind (Deferred.return (Autonomy_runner.create ?socket_name ())) ~f:(fun runner ->
+                     Deferred.Or_error.bind (Autonomy_runner.status runner) ~f:(fun initial_autonomy ->
+                       Deferred.Or_error.bind
+                         (Bonsai_term.start_with_driver
+                            ~mouse:No_mouse_events
+                            ~get_view_and_handler:Fn.id
+                            ~handle_incoming:(fun _ _ -> Effect.Ignore)
+                            (fun ~exit ~dimensions graph ->
+                               let (~view: view, ~handler: handler) =
+                                 app
+                                   ~autonomy_runner:runner
+                                   ~initial_autonomy
+                                   ~service
+                                   ~initial
+                                   ~initial_recovery
+                                   ~initial_snapshots:(Ok initial_snapshots)
+                                   ~initial_services:(Ok initial_services)
+                                   ~exit
+                                   ~dimensions
+                                   graph
+                               in
+                               Bonsai.Let_syntax.Let_syntax.map2 view handler
+                                 ~f:(fun view handler -> (~view: view, ~handler: handler))))
+                         ~f:(fun driver ->
+                           don't_wait_for (periodic_refresh driver);
+                           Deferred.map (Driver.finished driver) ~f:(fun result ->
+                             (match result with
+                              | Ok () -> Ok ()
+                              | Error `Incoming_events_pipe_closed -> Ok ()))))))))))
 ;;

@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build & test (ubuntu, OCaml ${{ matrix.ocaml }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The project builds against the oxcaml (ox) ecosystem: ox-version
+        # core / async / bonsai require the oxocaml compiler.
+        ocaml: ["ocaml-variants.5.2.0+ox"]
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        # The integration test drives a real tmux server on an isolated socket
+        # and the Codex adapter shells out to `ps`.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tmux procps
+
+      - name: Set up OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: ${{ matrix.ocaml }}
+          cache: false
+          # bonsai / bonsai_term are published from the oxcaml (ox) repository.
+          opam-repositories: |
+            default: git+https://github.com/ocaml/opam-repository.git
+            ox: git+https://github.com/oxcaml/opam-repository.git
+
+      - name: Install dependencies
+        run: eval $(opam env) && opam install . --deps-only
+
+      - name: Build
+        run: eval $(opam env) && dune build
+
+      - name: Test
+        run: eval $(opam env) && dune runtest

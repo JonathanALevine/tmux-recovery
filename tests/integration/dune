@@ -1,0 +1,10 @@
+(tests
+ (names autonomy_integration_tests)
+ (libraries
+  async
+  core
+  core_unix
+  tmux_recovery_adapters
+  tmux_recovery_application
+  tmux_recovery_domain)
+ (preprocess (pps ppx_jane)))

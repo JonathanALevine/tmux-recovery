@@ -1,6 +1,5 @@
 open! Core
 open Bonsai_term
-
 module Recovery = Tmux_recovery_domain.Recovery
 module Service = Tmux_recovery_domain.Service
 module Snapshot = Tmux_recovery_domain.Snapshot

@@ -33,6 +33,7 @@ type t =
   { manager : manager
   ; ownership : ownership
   ; periodic_save : component
+  ; autonomy : component
   ; login_restore : component
   ; binary_path : string option
   ; binary_version : string option

@@ -650,6 +650,68 @@ let restart_approved config ~pane_id ~cwd ~executable =
     >>| Or_error.map ~f:ignore
 ;;
 
+(** Close a single tmux window. Used by autonomous cleanup after a snapshot has been
+    taken, so the action remains recoverable. *)
+let close_window config ~window_id =
+  run config [ "kill-window"; "-t"; window_id ] >>| Or_error.map ~f:ignore
+;;
+
+(** Window IDs currently viewed by any client (attached or detached). A window
+    on this list must never be a cleanup candidate. *)
+let viewed_window_ids config =
+  run_lines config [ "list-clients"; "-F"; "#{window_id}" ]
+  >>| fun result ->
+  (match result with
+   | Ok lines -> Ok (List.filter lines ~f:(fun l -> not (String.is_empty l)))
+   | Error error when no_server error -> Ok []
+   | Error _ as error -> error)
+;;
+
+let digest_lines prefix lines =
+  Sha256.digest_string (String.concat ~sep:"\n" (prefix @ lines))
+;;
+
+(** Fingerprint of a window's activity: pane IDs, pane PIDs, current commands,
+    and the most recent captured output of each pane. Any change between ticks
+    resets the quiescence persistence period. *)
+let activity_signature config ~window_id =
+  Deferred.bind
+    (run_lines config
+       [ "list-panes"; "-t"; window_id; "-F"; "#{pane_id}|#{pane_pid}|#{pane_current_command}" ])
+    ~f:(fun pane_lines_result ->
+      (match pane_lines_result with
+       | Error _ as error -> return error
+       | Ok pane_lines ->
+         let pane_ids =
+           List.map pane_lines ~f:(fun line -> String.split line ~on:'|' |> List.hd_exn)
+         in
+         Deferred.List.map pane_ids ~f:(fun pane_id ->
+           run_lines config [ "capture-pane"; "-t"; pane_id; "-p"; "-S"; "-80" ])
+           ~how:`Sequential
+         >>| fun captures ->
+         let parts =
+           pane_lines
+           :: List.map captures ~f:(fun result ->
+                (match result with
+                 | Ok lines -> List.map lines ~f:sanitize_capture_line
+                 | Error _ -> [ "<capture unavailable>" ]))
+         in
+         Ok (digest_lines [ window_id ] (List.concat parts))))
+;;
+
+(** Stable identity of the tmux server instance: socket plus every session,
+    window, and pane ID. A server restart renumbers IDs, so a reused @id can
+    never be mistaken for the original target. *)
+let server_identity config =
+  run_lines config [ "list-panes"; "-a"; "-F"; "#{session_id}|#{window_id}|#{pane_id}" ]
+  >>| fun result ->
+  (match result with
+   | Ok lines ->
+     Ok (digest_lines [ Option.value config.socket_name ~default:"default" ] (List.sort lines ~compare:String.compare))
+   | Error error when no_server error -> Ok (digest_lines [ Option.value config.socket_name ~default:"default" ] [])
+   | Error _ as error -> error)
+;;
+
 let resume_codex config ~pane_id ~cwd ~executable ~thread_id ~bypass_approvals =
   let open Deferred.Or_error.Let_syntax in
   let%bind () =

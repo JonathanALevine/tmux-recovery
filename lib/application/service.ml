@@ -73,6 +73,7 @@ let unsupported name =
   { Service.manager = Unsupported name
   ; ownership = Absent
   ; periodic_save = Service.empty_component
+  ; autonomy = Service.empty_component
   ; login_restore = Service.empty_component
   ; binary_path = None
   ; binary_version = None

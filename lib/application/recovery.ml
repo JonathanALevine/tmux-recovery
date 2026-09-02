@@ -15,6 +15,7 @@ let create ?socket_name ?codex () =
 
 let workspace t = Tmux_adapter.observe t.tmux
 let capture_pane t ~pane_id = Tmux_adapter.capture_pane t.tmux ~pane_id
+let close_window t ~window_id = Tmux_adapter.close_window t.tmux ~window_id
 
 let plan t =
   let%bind result = workspace t in
