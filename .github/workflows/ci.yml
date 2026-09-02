@@ -16,7 +16,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ocaml: ["5.2.0"]
+        # The project builds against the oxcaml (ox) ecosystem: ox-version
+        # core / async / bonsai require the oxocaml compiler.
+        ocaml: ["ocaml-variants.5.2.0+ox"]
     steps:
       - name: Check out
         uses: actions/checkout@v4
@@ -33,6 +35,10 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.ocaml }}
           cache: false
+          # bonsai / bonsai_term are published from the oxcaml (ox) repository.
+          opam-repositories: |
+            default: git+https://github.com/ocaml/opam-repository.git
+            ox: git+https://github.com/oxcaml/opam-repository.git
 
       - name: Install dependencies
         run: opam install . --deps-only

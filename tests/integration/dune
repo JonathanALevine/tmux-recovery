@@ -1,5 +1,5 @@
-(executable
- (name autonomy_integration_tests)
+(tests
+ (names autonomy_integration_tests)
  (libraries
   async
   core
@@ -8,7 +8,3 @@
   tmux_recovery_application
   tmux_recovery_domain)
  (preprocess (pps ppx_jane)))
-
-(rule
- (target run_tests)
- (action (run ./autonomy_integration_tests.exe)))
