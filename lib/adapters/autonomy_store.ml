@@ -5,17 +5,24 @@
     - [config_home/tmux-recovery/autonomy.json]       -- the user's policy
     - [state_home/tmux-recovery/autonomy-state.json]  -- the engine state
     - [state_home/tmux-recovery/autonomy-audit.jsonl] -- durable audit log
-    - [state_home/tmux-recovery/autonomy.lock]        -- advisory lock (flock)
+    - [state_home/tmux-recovery/autonomy.lock]        -- advisory lock (lockf)
 
-    Writes are atomic (temp file + fsync + rename). The engine state is
-    fail-closed: a corrupt or unreadable state file is an error and never
-    leads to a window being closed. The lock serializes reconcile/fire
-    transactions between the runner, the CLI, and the TUI. *)
+    Writes are atomic (temp file + fsync + rename + directory fsync). The
+    engine state is fail-closed: a corrupt or unreadable state file is an
+    error and never leads to a window being closed. The lock serializes
+    reconcile/fire transactions between the runner, the CLI, and the TUI.
+
+    Or_error threading is uniform throughout: every function that chains
+    fallible steps uses [let open Or_error.Let_syntax in] with [let%bind] /
+    [let%map] and [return]; a single fallible syscall is wrapped directly in
+    [Or_error.try_with]. No ad-hoc bind operators. *)
 
 open! Core
 open Async
 
 module Autonomy = Tmux_recovery_domain.Autonomy
+
+(* ---------------------------------------------------------------- store *)
 
 type t =
   { config_home : string
@@ -51,6 +58,28 @@ let create ?config_home ?state_home () =
   return t
 ;;
 
+(* ------------------------------------------------------ file primitives *)
+
+let file_exists path =
+  match Sys_unix.file_exists path with
+  | `Yes -> true
+  | `No | `Unknown -> false
+;;
+
+let read_file path = Or_error.try_with (fun () -> In_channel.read_all path)
+
+(** Write all of [contents] to [fd], looping over partial writes. Shared by
+    the atomic writer and the audit appender so both use one write discipline. *)
+let write_all fd contents =
+  let buf = Bytes.of_string contents in
+  let len = Bytes.length buf in
+  let offset = ref 0 in
+  while !offset < len do
+    let n = Caml_unix.write fd buf !offset (len - !offset) in
+    offset := !offset + n
+  done
+;;
+
 (** Fsync a directory so that a completed rename is durable. *)
 let fsync_directory directory =
   let fd = Core_unix.openfile directory ~mode:[O_RDONLY; O_CLOEXEC] in
@@ -58,10 +87,10 @@ let fsync_directory directory =
 ;;
 
 (** Atomically write [contents] to [path]: write a temp file in the same
-    directory, fsync the file, rename it into place, and fsync the directory so
-    the rename is durable. The temp file is removed if the write fails. This is
-    the same pattern the native snapshot adapter uses to commit snapshot files
-    and the latest/last-good pointers. *)
+    directory, fsync the file, rename it into place, and fsync the directory
+    so the rename is durable. The temp file is removed if the write fails.
+    This is the same pattern the native snapshot adapter uses to commit
+    snapshot files and the latest/last-good pointers. *)
 let atomic_write path contents =
   let dir = Filename.dirname path in
   let tmp =
@@ -74,18 +103,7 @@ let atomic_write path contents =
     Exn.protect
       ~f:(fun () ->
         let ic = Core_unix.openfile tmp ~mode:[O_WRONLY; O_CREAT; O_TRUNC; O_CLOEXEC] ~perm:0o600 in
-        Exn.protect
-          ~f:(fun () ->
-            let buf = Bytes.of_string contents in
-            let len = Bytes.length buf in
-            let offset = ref 0 in
-            while !offset < len do
-              let n = Caml_unix.write ic buf !offset (len - !offset) in
-              offset := !offset + n
-            done;
-            Caml_unix.fsync ic;
-            ())
-          ~finally:(fun () -> Caml_unix.close ic);
+        Exn.protect ~f:(fun () -> write_all ic contents) ~finally:(fun () -> Caml_unix.close ic);
         (* Commit the rename, then make the rename durable. *)
         Core_unix.rename ~src:tmp ~dst:path;
         fsync_directory dir;
@@ -97,13 +115,7 @@ let atomic_write path contents =
   )
 ;;
 
-let read_file path = Or_error.try_with (fun () -> In_channel.read_all path)
-
-let file_exists path =
-  match Sys_unix.file_exists path with
-  | `Yes -> true
-  | `No | `Unknown -> false
-;;
+(* --------------------------------------------------------- advisory lock *)
 
 let with_lock t ~f =
   let fd =
@@ -115,6 +127,33 @@ let with_lock t ~f =
       Exn.protect ~f ~finally:(fun () -> Core_unix.lockf fd ~mode:Core_unix.F_ULOCK ~len:0L))
     ~finally:(fun () -> Caml_unix.close fd)
 ;;
+
+(** [with_lock_async t ~f] runs [f] while holding the store's advisory lock and
+    releases the lock when [f]'s deferred settles (resolves or raises), so
+    asynchronous work (tmux observation, snapshots, window close) stays inside
+    the transaction.
+
+    This mirrors [with_lock] and the native snapshot adapter's operation lock:
+    an ordinary advisory lock file guarded by [lockf] -- no PID file, no
+    stale-lock takeover -- with [Monitor.protect] tying the release to the
+    deferred settling, so the lock cannot be dropped while [f] is still
+    running. The blocking acquire runs on the main thread, like [with_lock]. *)
+let with_lock_async t ~f =
+  let fd =
+    Core_unix.openfile (lock_path t) ~mode:[O_RDWR; O_CREAT; O_CLOEXEC] ~perm:0o600
+  in
+  Monitor.protect
+    (fun () ->
+      Core_unix.lockf fd ~mode:Core_unix.F_LOCK ~len:0L;
+      Monitor.protect (fun () -> f ()) ~finally:(fun () ->
+        Core_unix.lockf fd ~mode:Core_unix.F_ULOCK ~len:0L;
+        Deferred.unit))
+    ~finally:(fun () ->
+      Caml_unix.close fd;
+      Deferred.unit)
+;;
+
+(* --------------------------------------------------------------- policy *)
 
 let load_policy (t : t) =
   let open Or_error.Let_syntax in
@@ -135,6 +174,8 @@ let load_policy (t : t) =
 let save_policy (t : t) config =
   atomic_write (policy_path t) (Yojson.Safe.to_string (Autonomy.config_to_yojson config))
 ;;
+
+(* ---------------------------------------------------------------- state *)
 
 let load_state (t : t) =
   let open Or_error.Let_syntax in
@@ -165,6 +206,8 @@ let load_state (t : t) =
 let save_state (t : t) state =
   atomic_write (state_path t) (Yojson.Safe.to_string (Autonomy.state_to_yojson state))
 ;;
+
+(* --------------------------------------------------------- audit log *)
 
 module Audit = struct
   type line =
@@ -285,46 +328,19 @@ module Audit = struct
                ~mode:[O_WRONLY; O_CREAT; O_APPEND; O_CLOEXEC]
                ~perm:0o600
            in
-           List.iter lines ~f:(fun line ->
-             let contents = Bytes.of_string (Yojson.Safe.to_string (to_yojson line) ^ "\n") in
-             let n = Bytes.length contents in
-             let written = ref 0 in
-             while !written < n do
-               let k = Caml_unix.write ic contents !written (n - !written) in
-               written := !written + k
-             done);
-           Caml_unix.fsync ic;
-           Caml_unix.close ic;
-           ())
+           Exn.protect
+             ~f:(fun () ->
+               List.iter lines ~f:(fun line ->
+                 write_all ic (Yojson.Safe.to_string (to_yojson line) ^ "\n"));
+               Caml_unix.fsync ic;
+               ())
+             ~finally:(fun () -> Caml_unix.close ic))
        in
        return ())
   ;;
 end
 
-(** [with_lock_async t ~f] runs [f] while holding the store's advisory lock and
-    releases the lock when [f]'s deferred settles (resolves or raises), so
-    asynchronous work (tmux observation, snapshots, window close) stays inside
-    the transaction.
-
-    This mirrors [with_lock] and the native snapshot adapter's operation lock:
-    an ordinary advisory lock file guarded by [lockf] -- no PID file, no
-    stale-lock takeover -- with [Monitor.protect] tying the release to the
-    deferred settling, so the lock cannot be dropped while [f] is still
-    running. The blocking acquire runs on the main thread, like [with_lock]. *)
-let with_lock_async t ~f =
-  let fd =
-    Core_unix.openfile (lock_path t) ~mode:[O_RDWR; O_CREAT; O_CLOEXEC] ~perm:0o600
-  in
-  Monitor.protect
-    (fun () ->
-      Core_unix.lockf fd ~mode:Core_unix.F_LOCK ~len:0L;
-      Monitor.protect (fun () -> f ()) ~finally:(fun () ->
-        Core_unix.lockf fd ~mode:Core_unix.F_ULOCK ~len:0L;
-        Deferred.unit))
-    ~finally:(fun () ->
-      Caml_unix.close fd;
-      Deferred.unit)
-;;
+(* ------------------------------------------------- audit log access *)
 
 (** Idempotently append audit entries not already in the durable log, taking
     the store's advisory lock. Safe to call repeatedly (e.g. after a crash
@@ -348,3 +364,4 @@ let read_audit (t : t) =
   let open Or_error.Let_syntax in
   let%bind lines = Audit.read_all t in
   return (List.sort lines ~compare:(fun a b -> Int.compare b.seq a.seq) |> List.map ~f:(fun l -> l.entry))
+;;
