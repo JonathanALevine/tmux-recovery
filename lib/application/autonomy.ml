@@ -295,7 +295,7 @@ let tick t =
                 | Autonomy.Mode.Off -> Deferred.return (Ok (state, None))))
           in
           let%bind () = Deferred.return (Autonomy_store.save_state t.store state) in
-          let%bind () = Deferred.return (Autonomy_store.sync_audit t.store (Autonomy.audit state)) in
+          let%bind () = Deferred.return (Autonomy_store.sync_audit_unlocked t.store (Autonomy.audit state)) in
           Deferred.return (Ok (Reconciled { policy = state.config; state; fired })))))
 ;;
 
@@ -336,7 +336,7 @@ let cancel t ~id =
       let%bind state = Deferred.return (Autonomy_store.load_state t.store) in
     let state = Autonomy.cancel ~now:(t.deps.now ()) ~id state in
     let%bind () = Deferred.return (Autonomy_store.save_state t.store state) in
-    let%bind () = Deferred.return (Autonomy_store.sync_audit t.store (Autonomy.audit state)) in
+    let%bind () = Deferred.return (Autonomy_store.sync_audit_unlocked t.store (Autonomy.audit state)) in
     Deferred.return (Ok ()))
 ;;
 
@@ -345,7 +345,7 @@ let pause t =
       let%bind state = Deferred.return (Autonomy_store.load_state t.store) in
     let state = Autonomy.pause ~now:(t.deps.now ()) state in
     let%bind () = Deferred.return (Autonomy_store.save_state t.store state) in
-    let%bind () = Deferred.return (Autonomy_store.sync_audit t.store (Autonomy.audit state)) in
+    let%bind () = Deferred.return (Autonomy_store.sync_audit_unlocked t.store (Autonomy.audit state)) in
     Deferred.return (Ok ()))
 ;;
 
@@ -354,6 +354,6 @@ let resume t =
       let%bind state = Deferred.return (Autonomy_store.load_state t.store) in
     let state = Autonomy.resume ~now:(t.deps.now ()) state in
     let%bind () = Deferred.return (Autonomy_store.save_state t.store state) in
-    let%bind () = Deferred.return (Autonomy_store.sync_audit t.store (Autonomy.audit state)) in
+    let%bind () = Deferred.return (Autonomy_store.sync_audit_unlocked t.store (Autonomy.audit state)) in
     Deferred.return (Ok ()))
 ;;

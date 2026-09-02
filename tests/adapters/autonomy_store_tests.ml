@@ -1,4 +1,5 @@
 open! Core
+open Async
 
 module Autonomy = Tmux_recovery_domain.Autonomy
 
@@ -62,7 +63,44 @@ let with_temp_store f =
   result
 ;;
 
-let test_create_and_policy () =
+(** [held_lock path] reports whether this process currently holds an advisory
+    (fcntl/[lockf]) lock on [path], by reading [/proc/locks] (Linux: each line
+    is "<n>: TYPE ADVISORY READ|WRITE <pid> <major_hex>:<minor_hex>:<inode_dec>
+    <start> <end>"). Returns [None] where that interface is unavailable; the
+    lock-state assertions in the tests then skip and the rest still runs. *)
+let held_lock (path : string) : bool option =
+  let locks_contents =
+    (match Sys_unix.file_exists "/proc/locks" with
+     | `No | `Unknown -> None
+     | `Yes -> (try Some (In_channel.read_all "/proc/locks") with _ -> None))
+  in
+  (match locks_contents with
+   | None -> None
+   | Some contents ->
+     (match (try Some (Core_unix.stat path) with _ -> None) with
+      | None -> None
+      | Some st ->
+        let me = Int.to_string (Caml_unix.getpid ()) in
+        let ino = Int.to_string st.st_ino in
+        let line_holds (line : string) : bool =
+          let fields =
+            String.split line ~on:' ' |> List.filter ~f:(fun s -> not (String.is_empty s))
+          in
+          (match List.nth fields 4, List.nth fields 5 with
+           | Some pid, Some dev_ino ->
+             (match String.split dev_ino ~on:':' |> List.last with
+              | Some inode -> String.equal pid me && String.equal inode ino
+              | None -> false)
+           | _ -> false)
+        in
+        Some (String.split contents ~on:'\n' |> List.exists ~f:line_holds)))
+;;
+
+let run_cycles () = Async_kernel_scheduler.Expert.run_cycles_until_no_jobs_remain ()
+
+exception Boom
+
+let%test_unit "a fresh store defaults to dry-run and the policy round-trips" =
   let result =
     with_temp_store (fun store ->
       Or_error.bind (Autonomy_store.load_policy store) ~f:(fun config ->
@@ -78,7 +116,7 @@ let test_create_and_policy () =
   [%test_eq: bool Or_error.t] result (Ok true)
 ;;
 
-let test_state_default_and_round_trip () =
+let%test_unit "engine state round-trips through the store" =
   let result =
     with_temp_store (fun store ->
       let state = Autonomy.empty ~config:live_config in
@@ -89,7 +127,7 @@ let test_state_default_and_round_trip () =
   [%test_eq: bool Or_error.t] result (Ok true)
 ;;
 
-let test_state_missing_uses_policy () =
+let%test_unit "a missing state file starts an empty engine with the current policy" =
   let result =
     with_temp_store (fun store ->
       Or_error.bind (Autonomy_store.save_policy store live_config) ~f:(fun () ->
@@ -99,7 +137,7 @@ let test_state_missing_uses_policy () =
   [%test_eq: bool Or_error.t] result (Ok true)
 ;;
 
-let test_state_corrupt_fails_closed () =
+let%test_unit "a corrupt state file fails closed" =
   let result =
     with_temp_store (fun store ->
       Out_channel.with_file (Autonomy_store.state_path store) ~f:(fun oc ->
@@ -111,7 +149,7 @@ let test_state_corrupt_fails_closed () =
   [%test_eq: unit Or_error.t] result (Ok ())
 ;;
 
-let test_policy_corrupt_fails () =
+let%test_unit "a corrupt policy file is an error" =
   let result =
     with_temp_store (fun store ->
       Out_channel.with_file (Autonomy_store.policy_path store) ~f:(fun oc ->
@@ -123,7 +161,7 @@ let test_policy_corrupt_fails () =
   [%test_eq: unit Or_error.t] result (Ok ())
 ;;
 
-let test_audit_round_trip_and_dedup () =
+let%test_unit "audit sync is idempotent (dedup by entry identity)" =
   let result =
     with_temp_store (fun store ->
       Or_error.bind (Autonomy_store.sync_audit store [sample_entry]) ~f:(fun () ->
@@ -144,7 +182,7 @@ let test_audit_round_trip_and_dedup () =
   [%test_eq: bool Or_error.t] result (Ok true)
 ;;
 
-let test_audit_skips_corrupt_lines () =
+let%test_unit "corrupt audit lines are skipped on read" =
   let result =
     with_temp_store (fun store ->
       Or_error.bind (Autonomy_store.sync_audit store [sample_entry]) ~f:(fun () ->
@@ -163,11 +201,89 @@ let test_audit_skips_corrupt_lines () =
   [%test_eq: int Or_error.t] result (Ok 1)
 ;;
 
-let test_with_lock_serializes () =
+let%test_unit "with_lock acquires and releases the advisory lock" =
   let result =
     with_temp_store (fun store ->
       Or_error.bind (Autonomy_store.with_lock store ~f:(fun () -> Ok ())) ~f:(fun () ->
         Autonomy_store.with_lock store ~f:(fun () -> Ok ())))
   in
   [%test_eq: unit Or_error.t] result (Ok ())
+;;
+
+let%test_unit "with_lock_async holds the lock until the deferred settles" =
+  let result =
+    with_temp_store (fun store ->
+      let lock_file = Autonomy_store.lock_path store in
+      let release_signal = Ivar.create () in
+      let settled = Ivar.create () in
+      let held_while_pending = ref None in
+      let work =
+        Monitor.try_with ~extract_exn:true
+          (fun () ->
+            Autonomy_store.with_lock_async store ~f:(fun () ->
+              held_while_pending := held_lock lock_file;
+              Ivar.read release_signal >>| fun () -> Ok ()))
+      in
+      let _ =
+        Deferred.bind work ~f:(fun r ->
+          Ivar.fill_exn settled r;
+          Deferred.unit)
+      in
+      (* [f] is now pending on [release_signal]; the lock must still be held. *)
+      Ivar.fill_exn release_signal ();
+      run_cycles ();
+      (match Ivar.peek settled, !held_while_pending, held_lock lock_file with
+       | Some (Ok (Ok ())), Some true, Some false -> Ok ()
+       | Some (Ok (Ok ())), Some true, Some true ->
+         Error (Error.of_string "the lock was not released after the deferred settled")
+       | Some (Ok (Ok ())), Some true, None -> Ok () (* inconsistent observation; skip *)
+       | Some (Ok (Ok ())), Some false, _ ->
+         Error (Error.of_string "the lock was not held while the work was pending")
+       | Some (Ok (Ok ())), None, _ -> Ok () (* non-Linux: lock state unobservable *)
+       | Some (Ok (Error e)), _, _ -> Error e
+       | Some (Error exn), _, _ -> Error (Error.of_string (Exn.to_string exn))
+       | None, _, _ -> Error (Error.of_string "the locked work never settled")))
+  in
+  [%test_eq: unit Or_error.t] result (Ok ())
+;;
+
+let%test_unit "with_lock_async releases the lock when the work raises" =
+  let result =
+    with_temp_store (fun store ->
+      let lock_file = Autonomy_store.lock_path store in
+      let boom = Ivar.create () in
+      let settled = Ivar.create () in
+      let work =
+        Monitor.try_with ~extract_exn:true
+          (fun () ->
+            Autonomy_store.with_lock_async store ~f:(fun () ->
+              Deferred.map (Ivar.read boom) ~f:(fun _ -> raise Boom)))
+      in
+      let _ =
+        Deferred.bind work ~f:(fun r ->
+          Ivar.fill_exn settled r;
+          Deferred.unit)
+      in
+      Ivar.fill_exn boom ();
+      run_cycles ();
+      (match Ivar.peek settled, held_lock lock_file with
+       | Some (Error Boom), Some false -> Ok ()
+       | Some (Error Boom), None -> Ok ()
+       | Some (Error Boom), Some true ->
+         Error (Error.of_string "the lock was not released after the error")
+       | Some (Error exn), _ -> Error (Error.of_string (Exn.to_string exn))
+       | Some (Ok _), _ -> Error (Error.of_string "the error did not propagate")
+       | None, _ -> Error (Error.of_string "the locked work never settled")))
+  in
+  [%test_eq: unit Or_error.t] result (Ok ())
+;;
+
+let%test_unit "sync_audit_unlocked appends entries from inside a held lock" =
+  let result =
+    with_temp_store (fun store ->
+      Autonomy_store.with_lock store ~f:(fun () ->
+        Or_error.bind (Autonomy_store.sync_audit_unlocked store [sample_entry]) ~f:(fun () ->
+          Or_error.map (Autonomy_store.read_audit store) ~f:List.length)))
+  in
+  [%test_eq: int Or_error.t] result (Ok 1)
 ;;

@@ -51,6 +51,17 @@ let create ?config_home ?state_home () =
   return t
 ;;
 
+(** Fsync a directory so that a completed rename is durable. *)
+let fsync_directory directory =
+  let fd = Core_unix.openfile directory ~mode:[O_RDONLY; O_CLOEXEC] in
+  Exn.protect ~f:(fun () -> Core_unix.fsync fd) ~finally:(fun () -> Caml_unix.close fd)
+;;
+
+(** Atomically write [contents] to [path]: write a temp file in the same
+    directory, fsync the file, rename it into place, and fsync the directory so
+    the rename is durable. The temp file is removed if the write fails. This is
+    the same pattern the native snapshot adapter uses to commit snapshot files
+    and the latest/last-good pointers. *)
 let atomic_write path contents =
   let dir = Filename.dirname path in
   let tmp =
@@ -60,18 +71,30 @@ let atomic_write path contents =
     (match Sys_unix.file_exists tmp with
      | `Yes -> Core_unix.unlink tmp
      | `No | `Unknown -> ());
-    let ic = Core_unix.openfile tmp ~mode:[O_WRONLY; O_CREAT; O_TRUNC; O_CLOEXEC] ~perm:0o600 in
-    let buf = Bytes.of_string contents in
-    let len = Bytes.length buf in
-    let offset = ref 0 in
-    while !offset < len do
-      let n = Caml_unix.write ic buf !offset (len - !offset) in
-      offset := !offset + n
-    done;
-    Caml_unix.fsync ic;
-    Caml_unix.close ic;
-    Core_unix.rename ~src:tmp ~dst:path;
-    ())
+    Exn.protect
+      ~f:(fun () ->
+        let ic = Core_unix.openfile tmp ~mode:[O_WRONLY; O_CREAT; O_TRUNC; O_CLOEXEC] ~perm:0o600 in
+        Exn.protect
+          ~f:(fun () ->
+            let buf = Bytes.of_string contents in
+            let len = Bytes.length buf in
+            let offset = ref 0 in
+            while !offset < len do
+              let n = Caml_unix.write ic buf !offset (len - !offset) in
+              offset := !offset + n
+            done;
+            Caml_unix.fsync ic;
+            ())
+          ~finally:(fun () -> Caml_unix.close ic);
+        (* Commit the rename, then make the rename durable. *)
+        Core_unix.rename ~src:tmp ~dst:path;
+        fsync_directory dir;
+        ())
+      ~finally:(fun () ->
+        (match Sys_unix.file_exists tmp with
+         | `Yes -> ignore (Or_error.try_with (fun () -> Core_unix.unlink tmp))
+         | `No | `Unknown -> ()))
+  )
 ;;
 
 let read_file path = Or_error.try_with (fun () -> In_channel.read_all path)
@@ -278,6 +301,16 @@ module Audit = struct
   ;;
 end
 
+(** [with_lock_async t ~f] runs [f] while holding the store's advisory lock and
+    releases the lock when [f]'s deferred settles (resolves or raises), so
+    asynchronous work (tmux observation, snapshots, window close) stays inside
+    the transaction.
+
+    This mirrors [with_lock] and the native snapshot adapter's operation lock:
+    an ordinary advisory lock file guarded by [lockf] -- no PID file, no
+    stale-lock takeover -- with [Monitor.protect] tying the release to the
+    deferred settling, so the lock cannot be dropped while [f] is still
+    running. The blocking acquire runs on the main thread, like [with_lock]. *)
 let with_lock_async t ~f =
   let fd =
     Core_unix.openfile (lock_path t) ~mode:[O_RDWR; O_CREAT; O_CLOEXEC] ~perm:0o600
@@ -293,10 +326,22 @@ let with_lock_async t ~f =
       Deferred.unit)
 ;;
 
-(** Idempotently append audit entries not already in the durable log. Safe to
-    call repeatedly (e.g. after a crash between state save and audit append).
-    Runs under the advisory lock. *)
+(** Idempotently append audit entries not already in the durable log, taking
+    the store's advisory lock. Safe to call repeatedly (e.g. after a crash
+    between state save and audit append).
+
+    Callers that already hold the lock (inside [with_lock] or
+    [with_lock_async]) must use [sync_audit_unlocked] instead: POSIX locks are
+    per-process, so re-acquiring the lock from within a locked section does not
+    serialize anything, and its release would drop the outer lock early. *)
 let sync_audit t entries = with_lock t ~f:(fun () -> Audit.sync t entries)
+
+(** Like [sync_audit], but without taking the lock: the caller must already
+    hold the store's advisory lock. Use this inside a locked transaction so the
+    state save and the audit append stay in one critical section. *)
+let sync_audit_unlocked (t : t) (entries : Autonomy.audit_entry list) : unit Or_error.t =
+  Audit.sync t entries
+;;
 
 (** Read the durable audit log, newest first. Corrupt lines are skipped. *)
 let read_audit (t : t) =
