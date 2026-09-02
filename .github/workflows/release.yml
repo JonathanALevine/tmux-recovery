@@ -1,0 +1,56 @@
+name: Release
+
+# Publishes a GitHub Release when a version tag is pushed. The release is
+# gated: the tag-derived version must match the version declared in the code,
+# and a full build + test must pass before anything is published.
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Verify & publish ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Derive version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Check the code version matches the tag
+        run: ./scripts/check-version.sh "${{ steps.version.outputs.version }}"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tmux procps
+
+      - name: Set up OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          compiler: "5.2.0"
+          dune-cache: false
+
+      - name: Install dependencies
+        run: opam install . --deps-only
+
+      - name: Build
+        run: dune build
+
+      - name: Test
+        run: dune runtest
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "tmux-recovery ${{ steps.version.outputs.version }}"
+          generate_release_notes: true

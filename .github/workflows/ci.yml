@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build & test (ubuntu, OCaml ${{ matrix.ocaml }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ocaml: ["5.2.0"]
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        # The integration test drives a real tmux server on an isolated socket
+        # and the Codex adapter shells out to `ps`.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tmux procps
+
+      - name: Set up OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          compiler: ${{ matrix.ocaml }}
+          dune-cache: false
+
+      - name: Install dependencies
+        run: opam install . --deps-only
+
+      - name: Build
+        run: dune build
+
+      - name: Test
+        run: dune runtest
