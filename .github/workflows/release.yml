@@ -1,12 +1,20 @@
 name: Release
 
-# Publishes a GitHub Release when a version tag is pushed. The release is
-# gated: the tag-derived version must match the version declared in the code,
-# and a full build + test must pass before anything is published.
+# Publishes a GitHub Release for a version. The release is gated: the version
+# must match the version declared in the code, a full build + test must pass,
+# and the release executable must build and smoke-test, before anything is
+# published. The tested Linux x86_64 artifact and SHA256SUMS are attached.
+#
+# Triggered by a `v*` tag, or manually via "Run workflow" with a `version`.
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 0.3.0)"
+        required: true
 
 concurrency:
   group: release-${{ github.ref }}
@@ -14,7 +22,7 @@ concurrency:
 
 jobs:
   release:
-    name: Verify & publish ${{ github.ref_name }}
+    name: Verify & publish
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -22,11 +30,16 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
 
-      - name: Derive version from tag
+      - name: Determine version
         id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Check the code version matches the tag
+      - name: Check the code version matches
         run: ./scripts/check-version.sh "${{ steps.version.outputs.version }}"
 
       - name: Install system dependencies
@@ -54,8 +67,35 @@ jobs:
       - name: Test
         run: eval $(opam env) && dune runtest
 
+      - name: Smoke-test the release executable
+        run: |
+          eval $(opam env)
+          version="$(_build/default/bin/main.exe --version)"
+          echo "binary reports: $version"
+          case "$version" in
+            "${{ steps.version.outputs.version }}".*) echo "OK: version prefix matches" ;;
+            *) echo "error: binary version '$version' does not start with ${{ steps.version.outputs.version }}" >&2; exit 1 ;;
+          esac
+
+      - name: Package the Linux x86_64 artifact
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          stage="tmux-recovery-v${version}-linux-x86_64"
+          mkdir -p "$stage/bin"
+          install -m 0755 _build/default/bin/main.exe     "$stage/bin/tmux-recovery"
+          install -m 0755 _build/default/bin/headless.exe "$stage/bin/tmux-recovery-headless"
+          tar -czf "tmux-recovery-v${version}-linux-x86_64.tar.gz" "$stage"
+          sha256sum "tmux-recovery-v${version}-linux-x86_64.tar.gz" > SHA256SUMS
+          echo "=== artifact ===" && ls -l "tmux-recovery-v${version}-linux-x86_64.tar.gz"
+          cat SHA256SUMS
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: "v${{ steps.version.outputs.version }}"
           name: "tmux-recovery ${{ steps.version.outputs.version }}"
-          generate_release_notes: true
+          body_file: CHANGELOG.md
+          files: |
+            tmux-recovery-v${{ steps.version.outputs.version }}-linux-x86_64.tar.gz
+            SHA256SUMS
+          overwrite_files: true
