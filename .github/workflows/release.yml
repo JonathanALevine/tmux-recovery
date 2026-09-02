@@ -46,13 +46,13 @@ jobs:
             ox: git+https://github.com/oxcaml/opam-repository.git
 
       - name: Install dependencies
-        run: opam install . --deps-only
+        run: eval $(opam env) && opam install . --deps-only
 
       - name: Build
-        run: dune build
+        run: eval $(opam env) && dune build
 
       - name: Test
-        run: dune runtest
+        run: eval $(opam env) && dune runtest
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
