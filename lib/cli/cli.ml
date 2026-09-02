@@ -14,7 +14,7 @@ module Snapshot = Tmux_recovery_domain.Snapshot
 module Workspace = Tmux_recovery_domain.Workspace
 
 let schema_version = "1"
-let version = "0.3.0"
+let version = "0.3.0-dev.22"
 let build_time = Build_stamp.build_time
 
 let envelope ~command ?(warnings = []) data =
