@@ -1,6 +1,7 @@
   $ ./render_fixture.exe
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
   │NAVIGATION                                  │DETAIL                                                 │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│───────────────────────────────────────────────────────│
   │  Overview                                  │tmux-recovery                                          │
   │▾ Sessions  [online]                        │A conservative recovery control plane for tmux.        │
   │  ▸ development  [attached]                 │                                                       │
@@ -20,12 +21,12 @@
   │                                            │                                                       │
   │                                            │                                                       │
   │                                            │                                                       │
-  │                                            │                                                       │
   │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- MOVED ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
   │NAVIGATION                                  │DETAIL                                                 │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│───────────────────────────────────────────────────────│
   │  Overview                                  │Sessions                                               │
   │▾ Sessions  [online]                        │Source: live                                           │
   │  ▸ development  [attached]                 │Server: running                                        │
@@ -45,19 +46,18 @@
   │                                            │                                                       │
   │                                            │                                                       │
   │                                            │                                                       │
-  │                                            │                                                       │
   │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- WINDOW SELECTED ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
   │NAVIGATION                                  │PREVIEW                                                │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│───────────────────────────────────────────────────────│
   │  Overview                                  │monitoring                                             │
   │▾ Sessions  [online]                        │Window 0 · active pane 0 · btop                        │
   │  ▾ development  [attached]                 │                                                       │
   │    ▸ 0:monitoring  [active]                │Live window contents                                   │
   │  Status  [ready]                           │Active pane · bottom of screen · read-only · refresh wi│
   │                                            │                                                       │
-  │                                            │older output 01                                        │
   │                                            │older output 02                                        │
   │                                            │older output 03                                        │
   │                                            │older output 04                                        │
@@ -76,6 +76,7 @@
   --- PANE SELECTED ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
   │NAVIGATION                                  │PREVIEW                                                │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│───────────────────────────────────────────────────────│
   │  Overview                                  │Pane 0                                                 │
   │▾ Sessions  [online]                        │Typed ID: %1                                           │
   │  ▾ development  [attached]                 │Working directory: /Users/demo                         │
@@ -86,7 +87,6 @@
   │                                            │Latest pane output                                     │
   │                                            │Bottom of pane · read-only · refresh with r            │
   │                                            │                                                       │
-  │                                            │older output 05                                        │
   │                                            │older output 06                                        │
   │                                            │older output 07                                        │
   │                                            │older output 08                                        │
@@ -101,12 +101,13 @@
   --- NARROW PANE ---
   ┌────────────────────────────────────────────────────────────┐
   │NAVIGATION                                                  │
-  │▾ Sessions  [online]                                        │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
   │  ▾ development  [attached]                                 │
   │    ▾ 0:monitoring  [active]                                │
   │      ▸ pane 0  [active]                                    │
   │────────────────────────────────────────────────────────────│
   │PREVIEW                                                     │
+  │────────────────────────────────────────────────────────────│
   │Pane 0                                                      │
   │Typed ID: %1                                                │
   │Working directory: /Users/demo                              │
@@ -117,7 +118,6 @@
   │Latest pane output                                          │
   │Bottom of pane · read-only · refresh with r                 │
   │                                                            │
-  │older output 11                                             │
   │older output 12                                             │
   │$ printf 'latest pane output\n'                             │
   │latest btop output                                          │
@@ -126,14 +126,14 @@
   --- SHORT NARROW PANE ---
   ┌────────────────────────────────────────┐
   │NAVIGATION                              │
-  │    ▾ 0:monitoring  [active]            │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
   │      ▸ pane 0  [active]                │
   │────────────────────────────────────────│
   │PREVIEW                                 │
+  │────────────────────────────────────────│
   │Pane 0 · btop                           │
   │Recovery: restart                       │
   │Latest pane output                      │
-  │older output 10                         │
   │older output 11                         │
   │older output 12                         │
   │$ printf 'latest pane output\n'         │
@@ -143,6 +143,7 @@
   --- RESIZED WIDE AGAIN ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
   │NAVIGATION                                  │PREVIEW                                                │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│───────────────────────────────────────────────────────│
   │  Overview                                  │Pane 0                                                 │
   │▾ Sessions  [online]                        │Typed ID: %1                                           │
   │  ▾ development  [attached]                 │Working directory: /Users/demo                         │
@@ -153,7 +154,6 @@
   │                                            │Latest pane output                                     │
   │                                            │Bottom of pane · read-only · refresh with r            │
   │                                            │                                                       │
-  │                                            │older output 05                                        │
   │                                            │older output 06                                        │
   │                                            │older output 07                                        │
   │                                            │older output 08                                        │
@@ -167,7 +167,8 @@
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- STATUS ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │NAVIGATION                                  │DETAIL · 1–20/54                                       │
+  │NAVIGATION                                  │DETAIL · 1–19/54                                       │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│───────────────────────────────────────────────────────│
   │  Overview                                  │Status                                                 │
   │▾ Sessions  [online]                        │Recovery readiness, snapshot history, and automation.  │
   │  ▸ development  [attached]                 │                                                       │
@@ -187,12 +188,12 @@
   │                                            │Last good: 2026-07-21 01:32:39.000000000Z              │
   │                                            │Native storage: 8.0 KiB                                │
   │                                            │                                                       │
-  │                                            │Automation                                             │
   │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- STATUS WITH APPLICATION WARNING ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │NAVIGATION                                  │DETAIL · 1–20/58                                       │
+  │NAVIGATION                                  │DETAIL · 1–19/58                                       │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│───────────────────────────────────────────────────────│
   │  Overview                                  │Status                                                 │
   │▾ Sessions  [online]                        │Recovery readiness, snapshot history, and automation.  │
   │  ▸ development  [attached]                 │                                                       │
@@ -212,12 +213,12 @@
   │                                            │                                                       │
   │                                            │Snapshots                                              │
   │                                            │Readiness: PASS · valid native recovery point available│
-  │                                            │Native history: 1 saved · rolling limit 10             │
   │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- FOCUSED STATUS DETAILS ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │NAVIGATION                                  │DETAIL · 1–20/58                                       │
+  │NAVIGATION                                  │DETAIL · 1–19/58                                       │
+  │────────────────────────────────────────────│━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
   │  Overview                                  │Status                                                 │
   │▾ Sessions  [online]                        │Recovery readiness, snapshot history, and automation.  │
   │  ▸ development  [attached]                 │                                                       │
@@ -237,17 +238,16 @@
   │                                            │                                                       │
   │                                            │Snapshots                                              │
   │                                            │Readiness: PASS · valid native recovery point available│
-  │                                            │Native history: 1 saved · rolling limit 10             │
   │ Tab navigation · ↑/↓ scroll · Home/End · r refresh · q quit · c cancel · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- STATUS SCROLLED TO END ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │NAVIGATION                                  │DETAIL · 39–58/58                                      │
-  │  Overview                                  │tmux_recovery_1784597559000000000_0123abcd.snapshot    │
-  │▾ Sessions  [online]                        │Runtime version: 0.3.0-dev.14                          │
-  │  ▸ development  [attached]                 │Last result: launchctl exit status 0                   │
-  │  Status  [attention]                       │                                                       │
-  │                                            │Autonomous cleanup                                     │
+  │NAVIGATION                                  │DETAIL · 40–58/58                                      │
+  │────────────────────────────────────────────│━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+  │  Overview                                  │Runtime version: 0.3.0-dev.14                          │
+  │▾ Sessions  [online]                        │Last result: launchctl exit status 0                   │
+  │  ▸ development  [attached]                 │                                                       │
+  │  Status  [attention]                       │Autonomous cleanup                                     │
   │                                            │Policy: off (no autonomous cleanup) · grace 1h 0m ·    │
   │                                            │candidate for ≥ 15m 0s · snapshot before               │
   │                                            │fire: yes                                              │
@@ -268,10 +268,11 @@
   --- NARROW AFFECTED PANES ---
   ┌────────────────────────────────────────┐
   │NAVIGATION                              │
-  │  ▸ development  [attached]             │
+  │────────────────────────────────────────│
   │  Status  [attention]                   │
   │────────────────────────────────────────│
-  │DETAIL · 11–18/68                       │
+  │DETAIL · 11–17/68                       │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
   │                                        │
   │Affected panes (1)                      │
   │                                        │
@@ -279,12 +280,12 @@
   │Application: codex                      │
   │Cause: Codex has no durable thread ID.  │
   │Recovery: shell only; the application   │
-  │will not resume.                        │
   │ Tab navigation · ↑/↓ scroll · Home/End │
   └────────────────────────────────────────┘
   --- EMPTY STATUS ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │NAVIGATION                                  │DETAIL · 1–20/46                                       │
+  │NAVIGATION                                  │DETAIL · 1–19/46                                       │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│───────────────────────────────────────────────────────│
   │  Overview                                  │Status                                                 │
   │▾ Sessions  [online]                        │Recovery readiness, snapshot history, and automation.  │
   │  ▸ development  [attached]                 │                                                       │
@@ -304,12 +305,12 @@
   │                                            │Native history: 0 saved · rolling limit 10             │
   │                                            │Last good: none                                        │
   │                                            │Native storage: 0 B                                    │
-  │                                            │                                                       │
   │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- UNAVAILABLE STATUS ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │NAVIGATION                                  │DETAIL · 1–20/40                                       │
+  │NAVIGATION                                  │DETAIL · 1–19/40                                       │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│───────────────────────────────────────────────────────│
   │  Overview                                  │Status                                                 │
   │▾ Sessions  [online]                        │Recovery readiness, snapshot history, and automation.  │
   │  ▸ development  [attached]                 │                                                       │
@@ -329,6 +330,5 @@
   │                                            │Press r to retry. Existing snapshot files are          │
   │                                            │unchanged.                                             │
   │                                            │                                                       │
-  │                                            │Automation                                             │
   │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘

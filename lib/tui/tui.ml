@@ -459,14 +459,30 @@ let crop_to view ~width ~height =
   View.crop ~r ~b view
 ;;
 
-let panel ?(suffix = "") ~title ~width ~height body =
+let panel_header_height = 2
+let panel_body_height height = Int.max 0 (height - panel_header_height)
+
+let navigation_height body_height =
+  Int.min 6 (Int.max (panel_header_height + 1) (body_height / 4))
+;;
+
+let panel ~focused ?(suffix = "") ~title ~width ~height body =
   let title = title ^ suffix in
   let title =
     View.text
       ~attrs:[ Attr.bold; Attr.fg cyan; Attr.bg terminal_background ]
       (title ^ String.make (Int.max 0 (width - String.length title)) ' ')
   in
-  let content = View.vcat (title :: body) |> crop_to ~width ~height in
+  let rule =
+    View.text
+      ~attrs:
+        [ Attr.fg (if focused then Attr.Color.Expert.lightblue else muted)
+        ; Attr.bg terminal_background
+        ]
+      (String.concat
+         (List.init (Int.max 0 width) ~f:(fun _ -> if focused then "━" else "─")))
+  in
+  let content = View.vcat (title :: rule :: body) |> crop_to ~width ~height in
   let backdrop =
     View.rectangle ~attrs:[ Attr.bg terminal_background ] ~width ~height ()
   in
@@ -483,7 +499,7 @@ let render_navigation model ~width ~height =
       model.expanded
   in
   let selected_index = selected_index visible model.selected in
-  let row_capacity = Int.max 1 (height - 1) in
+  let row_capacity = Int.max 1 (panel_body_height height) in
   let first_visible = Int.max 0 (selected_index - row_capacity + 1) in
   let rows =
     visible
@@ -511,7 +527,12 @@ let render_navigation model ~width ~height =
       first_visible
       (Int.min (List.length rows) (first_visible + row_capacity))
   in
-  panel ~title:"NAVIGATION" ~width ~height rows
+  panel
+    ~focused:(equal_focus model.focus Navigation)
+    ~title:"NAVIGATION"
+    ~width
+    ~height
+    rows
 ;;
 
 type detail_line =
@@ -640,8 +661,9 @@ let pane_preview_lines
 ;;
 
 let detail_lines model ~height =
-  let compact = height < 14 in
-  let preview_line_limit = Int.max 1 (height - 11) in
+  let capacity = panel_body_height height in
+  let compact = capacity < 13 in
+  let preview_line_limit = Int.max 1 (capacity - 10) in
   let workspace = model.workspace in
   match model.selected with
   | Overview ->
@@ -704,7 +726,7 @@ let detail_lines model ~height =
               ~compact
               model
               pane.id
-              ~line_limit:(Int.max 1 (height - if compact then 4 else 7))))
+              ~line_limit:(Int.max 1 (capacity - if compact then 3 else 6))))
   | Resource (Pane (_source, id)) ->
     (match Map.find workspace.panes id with
      | None -> [ heading "Pane ended" ]
@@ -727,7 +749,7 @@ let detail_lines model ~height =
            ~compact
            model
            pane.id
-           ~line_limit:(if compact then Int.max 1 (height - 4) else preview_line_limit))
+           ~line_limit:(if compact then Int.max 1 (capacity - 3) else preview_line_limit))
   | Resource (Application (_source, pane_id)) ->
     (match Map.find workspace.panes pane_id with
      | None -> [ heading "Application ended" ]
@@ -743,7 +765,7 @@ let detail_lines model ~height =
            ~compact
            model
            pane.id
-           ~line_limit:(if compact then Int.max 1 (height - 4) else preview_line_limit))
+           ~line_limit:(if compact then Int.max 1 (capacity - 3) else preview_line_limit))
   | Status ->
     let blocked = blocked_decisions model.recovery in
     let blocked_count = List.length blocked in
@@ -970,7 +992,7 @@ let detail_dimensions { Dimensions.width; height } =
     ; height = body_height
     }
   else (
-    let navigation_height = Int.min 6 (Int.max 2 (body_height / 4)) in
+    let navigation_height = navigation_height body_height in
     { Dimensions.width; height = Int.max 1 (body_height - navigation_height - 1) })
 ;;
 
@@ -1029,7 +1051,7 @@ let detail_viewport model dimensions =
      else List.map lines ~f:(wrap_detail_line ~width))
     |> View.vcat
   in
-  let capacity = Int.max 0 (height - 1) in
+  let capacity = panel_body_height height in
   let total = View.height body in
   let maximum = Int.max 0 (total - capacity) in
   let offset = Int.clamp_exn model.detail_offset ~min:0 ~max:maximum in
@@ -1047,6 +1069,7 @@ let render_detail model viewport =
         " · %{offset + 1#Int}–%{Int.min total (offset + capacity)#Int}/%{total#Int}"]
   in
   panel
+    ~focused:(equal_focus model.focus Detail)
     ~title
     ~suffix
     ~width
@@ -1086,7 +1109,7 @@ let render model ({ Dimensions.width; height } as dimensions) =
         ])
     else (
       (* Keep the tree and the read-only detail viewer visible in either focus mode. *)
-      let navigation_height = Int.min 6 (Int.max 2 (body_height / 4)) in
+      let navigation_height = navigation_height body_height in
       let divider =
         View.text
           ~attrs:[ Attr.fg terminal_foreground; Attr.bg terminal_background ]

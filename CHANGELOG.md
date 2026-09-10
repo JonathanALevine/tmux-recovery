@@ -19,8 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enter expands/collapses tree branches. Details follow selection automatically;
   Tab switches focus to scroll the read-only detail viewer with up/down and
   Home/End. Headings align with their content and keep the same position and color.
+  A bright blue, heavy rule beneath the active heading and a muted, thin rule
+  beneath the inactive heading provide a visual focus cue without shifting content.
   The footer indicates focus with `Tab detail · ↑/↓ navigate` or
-  `Tab navigation · ↑/↓ scroll`; headings have no focus marker or reserved spacing.
+  `Tab navigation · ↑/↓ scroll`; headings have no arrow or extra indentation.
   Left/right, Shift-Tab, and Page Up/Down are unbound. Narrow terminals
   show navigation above details. Status groups recovery warnings in an Affected
   panes section with each application's location, cause, and recovery result.
