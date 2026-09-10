@@ -110,7 +110,7 @@ let%test_unit "refresh retains the selected page and recaptures its preview" =
   send handle (ASCII 'r');
   assert (String.is_substring (rendered ()) ~substring:"capture 2 for %1");
   assert (String.is_substring (rendered ()) ~substring:"Typed ID: %1");
-  assert (String.is_substring (rendered ()) ~substring:"▶ PREVIEW");
+  assert (String.is_substring (rendered ()) ~substring:"Tab navigation");
   send handle (ASCII 'q');
   Bonsai_term_test.send_event handle (Key_press { key = ASCII 'c'; mods = [ Ctrl ] });
   Handle.recompute_view_until_stable handle;

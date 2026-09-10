@@ -459,12 +459,12 @@ let crop_to view ~width ~height =
   View.crop ~r ~b view
 ;;
 
-let panel ?(focused = false) ?(suffix = "") ~title ~width ~height body =
-  let title = (if focused then "▶ " else "  ") ^ title ^ suffix in
+let panel ?(suffix = "") ~title ~width ~height body =
+  let title = title ^ suffix in
   let title =
     View.text
       ~attrs:[ Attr.bold; Attr.fg cyan; Attr.bg terminal_background ]
-      (" " ^ title ^ String.make (Int.max 0 (width - String.length title - 1)) ' ')
+      (title ^ String.make (Int.max 0 (width - String.length title)) ' ')
   in
   let content = View.vcat (title :: body) |> crop_to ~width ~height in
   let backdrop =
@@ -511,12 +511,7 @@ let render_navigation model ~width ~height =
       first_visible
       (Int.min (List.length rows) (first_visible + row_capacity))
   in
-  panel
-    ~focused:(equal_focus model.focus Navigation)
-    ~title:"NAVIGATION"
-    ~width
-    ~height
-    rows
+  panel ~title:"NAVIGATION" ~width ~height rows
 ;;
 
 type detail_line =
@@ -1052,7 +1047,6 @@ let render_detail model viewport =
         " · %{offset + 1#Int}–%{Int.min total (offset + capacity)#Int}/%{total#Int}"]
   in
   panel
-    ~focused:(equal_focus model.focus Detail)
     ~title
     ~suffix
     ~width
