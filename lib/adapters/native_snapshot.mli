@@ -32,8 +32,4 @@ val prune_candidates
   -> Snapshot.catalog
   -> Snapshot.summary list
 
-val prune
-  :  config
-  -> now:Time_ns.t
-  -> apply:bool
-  -> Snapshot.summary list Or_error.t Deferred.t
+val prune : config -> now:Time_ns.t -> Snapshot.summary list Or_error.t Deferred.t

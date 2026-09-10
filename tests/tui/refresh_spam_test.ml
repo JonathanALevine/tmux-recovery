@@ -30,7 +30,7 @@ let spam_refresh_is_coalesced () =
       let unavailable = Error.of_string "refresh regression test" in
       return (Error unavailable, Error unavailable, Error unavailable, Error unavailable))
   in
-  let handle = Bonsai_term_test.create_handle (Fixture.make_app_with_reload ~reload) in
+  let handle = Bonsai_term_test.create_handle (Fixture.make_app_with_reload ~reload ()) in
   Bonsai_term_test.set_dimensions handle { width = 100; height = 22 };
   Handle.recompute_view handle;
   for _ = 1 to 50 do

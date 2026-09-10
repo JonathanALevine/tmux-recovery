@@ -184,7 +184,7 @@ let save t ~trigger =
     (match saved with
      | Error _ as error -> return error
      | Ok summary ->
-       let%map pruned = Native_snapshot.prune t.native ~now:(t.now ()) ~apply:true in
+       let%map pruned = Native_snapshot.prune t.native ~now:(t.now ()) in
        let summary =
          match pruned with
          | Ok _ -> summary
@@ -202,7 +202,7 @@ let save t ~trigger =
 
 let load_native t id = Native_snapshot.load t.native id
 let resolve_native t selector = Native_snapshot.resolve t.native selector
-let prune t ~apply = Native_snapshot.prune t.native ~now:(t.now ()) ~apply
+let prune t = Native_snapshot.prune t.native ~now:(t.now ())
 
 let prepare_import_resurrect t legacy_id =
   let%map workspace = Resurrect.load_workspace t.resurrect legacy_id in

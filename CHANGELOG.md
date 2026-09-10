@@ -9,12 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Ordinary restore, import, service and migration commands execute directly;
-  `--dry-run` remains an optional preview and legacy `--approve` is accepted.
-  Autonomous cleanup continues to default to dry-run.
+- Action commands execute directly. Remove `--dry-run`, `--approve`, and prune's
+  `--apply` flag from scripts; plain `snapshots prune` now applies retention while
+  preserving protected recovery points.
+- Autonomous cleanup supports off/live modes and defaults to off. Legacy dry-run
+  policies migrate to off with pending work cleared; historical simulated events
+  remain distinguishable from actual closures. Explicit live/off and paused
+  settings are preserved.
+- Enter expands/collapses tree branches. Details follow selection automatically;
+  remove left/right bindings and the separate detail-focus mode. Narrow terminals
+  show navigation above details.
+- Bare `tmux-recovery` opens the TUI; remove the redundant `ui` command and the
+  one-time `migrate` command family. Existing migration backup data is retained.
+- Remove `scripts/check-version.sh`. The release workflow checks the built
+  executables' exact versions directly, with no new dependencies.
 
 ### Fixed
 
+- Match the `+built-...` version suffix in release checks instead of requiring a
+  dot after the release version. Both packaged executables must match.
+- Restore into a running tmux server with zero sessions after verifying its empty
+  session inventory; continue to reject occupied or unobservable targets.
 - Recover current interactive Codex conversations from their writer locks, keep
   moved working directories, reject child-agent references, and avoid guessing
   conversations from directory recency. Exited Codex-named shells no longer

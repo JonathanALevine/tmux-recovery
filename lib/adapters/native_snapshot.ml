@@ -368,16 +368,14 @@ let delete_bundle config (summary : Snapshot.summary) =
   Core_unix.rmdir directory
 ;;
 
-let prune config ~now ~apply =
+let prune config ~now =
   In_thread.run (fun () ->
     Or_error.try_with_join (fun () ->
       with_lock config ~socket_name:None (fun () ->
         let open Or_error.Let_syntax in
         let%map catalog = list_sync config in
         let candidates = prune_candidates config ~now catalog in
-        if apply
-        then (
-          List.iter candidates ~f:(delete_bundle config);
-          if not (List.is_empty candidates) then fsync_directory config.directory);
+        List.iter candidates ~f:(delete_bundle config);
+        if not (List.is_empty candidates) then fsync_directory config.directory;
         candidates)))
 ;;

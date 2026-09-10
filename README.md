@@ -63,20 +63,23 @@ offers `snapshot` and `snapshots`.
 
 ## TUI commands
 
-The TUI is read-only. Use the CLI to save and restore workspaces or manage
-background services.
+Run `tmux-recovery` to open the TUI. Select an item in the tree to view its
+details or live pane output. The detail pane follows the selection automatically;
+it has no separate focus mode. On narrow terminals it appears below the tree.
+Use the CLI to save and restore workspaces or manage background services.
 
 | Key | Action |
 | --- | --- |
 | <kbd>↑</kbd> / <kbd>↓</kbd> | Move through the workspace tree |
-| <kbd>→</kbd> | Expand a branch or open its details |
-| <kbd>←</kbd> | Collapse a branch, move to its parent, or return to navigation |
-| <kbd>Enter</kbd> | Toggle a branch or open its details |
+| <kbd>Enter</kbd> | Expand/collapse a branch; no action on items without children |
 | <kbd>r</kbd> | Refresh workspace, snapshot, service, and pane-preview data |
+| <kbd>c</kbd> | Cancel a pending autonomous cleanup action |
+| <kbd>p</kbd> | Pause/resume autonomous cleanup |
 | <kbd>q</kbd> | Quit |
 | <kbd>Ctrl</kbd>+<kbd>C</kbd> | Quit |
 
-Run `tmux-recovery ui --socket NAME` to inspect a named tmux socket.
+Run `tmux-recovery --socket NAME` to view a named tmux socket.
+Without an interactive terminal, bare `tmux-recovery` prints help.
 
 ## Essential CLI commands
 
@@ -98,9 +101,9 @@ tmux-recovery service sync
 tmux-recovery service enable
 ```
 
-These commands execute directly. Add `--dry-run` to preview a save, restore, import,
-or service sync/enable/disable without applying changes. The old `--approve`
-flag is accepted for compatibility but is no longer needed for these commands.
+Action commands execute directly. `snapshots prune` applies the retention policy,
+preserving protected recovery points. Inspection commands such as `service plan`,
+`processes plan`, and `status` remain available whenever you want more detail.
 
 A restore refuses to run when the target already contains sessions. Use
 `--socket recovery-test` to rehearse against a disposable named socket, or
@@ -108,6 +111,58 @@ A restore refuses to run when the target already contains sessions. Use
 
 Run `tmux-recovery help` for the full command tree and
 `tmux-recovery help COMMAND` for command-specific options.
+
+## Autonomous cleanup
+
+Cleanup defaults to **off**. Enable it with:
+
+```sh
+tmux-recovery autonomy configure --mode live
+```
+
+It only considers unviewed windows whose panes have all exited and have no recovery
+action. Live or recoverable panes protect the entire window. Persistence and grace
+periods, fresh eligibility checks, and snapshot-before-close remain in place.
+Observation failures cancel pending cleanup and restart the eligibility period.
+
+Use `autonomy status` to inspect the policy, `autonomy pause` / `autonomy resume`
+to suspend/resume it, or `autonomy configure --mode off` to disable it.
+The TUI's `c` and `p` keys control the same persisted pipeline; background services
+continue operating independently of the TUI.
+
+## Upgrading existing installations
+
+The `--dry-run`, `--approve`, and prune's `--apply` flags have been removed.
+Delete preview-only invocations from scripts unless you intend them to execute.
+For commands that already execute, remove the obsolete flags. Action commands now
+execute directly, including plain `snapshots prune`.
+The explicit `ui` and `migrate` commands are also removed;
+use bare `tmux-recovery` to open the TUI.
+
+After rebuilding, regenerate existing managed service definitions so old arguments
+are removed. Run these commands from the source checkout using the new executable:
+
+```sh
+opam exec -- dune exec bin/main.exe -- service disable
+opam exec -- dune exec bin/main.exe -- service sync
+opam exec -- dune exec bin/main.exe -- service enable
+```
+
+If you still use the old macOS scripts and launch agents, back up their definitions
+and scripts before switching. Unload the old `com.jonathan.tmux-resurrect-save`
+and `com.jonathan.tmux` agents with `launchctl bootout` and move their definitions
+out of `~/Library/LaunchAgents`. Disable any other conflicting legacy timers or
+tmux-resurrect/continuum automation, then use `service sync` and `service enable`.
+`service status` identifies conflicts; enabling services still refuses unresolved
+conflicts. Existing backup bundles under the data directory's `migrations/` folder
+are retained for manual recovery.
+
+Existing autonomy policies in `$XDG_CONFIG_HOME/tmux-recovery/autonomy.json` that
+used the removed dry-run mode migrate to **off**. Their pending actions and
+eligibility funnel are reset, so enabling live mode starts a fresh persistence
+and grace period. Explicit off/live settings and paused state are preserved.
+Old simulated audit events remain identified as simulations; state and history in
+`$XDG_STATE_HOME/tmux-recovery/` do not need to be deleted.
 
 ## Development
 
@@ -119,11 +174,6 @@ opam exec -- dune runtest --force
 
 Codex capture requires `ps` and `lsof` alongside tmux. On Debian/Ubuntu, install
 `tmux procps lsof`; macOS includes `ps` and `lsof`.
-
-Autonomous cleanup defaults to dry-run. It only considers unviewed windows whose
-panes have all exited and have no recovery action. Live Codex processes and live
-or recoverable sibling panes are protected. Observation failures cancel pending
-cleanup; recovery starts a new persistence and grace period.
 
 Snapshots are stored under
 `~/.local/share/tmux-recovery/snapshots/` by default.

@@ -68,6 +68,98 @@ let rec remove_tree path =
         | `No | `Unknown -> ()))
 ;;
 
+let with_tmux_observation_fixture ~pane_error ~session_reply f =
+  let root = Core_unix.mkdtemp "/tmp/tmux-recovery-observe-XXXXXX" in
+  Exn.protect
+    ~finally:(fun () -> remove_tree root)
+    ~f:(fun () ->
+      let script = Filename.concat root "tmux" in
+      Out_channel.write_all
+        script
+        ~data:
+          ("#!/bin/sh\n"
+           ^ "if [ \"$1\" = -V ]; then printf '%s\\n' 'tmux fixture'; exit 0; fi\n"
+           ^ "if [ \"$1\" != -L ] || [ \"$2\" != fixture-empty ]; then exit 99; fi\n"
+           ^ "shift 2\n"
+           ^ "case \"$1\" in\n"
+           ^ "list-panes) printf '%s\\n' "
+           ^ Filename.quote pane_error
+           ^ " >&2; exit 1 ;;\n"
+           ^ "list-sessions)\n"
+           ^ "  if [ \"$2\" != -F ] || [ \"$3\" != '#{session_id}' ]; then exit 99; fi\n"
+           ^ "  : > \"$0.sessions-queried\"\n"
+           ^ session_reply
+           ^ "\n;;\n*) exit 99 ;;\nesac\n");
+      Core_unix.chmod script ~perm:0o700;
+      let config : Tmux_adapter.config =
+        { executable = script; socket_name = Some "fixture-empty" }
+      in
+      let result =
+        Thread_safe.block_on_async_exn (fun () -> Tmux_adapter.observe config)
+      in
+      let queried_sessions =
+        Poly.equal (Sys_unix.file_exists (script ^ ".sessions-queried")) `Yes
+      in
+      f result ~queried_sessions)
+;;
+
+let%test_unit "a running tmux server is empty only after a successful empty session query"
+  =
+  with_tmux_observation_fixture
+    ~pane_error:"no current target"
+    ~session_reply:"exit 0"
+    (fun result ~queried_sessions ->
+       assert queried_sessions;
+       let workspace = Or_error.ok_exn result in
+       assert workspace.server.available;
+       [%test_eq: string option] workspace.server.socket (Some "fixture-empty");
+       [%test_eq: string option] workspace.server.version (Some "tmux fixture");
+       assert (Map.is_empty workspace.sessions);
+       assert (Map.is_empty workspace.windows);
+       assert (Map.is_empty workspace.panes))
+;;
+
+let%test_unit "a failed pane query cannot hide sessions confirmed by tmux" =
+  with_tmux_observation_fixture
+    ~pane_error:"no current target"
+    ~session_reply:"printf '%s\\n' '$7'; exit 0"
+    (fun result ~queried_sessions ->
+       assert queried_sessions;
+       match result with
+       | Ok _ -> failwith "a nonempty session inventory was treated as empty"
+       | Error error ->
+         assert (
+           String.is_substring (Error.to_string_hum error) ~substring:"no current target"))
+;;
+
+let%test_unit "a failed session query does not turn a failed pane query into an empty \
+               workspace"
+  =
+  with_tmux_observation_fixture
+    ~pane_error:"no current target"
+    ~session_reply:"printf '%s\\n' 'session lookup failed' >&2; exit 1"
+    (fun result ~queried_sessions ->
+       assert queried_sessions;
+       match result with
+       | Ok _ -> failwith "an unavailable session inventory was treated as empty"
+       | Error error ->
+         assert (
+           String.is_substring (Error.to_string_hum error) ~substring:"no current target"))
+;;
+
+let%test_unit "unrelated pane-query errors cannot be recovered by an empty session query" =
+  with_tmux_observation_fixture
+    ~pane_error:"permission denied"
+    ~session_reply:"exit 0"
+    (fun result ~queried_sessions ->
+       assert (not queried_sessions);
+       match result with
+       | Ok _ -> failwith "an observation error was treated as empty"
+       | Error error ->
+         assert (
+           String.is_substring (Error.to_string_hum error) ~substring:"permission denied"))
+;;
+
 let sqlite_exec database sql = Sqlite3.exec database sql |> Sqlite3.Rc.check
 
 let with_codex_fixture f =
@@ -770,8 +862,7 @@ let%test_unit "systemd prefers the timer over its inactive save service" =
     unit
       ~name:"tmux-recovery-restore.service"
       ~contents:
-        "[Service]\n\
-         ExecStart=/fixtures/bin/tmux-recovery restore --approve --if-empty --quiet"
+        "[Service]\nExecStart=/fixtures/bin/tmux-recovery restore --if-empty --quiet"
   in
   let status =
     Systemd.status_from_inventory
@@ -788,7 +879,7 @@ let%test_unit "systemd prefers the timer over its inactive save service" =
     (Some "tmux-recovery snapshot --trigger timer --quiet");
   [%test_eq: string option]
     status.login_restore.command
-    (Some "tmux-recovery restore --approve --if-empty --quiet")
+    (Some "tmux-recovery restore --if-empty --quiet")
 ;;
 
 let%test_unit "systemd recognizes legacy user units without adopting them" =

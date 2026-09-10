@@ -14,7 +14,7 @@
 
 (library
  (name tui_refresh_spam_tests)
- (modules refresh_spam_test)
+ (modules refresh_spam_test navigation_test)
  (libraries
   async
   bonsai_test

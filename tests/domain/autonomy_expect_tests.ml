@@ -10,18 +10,16 @@ let has_substring (haystack : string) (needle : string) =
   let len = String.length needle in
   if len > String.length haystack
   then false
-  else
+  else (
     let rec loop i =
       i + len <= String.length haystack
-      && (
-        String.equal (String.sub haystack ~pos:i ~len) needle
-        || loop (i + 1))
+      && (String.equal (String.sub haystack ~pos:i ~len) needle || loop (i + 1))
     in
-    loop 0
+    loop 0)
 ;;
 
-let dry_config : Autonomy.config =
-  { mode = Autonomy.Mode.Dry_run
+let live_config : Autonomy.config =
+  { mode = Autonomy.Mode.Live
   ; grace_seconds = 100
   ; persistence_seconds = 10
   ; snapshot_before_fire = true
@@ -30,8 +28,8 @@ let dry_config : Autonomy.config =
 
 (* A workspace with three windows:
    - @1 is blocked (codex) but viewed by a client -> never a candidate.
-   - @2 is blocked (codex) and unviewed (its session is even attached; the client
-     looks at @1) -> a candidate.
+   - @2 is blocked (codex) and unviewed (its session is even attached; the client looks at
+     @1) -> a candidate.
    - @3 is recoverable (btop) -> never a candidate. *)
 let test_workspace () =
   let sessions : Workspace.Session.t list =
@@ -100,13 +98,7 @@ let target_for (window_id : string) : Autonomy.target =
     | "@2" -> "$2", "w2", "layout-2", [ "%2", "codex" ]
     | _ -> failwith "unexpected window"
   in
-  { window_id
-  ; session_id
-  ; server_identity
-  ; window_name
-  ; window_layout
-  ; panes
-  }
+  { window_id; session_id; server_identity; window_name; window_layout; panes }
 ;;
 
 let candidate ~window_id ~signature : Autonomy.candidate =
@@ -120,35 +112,54 @@ let tick_candidate state now ~window_id ~signature =
   Autonomy.tick ~now ~candidates:[ candidate ~window_id ~signature ] state
 ;;
 
-let fresh () = Autonomy.empty ~config:dry_config
+let fresh () = Autonomy.empty ~config:live_config
 
-(* A state in which window @2 was first observed at t0 and again, unchanged, at t1;
-   its eligibility clock therefore started at t1, and by t11 (10s later) the
-   persistence threshold is met: act-1 is scheduled at t11 with deadline t111. *)
+(* A state in which window @2 was first observed at t0 and again, unchanged, at t1; its
+   eligibility clock therefore started at t1, and by t11 (10s later) the persistence
+   threshold is met: act-1 is scheduled at t11 with deadline t111. *)
 let scheduled_state () =
   let state = fresh () in
   let state = tick_candidate state (at 0) ~window_id:"@2" ~signature:"s1" in
   let state = tick_candidate state (at 1) ~window_id:"@2" ~signature:"s1" in
-  Autonomy.tick ~now:(at 11) ~candidates:[ candidate ~window_id:"@2" ~signature:"s1" ] state
+  Autonomy.tick
+    ~now:(at 11)
+    ~candidates:[ candidate ~window_id:"@2" ~signature:"s1" ]
+    state
 ;;
 
 let%test_unit "detect flags only blocked windows that no client is viewing" =
   let workspace = test_workspace ()
   and recovery = test_plan () in
-  (* The client views @1, so even though @2's session $2 is unattached and @1's
-     session $1 is attached, only the exact viewed window is protected. *)
-  let found = Autonomy.detect ~workspace ~recovery ~exited_panes:(String.Set.of_list [ "%1"; "%2" ]) ~viewed:[ "@1" ] in
+  (* The client views @1, so even though @2's session $2 is unattached and @1's session $1
+     is attached, only the exact viewed window is protected. *)
+  let found =
+    Autonomy.detect
+      ~workspace
+      ~recovery
+      ~exited_panes:(String.Set.of_list [ "%1"; "%2" ])
+      ~viewed:[ "@1" ]
+  in
   [%test_eq: (string * string * string) list]
     found
     [ "@2", "$2", "no durable Codex thread reference was captured for this pane" ];
   (* Nothing viewed: both blocked windows are candidates. *)
-  let found = Autonomy.detect ~workspace ~recovery ~exited_panes:(String.Set.of_list [ "%1"; "%2" ]) ~viewed:[] in
+  let found =
+    Autonomy.detect
+      ~workspace
+      ~recovery
+      ~exited_panes:(String.Set.of_list [ "%1"; "%2" ])
+      ~viewed:[]
+  in
   [%test_eq: int] (List.length found) 2;
   (* Viewing @2 protects exactly that window. *)
-  let found = Autonomy.detect ~workspace ~recovery ~exited_panes:(String.Set.of_list [ "%1"; "%2" ]) ~viewed:[ "@2" ] in
-  [%test_eq: string list]
-    (List.map found ~f:(fun (w, _, _) -> w))
-    [ "@1" ]
+  let found =
+    Autonomy.detect
+      ~workspace
+      ~recovery
+      ~exited_panes:(String.Set.of_list [ "%1"; "%2" ])
+      ~viewed:[ "@2" ]
+  in
+  [%test_eq: string list] (List.map found ~f:(fun (w, _, _) -> w)) [ "@1" ]
 ;;
 
 let%test_unit "the first activity sample is never quiescent" =
@@ -156,9 +167,7 @@ let%test_unit "the first activity sample is never quiescent" =
   let state = tick_candidate state (at 0) ~window_id:"@2" ~signature:"s1" in
   [%test_eq: int] (List.length (Autonomy.active state)) 0;
   let entries = Autonomy.candidates state in
-  [%test_eq: (string * Time_ns.t option * bool) list]
-    entries
-    [ "@2", None, false ]
+  [%test_eq: (string * Time_ns.t option * bool) list] entries [ "@2", None, false ]
 ;;
 
 let%test_unit "an unchanged second sample starts the eligibility clock" =
@@ -166,9 +175,16 @@ let%test_unit "an unchanged second sample starts the eligibility clock" =
   let state = tick_candidate state (at 0) ~window_id:"@2" ~signature:"s1" in
   let state = tick_candidate state (at 30) ~window_id:"@2" ~signature:"s1" in
   let entries = Autonomy.candidates state in
-  [%test_eq: (string * Time_ns.t option * bool) list] entries [ "@2", Some (at 30), false ];
+  [%test_eq: (string * Time_ns.t option * bool) list]
+    entries
+    [ "@2", Some (at 30), false ];
   (* Persistence (10s) is not yet met: 30 -> 35 is only 5s of eligibility. *)
-  let state = Autonomy.tick ~now:(at 35) ~candidates:[ candidate ~window_id:"@2" ~signature:"s1" ] state in
+  let state =
+    Autonomy.tick
+      ~now:(at 35)
+      ~candidates:[ candidate ~window_id:"@2" ~signature:"s1" ]
+      state
+  in
   [%test_eq: int] (List.length (Autonomy.active state)) 0
 ;;
 
@@ -180,17 +196,18 @@ let%test_unit "activity changes reset persistence" =
   (* Eligibility started at t=1; persistence (10s) is met at t=11. *)
   let scheduled = Autonomy.active state in
   [%test_eq: int] (List.length scheduled) 1;
-  (* Now the signature changes: the pending action is auto-cancelled and the clock
-     resets. *)
+  (* Now the signature changes: the pending action is auto-cancelled and the clock resets. *)
   let state = tick_candidate state (at 31) ~window_id:"@2" ~signature:"s2" in
   [%test_eq: int] (List.length (Autonomy.active state)) 0;
-  let action = Option.value_exn (Autonomy.latest_action_for_window state ~window_id:"@2") in
+  let action =
+    Option.value_exn (Autonomy.latest_action_for_window state ~window_id:"@2")
+  in
   (match action.outcome with
    | Autonomy.Cancelled { reason; _ } ->
      [%test_eq: string] reason "activity changed during the grace countdown"
    | _ -> failwith "expected an auto-cancelled action");
-  (* The window is suppressed: it cannot be re-scheduled in this cycle even after
-     the new signature persists. *)
+  (* The window is suppressed: it cannot be re-scheduled in this cycle even after the new
+     signature persists. *)
   let state = tick_candidate state (at 41) ~window_id:"@2" ~signature:"s2" in
   let state = tick_candidate state (at 61) ~window_id:"@2" ~signature:"s2" in
   let state = tick_candidate state (at 81) ~window_id:"@2" ~signature:"s2" in
@@ -243,31 +260,39 @@ let%test_unit "due reports actions only once past their deadline" =
   [%test_eq: int] (List.length (Autonomy.due ~now:(at 111) state)) 1
 ;;
 
-let%test_unit "apply_fire records the snapshot id, dry-run flag, and note" =
+let%test_unit "apply_fire records the snapshot id and note" =
   let state = scheduled_state () in
   let state =
-    Autonomy.apply_fire ~now:(at 111) ~id:"act-1" ~snapshot_id:"snap-1" ~dry_run:false ~note:"closed" state
+    Autonomy.apply_fire
+      ~now:(at 111)
+      ~id:"act-1"
+      ~snapshot_id:"snap-1"
+      ~note:"closed"
+      state
   in
   let action = Option.value_exn (Autonomy.find_action state ~id:"act-1") in
-  (match action.outcome with
-   | Autonomy.Fired { snapshot_id; note; dry_run; _ } ->
-     [%test_eq: string option] snapshot_id (Some "snap-1");
-     [%test_eq: string] note "closed";
-     [%test_eq: bool] dry_run false
-   | _ -> failwith "expected a Fired action")
+  match action.outcome with
+  | Autonomy.Fired { snapshot_id; note; _ } ->
+    [%test_eq: string option] snapshot_id (Some "snap-1");
+    [%test_eq: string] note "closed"
+  | _ -> failwith "expected a Fired action"
 ;;
 
 let%test_unit "abort_fire and fail_fire archive with reasons" =
   let state = scheduled_state () in
-  let state = Autonomy.abort_fire ~now:(at 111) ~id:"act-1" ~reason:"snapshot failed" state in
+  let state =
+    Autonomy.abort_fire ~now:(at 111) ~id:"act-1" ~reason:"snapshot failed" state
+  in
   (match (Option.value_exn (Autonomy.find_action state ~id:"act-1")).outcome with
    | Autonomy.Aborted { reason; _ } -> [%test_eq: string] reason "snapshot failed"
    | _ -> failwith "expected Aborted");
   let state2 = scheduled_state () in
-  let state2 = Autonomy.fail_fire ~now:(at 111) ~id:"act-1" ~reason:"kill-window failed" state2 in
-  (match (Option.value_exn (Autonomy.find_action state2 ~id:"act-1")).outcome with
-   | Autonomy.Failed { reason; _ } -> [%test_eq: string] reason "kill-window failed"
-   | _ -> failwith "expected Failed")
+  let state2 =
+    Autonomy.fail_fire ~now:(at 111) ~id:"act-1" ~reason:"kill-window failed" state2
+  in
+  match (Option.value_exn (Autonomy.find_action state2 ~id:"act-1")).outcome with
+  | Autonomy.Failed { reason; _ } -> [%test_eq: string] reason "kill-window failed"
+  | _ -> failwith "expected Failed"
 ;;
 
 let%test_unit "cancel targets the selected action ID and suppresses the cycle" =
@@ -277,8 +302,18 @@ let%test_unit "cancel targets the selected action ID and suppresses the cycle" =
    | Autonomy.Cancelled { reason; _ } -> [%test_eq: string] reason "cancelled by user"
    | _ -> failwith "expected Cancelled");
   (* Even though @2 is still a candidate, the current cycle is suppressed. *)
-  let state = Autonomy.tick ~now:(at 60) ~candidates:[ candidate ~window_id:"@2" ~signature:"s1" ] state in
-  let state = Autonomy.tick ~now:(at 90) ~candidates:[ candidate ~window_id:"@2" ~signature:"s1" ] state in
+  let state =
+    Autonomy.tick
+      ~now:(at 60)
+      ~candidates:[ candidate ~window_id:"@2" ~signature:"s1" ]
+      state
+  in
+  let state =
+    Autonomy.tick
+      ~now:(at 90)
+      ~candidates:[ candidate ~window_id:"@2" ~signature:"s1" ]
+      state
+  in
   [%test_eq: int] (List.length (Autonomy.active state)) 0;
   (* Cancelling an unknown or terminal action ID is a no-op. *)
   let state = Autonomy.cancel ~now:(at 100) ~id:"act-99" state in
@@ -288,7 +323,9 @@ let%test_unit "cancel targets the selected action ID and suppresses the cycle" =
 let%test_unit "a window leaving the funnel auto-cancels its pending action" =
   let state = scheduled_state () in
   let state = Autonomy.tick ~now:(at 20) ~candidates:[] state in
-  (match (Option.value_exn (Autonomy.latest_action_for_window state ~window_id:"@2")).outcome with
+  (match
+     (Option.value_exn (Autonomy.latest_action_for_window state ~window_id:"@2")).outcome
+   with
    | Autonomy.Cancelled { reason; _ } ->
      [%test_eq: string] reason "window left the eligibility funnel"
    | _ -> failwith "expected a Cancelled action");
@@ -300,9 +337,24 @@ let%test_unit "re-arming requires leaving the funnel and re-entering" =
   let state = scheduled_state () in
   let state = Autonomy.cancel ~now:(at 20) ~id:"act-1" state in
   (* Still a candidate every tick: never re-scheduled in the same cycle. *)
-  let state = Autonomy.tick ~now:(at 30) ~candidates:[ candidate ~window_id:"@2" ~signature:"s1" ] state in
-  let state = Autonomy.tick ~now:(at 60) ~candidates:[ candidate ~window_id:"@2" ~signature:"s1" ] state in
-  let state = Autonomy.tick ~now:(at 90) ~candidates:[ candidate ~window_id:"@2" ~signature:"s1" ] state in
+  let state =
+    Autonomy.tick
+      ~now:(at 30)
+      ~candidates:[ candidate ~window_id:"@2" ~signature:"s1" ]
+      state
+  in
+  let state =
+    Autonomy.tick
+      ~now:(at 60)
+      ~candidates:[ candidate ~window_id:"@2" ~signature:"s1" ]
+      state
+  in
+  let state =
+    Autonomy.tick
+      ~now:(at 90)
+      ~candidates:[ candidate ~window_id:"@2" ~signature:"s1" ]
+      state
+  in
   [%test_eq: int] (List.length (Autonomy.active state)) 0;
   (* Leaves the funnel, then re-enters: a fresh cycle schedules again. *)
   let state = Autonomy.tick ~now:(at 100) ~candidates:[] state in
@@ -323,8 +375,8 @@ let%test_unit "pause cancels pending deadlines and clears the funnel" =
    | _ -> failwith "expected Cancelled");
   (* The pause audit entry reports how many pending actions were cancelled. *)
   [%test_eq: bool]
-    (List.exists (Autonomy.audit_lines state)
-       ~f:(fun l -> has_substring l "cancelled 1 pending action(s)"))
+    (List.exists (Autonomy.audit_lines state) ~f:(fun l ->
+       has_substring l "cancelled 1 pending action(s)"))
     true
 ;;
 
@@ -332,8 +384,18 @@ let%test_unit "ticks do nothing while paused and resume never fires overdue acti
   let state = scheduled_state () in
   let state = Autonomy.pause ~now:(at 50) state in
   (* Candidate observations while paused accumulate nothing. *)
-  let state = Autonomy.tick ~now:(at 60) ~candidates:[ candidate ~window_id:"@2" ~signature:"s1" ] state in
-  let state = Autonomy.tick ~now:(at 90) ~candidates:[ candidate ~window_id:"@2" ~signature:"s1" ] state in
+  let state =
+    Autonomy.tick
+      ~now:(at 60)
+      ~candidates:[ candidate ~window_id:"@2" ~signature:"s1" ]
+      state
+  in
+  let state =
+    Autonomy.tick
+      ~now:(at 90)
+      ~candidates:[ candidate ~window_id:"@2" ~signature:"s1" ]
+      state
+  in
   let state = Autonomy.resume ~now:(at 100) state in
   [%test_eq: bool] (Autonomy.paused state) false;
   (* The old deadline (t0+110) is in the past, but no action survives the pause, so
@@ -356,31 +418,36 @@ let%test_unit "ticks do nothing while paused and resume never fires overdue acti
 
 let%test_unit "mode or threshold changes safely reset eligibility cycles" =
   let state = scheduled_state () in
-  let live_config = { dry_config with mode = Autonomy.Mode.Live } in
-  let state = Autonomy.with_config ~now:(at 50) live_config state in
-  [%test_eq: Autonomy.Mode.t] state.config.mode Autonomy.Mode.Live;
+  let off_config = { live_config with mode = Autonomy.Mode.Off } in
+  let state = Autonomy.with_config ~now:(at 50) off_config state in
+  [%test_eq: Autonomy.Mode.t] state.config.mode Autonomy.Mode.Off;
   [%test_eq: int] (List.length (Autonomy.active state)) 0;
   [%test_eq: int] (List.length (Autonomy.candidates state)) 0;
   (match (Option.value_exn (Autonomy.find_action state ~id:"act-1")).outcome with
    | Autonomy.Cancelled { reason; _ } -> [%test_eq: string] reason "policy changed"
    | _ -> failwith "expected Cancelled");
   (* An identical config is a no-op. *)
-  [%test_eq: Autonomy.state] (Autonomy.with_config ~now:(at 60) live_config state) state;
+  [%test_eq: Autonomy.state] (Autonomy.with_config ~now:(at 60) off_config state) state;
   (* A grace-only change also resets. *)
   let state =
-    Autonomy.with_config ~now:(at 70) { dry_config with grace_seconds = 200 } state
+    Autonomy.with_config ~now:(at 70) { off_config with grace_seconds = 200 } state
   in
   [%test_eq: int] (List.length (Autonomy.candidates state)) 0
 ;;
 
 let%test_unit "off mode schedules nothing and freezes the funnel" =
-  let off_config : Autonomy.config = { dry_config with mode = Autonomy.Mode.Off } in
+  let off_config : Autonomy.config = { live_config with mode = Autonomy.Mode.Off } in
   let state = Autonomy.empty ~config:off_config in
-  let state = Autonomy.tick ~now:(at 100) ~candidates:[ candidate ~window_id:"@2" ~signature:"s1" ] state in
+  let state =
+    Autonomy.tick
+      ~now:(at 100)
+      ~candidates:[ candidate ~window_id:"@2" ~signature:"s1" ]
+      state
+  in
   [%test_eq: int] (List.length (Autonomy.active state)) 0;
   [%test_eq: int] (List.length (Autonomy.candidates state)) 0;
-  (* Switching back to dry-run resets the funnel cleanly. *)
-  let state = Autonomy.with_config ~now:(at 110) dry_config state in
+  (* Switching back to live resets the funnel cleanly. *)
+  let state = Autonomy.with_config ~now:(at 110) live_config state in
   [%test_eq: int] (List.length (Autonomy.candidates state)) 0
 ;;
 
@@ -401,15 +468,15 @@ let%test_unit "target_matches enforces server identity and window/pane fingerpri
    | Error _ -> ()
    | Ok () -> failwith "expected a window name mismatch");
   let repurposed = with_target { base with panes = [ "%2", "vim" ] } in
-  (match Autonomy.target_matches action repurposed with
-   | Error _ -> ()
-   | Ok () -> failwith "expected a pane fingerprint mismatch")
+  match Autonomy.target_matches action repurposed with
+  | Error _ -> ()
+  | Ok () -> failwith "expected a pane fingerprint mismatch"
 ;;
 
 let%test_unit "the audit log records schedules, fires, cancellations, and pauses" =
   let state = scheduled_state () in
   let state =
-    Autonomy.apply_fire ~now:(at 111) ~id:"act-1" ~snapshot_id:"s" ~dry_run:false ~note:"closed" state
+    Autonomy.apply_fire ~now:(at 111) ~id:"act-1" ~snapshot_id:"s" ~note:"closed" state
   in
   let lines = Autonomy.audit_lines state in
   [%test_eq: bool]
@@ -428,35 +495,183 @@ let%test_unit "the audit log records schedules, fires, cancellations, and pauses
 let%test_unit "state serializes to and from yojson without loss" =
   let state = scheduled_state () in
   let state =
-    Autonomy.apply_fire ~now:(at 111) ~id:"act-1" ~snapshot_id:"s" ~dry_run:true ~note:"dry-run" state
+    Autonomy.apply_fire ~now:(at 111) ~id:"act-1" ~snapshot_id:"s" ~note:"closed" state
   in
   let state = Autonomy.pause ~now:(at 120) state in
   let state = Autonomy.resume ~now:(at 130) state in
   let json = Autonomy.state_to_yojson state in
-  let restored = Autonomy.state_of_yojson json |> Or_error.ok_exn in
+  let restored = Autonomy.state_of_yojson ~now:(at 140) json |> Or_error.ok_exn in
   [%test_eq: Autonomy.state] restored state;
   (* Corrupt payloads fail closed instead of raising. *)
-  (match Autonomy.state_of_yojson (`String "garbage") with
-   | Error _ -> ()
-   | Ok _ -> failwith "expected a parse failure")
+  match Autonomy.state_of_yojson ~now:(at 140) (`String "garbage") with
+  | Error _ -> ()
+  | Ok _ -> failwith "expected a parse failure"
 ;;
 
 let%test_unit "missing thread identity never makes a live pane disposable" =
   let workspace = test_workspace () in
   let recovery = Recovery.plan workspace in
   [%test_eq: int]
-    (List.length (Autonomy.detect ~workspace ~recovery ~viewed:[]
-      ~exited_panes:String.Set.empty)) 0
+    (List.length
+       (Autonomy.detect ~workspace ~recovery ~viewed:[] ~exited_panes:String.Set.empty))
+    0
 ;;
 
 let%test_unit "one live or recoverable sibling protects the entire window" =
   let workspace = test_workspace () in
   let pane = Map.find_exn workspace.panes "%3" in
   let sibling = { pane with Workspace.Pane.window_id = "@2"; index = 1 } in
-  let workspace = { workspace with panes = Map.set workspace.panes ~key:"%3" ~data:sibling } in
+  let workspace =
+    { workspace with panes = Map.set workspace.panes ~key:"%3" ~data:sibling }
+  in
   let recovery = Recovery.plan workspace in
-  List.iter [ [ "%2" ]; [ "%2"; "%3" ] ] ~f:(fun exited ->
-    let found = Autonomy.detect ~workspace ~recovery ~viewed:[]
-      ~exited_panes:(String.Set.of_list exited) in
-    assert (List.is_empty found))
+  List.iter
+    [ [ "%2" ]; [ "%2"; "%3" ] ]
+    ~f:(fun exited ->
+      let found =
+        Autonomy.detect
+          ~workspace
+          ~recovery
+          ~viewed:[]
+          ~exited_panes:(String.Set.of_list exited)
+      in
+      assert (List.is_empty found))
+;;
+
+let json_set json key value =
+  match json with
+  | `Assoc fields ->
+    `Assoc ((key, value) :: List.Assoc.remove fields ~equal:String.equal key)
+  | _ -> failwith "expected an object"
+;;
+
+let%test_unit "simulation names are migration input only; off is the default" =
+  [%test_eq: Autonomy.Mode.t] Autonomy.default_config.mode Autonomy.Mode.Off;
+  List.iter [ "dry-run"; "dry_run"; "dryrun" ] ~f:(fun legacy ->
+    assert (Result.is_error (Autonomy.Mode.of_string legacy));
+    let json = json_set (Autonomy.config_to_yojson live_config) "mode" (`String legacy) in
+    let config = Autonomy.config_of_yojson json |> Or_error.ok_exn in
+    [%test_eq: Autonomy.config] config { live_config with mode = Autonomy.Mode.Off });
+  assert (
+    Result.is_error
+      (Autonomy.config_of_yojson
+         (json_set (Autonomy.config_to_yojson live_config) "mode" (`String "unknown"))))
+;;
+
+let%test_unit "old simulation schedules are cancelled while pause and IDs survive" =
+  List.iter [ "dry-run"; "dry_run"; "dryrun" ] ~f:(fun mode ->
+    let original =
+      { (scheduled_state ()) with paused = true; paused_at = Some (at 20) }
+    in
+    let json =
+      json_set
+        (Autonomy.state_to_yojson original)
+        "config"
+        (json_set (Autonomy.config_to_yojson original.config) "mode" (`String mode))
+    in
+    let state = Autonomy.state_of_yojson ~now:(at 10000) json |> Or_error.ok_exn in
+    [%test_eq: Autonomy.Mode.t] state.config.mode Autonomy.Mode.Off;
+    [%test_eq: bool] state.paused true;
+    [%test_eq: Time_ns.t option] state.paused_at (Some (at 20));
+    [%test_eq: int] state.next_action_id original.next_action_id;
+    assert (List.is_empty state.active);
+    assert (Map.is_empty state.candidates);
+    (match (Option.value_exn (Autonomy.find_action state ~id:"act-1")).outcome with
+     | Autonomy.Cancelled { at = cancelled_at; reason } ->
+       [%test_eq: Time_ns.t] cancelled_at (at 10000);
+       assert (String.is_substring reason ~substring:"legacy simulation")
+     | _ -> failwith "old simulation schedule was not cancelled");
+    let resumed = Autonomy.resume ~now:(at 10001) state in
+    let live = Autonomy.with_config ~now:(at 10001) live_config resumed in
+    let first = tick_candidate live (at 10002) ~window_id:"@2" ~signature:"s1" in
+    assert (List.is_empty (Autonomy.due ~now:(at 10002) first));
+    assert (List.is_empty first.active))
+;;
+
+let%test_unit "historical simulated outcomes and audit are never labeled as closures" =
+  let base = scheduled_state () in
+  let action = List.hd_exn base.active in
+  let simulated =
+    { action with
+      Autonomy.id = "act-10"
+    ; outcome =
+        Autonomy.Legacy_simulated
+          { at = at 111; snapshot_id = None; note = "historical note" }
+    }
+  in
+  let closed =
+    { action with
+      Autonomy.id = "act-11"
+    ; outcome =
+        Autonomy.Fired { at = at 112; snapshot_id = Some "snapshot"; note = "closed" }
+    }
+  in
+  let simulated_audit : Autonomy.audit_entry =
+    { at = at 111
+    ; event = Autonomy.Audit_event.Fired
+    ; action_id = Some "act-10"
+    ; window_id = Some "@2"
+    ; detail = "historical note"
+    }
+  in
+  let closed_audit =
+    { simulated_audit with at = at 112; action_id = Some "act-11"; detail = "closed" }
+  in
+  let state =
+    { base with
+      active = []
+    ; archived = [ closed; simulated ]
+    ; next_action_id = 12
+    ; audit = [ closed_audit; simulated_audit ]
+    }
+  in
+  let json = Autonomy.state_to_yojson state in
+  let old_archived =
+    Yojson.Safe.Util.(member "archived" json |> to_list)
+    |> List.map ~f:(fun action_json ->
+      let outcome = Yojson.Safe.Util.member "outcome" action_json in
+      let simulated =
+        Yojson.Safe.Util.(member "kind" outcome |> to_string)
+        |> String.equal "legacy_simulated"
+      in
+      json_set
+        action_json
+        "outcome"
+        (json_set (json_set outcome "kind" (`String "fired")) "dry_run" (`Bool simulated)))
+  in
+  let old_json = json_set json "archived" (`List old_archived) in
+  let migrated = Autonomy.state_of_yojson ~now:(at 200) old_json |> Or_error.ok_exn in
+  let events = List.map migrated.audit ~f:(fun entry -> entry.Autonomy.event) in
+  [%test_eq: Autonomy.Audit_event.t list] events [ Fired; Legacy_simulated ];
+  [%test_eq: Autonomy.action list] migrated.archived [ closed; simulated ];
+  assert (
+    List.exists (Autonomy.audit_lines migrated) ~f:(fun line ->
+      String.is_substring line ~substring:"legacy simulated act-10"));
+  let canonical = Autonomy.state_to_yojson migrated in
+  assert (
+    not (String.is_substring (Yojson.Safe.to_string canonical) ~substring:"\"dry_run\""));
+  [%test_eq: Autonomy.state]
+    (Autonomy.state_of_yojson ~now:(at 300) canonical |> Or_error.ok_exn)
+    migrated
+;;
+
+let%test_unit "terminal historical outcomes cannot be loaded as executable pending \
+               actions"
+  =
+  let state = scheduled_state () in
+  let action = List.hd_exn state.active in
+  let invalid =
+    { state with
+      active =
+        [ { action with
+            outcome =
+              Autonomy.Legacy_simulated
+                { at = at 100; snapshot_id = None; note = "old preview" }
+          }
+        ]
+    }
+  in
+  assert (
+    Result.is_error
+      (Autonomy.state_of_yojson ~now:(at 10000) (Autonomy.state_to_yojson invalid)))
 ;;

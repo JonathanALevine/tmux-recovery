@@ -1,18 +1,16 @@
-(** End-to-end test of the autonomous cleanup pipeline against a real tmux
-    server on an isolated socket ([tmux -L ...]). The server and all state live
-    under a throwaway [/tmp] directory; the user's real tmux server and XDG
-    directories are never touched.
+(** End-to-end test of the autonomous cleanup pipeline against a real tmux server on an
+    isolated socket ([tmux -L ...]). The server and all state live under a throwaway
+    [/tmp] directory; the user's real tmux server and XDG directories are never touched.
 
-    The test drives the full lifecycle:
-      observed -> persisted candidate -> grace countdown -> fresh eligibility
-      recheck -> native snapshot -> second recheck -> close (live mode), then
-      verifies the same window is only *recorded* (not closed) under dry-run.
+    The test drives the full lifecycle: observed -> persisted candidate -> grace countdown
+    -> fresh eligibility recheck -> native snapshot -> second recheck -> close (live
+    mode), then verifies migration discards legacy schedules and off mode cancels cleanup.
 
-    It runs under the full Async scheduler (the pipeline spawns real tmux and
-    ps commands), unlike the unit tests which run on a pumped scheduler. *)
+    It runs under the full Async scheduler (the pipeline spawns real tmux and ps
+    commands), unlike the unit tests which run on a pumped scheduler. *)
 open! Core
-open Async
 
+open Async
 module Runner = Tmux_recovery_application.Autonomy
 module Domain = Tmux_recovery_domain.Autonomy
 
@@ -23,9 +21,9 @@ module Let_syntax = struct
   let bind = Deferred.Or_error.bind
 end
 
-(** Run a tmux command on the isolated socket. Arguments are passed as a proper
-    argv list (no shell), so multi-word arguments (e.g. the send-keys payload)
-    stay intact. A non-zero exit is surfaced as an error. *)
+(** Run a tmux command on the isolated socket. Arguments are passed as a proper argv list
+    (no shell), so multi-word arguments (e.g. the send-keys payload) stay intact. A
+    non-zero exit is surfaced as an error. *)
 let run_tmux socket args =
   Deferred.bind
     (Process.run_lines ~prog:tmux ~args:([ "-L"; socket; "-f"; "/dev/null" ] @ args) ())
@@ -35,66 +33,78 @@ let run_tmux socket args =
 let list_windows socket session =
   Process.run_lines
     ~prog:tmux
-    ~args:[ "-L"; socket; "list-windows"; "-t"; session; "-F"; "#{window_id} #{window_name}" ]
+    ~args:
+      [ "-L"; socket; "list-windows"; "-t"; session; "-F"; "#{window_id} #{window_name}" ]
     ()
 ;;
 
-(** Retain an exited Codex pane. Only positive pane_dead evidence can make a
-    blocked pane disposable; the test never asks cleanup to kill a live agent. *)
+(** Retain an exited Codex pane. Only positive pane_dead evidence can make a blocked pane
+    disposable; the test never asks cleanup to kill a live agent. *)
 let make_blocked_window socket session ~name ~program =
-  let%bind () = run_tmux socket [ "new-window"; "-t"; session; "-n"; name; "-c"; "/tmp" ] in
-  let%bind () = run_tmux socket [ "set-option"; "-w"; "-t"; session ^ ":" ^ name; "remain-on-exit"; "on" ] in
-  let%bind () = run_tmux socket [ "respawn-pane"; "-k"; "-t"; session ^ ":" ^ name; program ] in
+  let%bind () =
+    run_tmux socket [ "new-window"; "-t"; session; "-n"; name; "-c"; "/tmp" ]
+  in
+  let%bind () =
+    run_tmux
+      socket
+      [ "set-option"; "-w"; "-t"; session ^ ":" ^ name; "remain-on-exit"; "on" ]
+  in
+  let%bind () =
+    run_tmux socket [ "respawn-pane"; "-k"; "-t"; session ^ ":" ^ name; program ]
+  in
   Clock_ns.after (Time_ns.Span.of_int_sec 1) >>| fun _ -> Ok ()
 ;;
 
 let window_id_of (lines : string list) (name : string) =
   let found =
     List.find lines ~f:(fun line ->
-      (match String.split line ~on:' ' with
-       | _window_id :: window_name :: _ -> String.equal window_name name
-       | _ -> false))
+      match String.split line ~on:' ' with
+      | _window_id :: window_name :: _ -> String.equal window_name name
+      | _ -> false)
   in
-  (match found with
-   | Some line ->
-     let id = String.split line ~on:' ' |> List.hd_exn in
-     (Ok id : (string, Error.t) result)
-   | None ->
-     let err = Error.createf "no window named %s" name in
-     (Error err : (string, Error.t) result))
+  match found with
+  | Some line ->
+    let id = String.split line ~on:' ' |> List.hd_exn in
+    (Ok id : (string, Error.t) result)
+  | None ->
+    let err = Error.createf "no window named %s" name in
+    (Error err : (string, Error.t) result)
 ;;
 
 let check label actual expected =
   if String.equal actual expected
   then (Ok () : unit Or_error.t)
-  else
+  else (
     let err = Error.createf "%s: got %s, expected %s" label actual expected in
-    (Error err : unit Or_error.t)
+    (Error err : unit Or_error.t))
 ;;
 
 (** Verify a native snapshot directory was written under [dir/snapshots]. *)
 let check_snapshot dir : unit Or_error.t Deferred.t =
   let snapshot_dir = Filename.concat dir "snapshots" in
-  (match Sys_unix.file_exists snapshot_dir with
-   | `No -> Deferred.return (Error (Error.of_string "snapshot directory missing"))
-   | `Unknown -> Deferred.return (Error (Error.of_string "snapshot directory unknown"))
-   | `Yes ->
-     (match Or_error.try_with (fun () ->
-        let d = Caml_unix.opendir snapshot_dir in
-        let rec loop acc =
-          (match Caml_unix.readdir d with
+  match Sys_unix.file_exists snapshot_dir with
+  | `No -> Deferred.return (Error (Error.of_string "snapshot directory missing"))
+  | `Unknown -> Deferred.return (Error (Error.of_string "snapshot directory unknown"))
+  | `Yes ->
+    (match
+       Or_error.try_with (fun () ->
+         let d = Caml_unix.opendir snapshot_dir in
+         let rec loop acc =
+           match Caml_unix.readdir d with
            | name -> loop (name :: acc)
-           | exception (Caml_unix.Unix_error _ | End_of_file) -> acc)
-        in
-        let e = loop [] in
-        Caml_unix.closedir d;
-        e)
-      with
-      | Error _ -> Deferred.return (Error (Error.of_string "snapshot read failed"))
-      | Ok entries ->
-        (match List.find entries ~f:(fun name -> String.is_suffix name ~suffix:".snapshot") with
-         | None -> Deferred.return (Error (Error.of_string "no snapshot file was written"))
-         | Some _ -> Deferred.return (Ok ()))))
+           | exception (Caml_unix.Unix_error _ | End_of_file) -> acc
+         in
+         let e = loop [] in
+         Caml_unix.closedir d;
+         e)
+     with
+     | Error _ -> Deferred.return (Error (Error.of_string "snapshot read failed"))
+     | Ok entries ->
+       (match
+          List.find entries ~f:(fun name -> String.is_suffix name ~suffix:".snapshot")
+        with
+        | None -> Deferred.return (Error (Error.of_string "no snapshot file was written"))
+        | Some _ -> Deferred.return (Ok ())))
 ;;
 
 let window_ids (lines : string list) =
@@ -114,7 +124,9 @@ let run_all () =
     let program = Filename.concat dir "codex" in
     Out_channel.write_all program ~data:"#!/bin/sh\nexit 0\n";
     Core_unix.chmod program ~perm:0o700;
-    let%bind () = run_tmux socket [ "new-session"; "-d"; "-s"; "int"; "-x"; "100"; "-y"; "30" ] in
+    let%bind () =
+      run_tmux socket [ "new-session"; "-d"; "-s"; "int"; "-x"; "100"; "-y"; "30" ]
+    in
     let%bind () = make_blocked_window socket "int" ~name:"victim" ~program in
     let%bind () = make_blocked_window socket "int" ~name:"keep" ~program in
     let%bind lines = list_windows socket "int" in
@@ -125,21 +137,33 @@ let run_all () =
     let deps =
       Runner.default_deps ~socket_name:socket ~now:(fun () -> !clock) ~snapshot_dir:dir ()
     in
-    let%bind store = Deferred.return (Autonomy_store.create ~config_home:dir ~state_home:dir ()) in
+    let%bind store =
+      Deferred.return (Autonomy_store.create ~config_home:dir ~state_home:dir ())
+    in
     let%bind runner = Deferred.return (Runner.create ~store ~deps ()) in
     let%bind () =
-      Runner.configure runner ~mode:Domain.Mode.Live ~grace_seconds:5 ~persistence_seconds:2
-        ~snapshot_before_fire:true ()
+      Runner.configure
+        runner
+        ~mode:Domain.Mode.Live
+        ~grace_seconds:5
+        ~persistence_seconds:2
+        ~snapshot_before_fire:true
+        ()
     in
     (* A live shell sibling protects an otherwise exited/blocked window. *)
-    let%bind () = run_tmux socket [ "split-window"; "-d"; "-t"; "int:victim"; "-c"; "/tmp" ] in
+    let%bind () =
+      run_tmux socket [ "split-window"; "-d"; "-t"; "int:victim"; "-c"; "/tmp" ]
+    in
     let%bind protected_tick = Runner.tick runner in
     let%bind () =
-      (match protected_tick with
-       | Runner.Reconciled r ->
-         Deferred.return (check "mixed window protected"
-           (string_of_int (Map.length r.state.candidates)) "1")
-       | Runner.Skipped reason -> Deferred.return (Error (Error.of_string reason)))
+      match protected_tick with
+      | Runner.Reconciled r ->
+        Deferred.return
+          (check
+             "mixed window protected"
+             (string_of_int (Map.length r.state.candidates))
+             "1")
+      | Runner.Skipped reason -> Deferred.return (Error (Error.of_string reason))
     in
     let%bind () = run_tmux socket [ "kill-pane"; "-t"; "int:victim.1" ] in
     (* Reset the fixture's funnel before the lifecycle assertions below. *)
@@ -148,161 +172,185 @@ let run_all () =
     (* t0: first quiescence sample for both windows. *)
     let%bind t0 = Runner.tick runner in
     let%bind () =
-      (match t0 with
-       | Runner.Reconciled r ->
-         Deferred.return (check "t0 candidates" (string_of_int (Map.length r.state.candidates)) "2")
-       | Runner.Skipped s -> Deferred.return (Error (Error.of_string ("t0 skipped: " ^ s))))
+      match t0 with
+      | Runner.Reconciled r ->
+        Deferred.return
+          (check "t0 candidates" (string_of_int (Map.length r.state.candidates)) "2")
+      | Runner.Skipped s -> Deferred.return (Error (Error.of_string ("t0 skipped: " ^ s)))
     in
     bump 3;
     (* t1: second (unchanged) sample. The eligibility clock starts here, but the
        persistence threshold has not yet elapsed, so nothing is scheduled. *)
     let%bind t1 = Runner.tick runner in
     let%bind () =
-      (match t1 with
-       | Runner.Reconciled r ->
-         Deferred.return (check "t1 not yet scheduled" (string_of_int (List.length r.state.active)) "0")
-       | Runner.Skipped s -> Deferred.return (Error (Error.of_string ("t1 skipped: " ^ s))))
+      match t1 with
+      | Runner.Reconciled r ->
+        Deferred.return
+          (check "t1 not yet scheduled" (string_of_int (List.length r.state.active)) "0")
+      | Runner.Skipped s -> Deferred.return (Error (Error.of_string ("t1 skipped: " ^ s)))
     in
     bump 3;
     (* t2: persistence elapsed -> both windows are scheduled actions. *)
     let%bind t2 = Runner.tick runner in
     let%bind () =
-      (match t2 with
-       | Runner.Reconciled r ->
-         Deferred.return (check "t2 scheduled" (string_of_int (List.length r.state.active)) "2")
-       | Runner.Skipped s -> Deferred.return (Error (Error.of_string ("t2 skipped: " ^ s))))
+      match t2 with
+      | Runner.Reconciled r ->
+        Deferred.return
+          (check "t2 scheduled" (string_of_int (List.length r.state.active)) "2")
+      | Runner.Skipped s -> Deferred.return (Error (Error.of_string ("t2 skipped: " ^ s)))
     in
-    (* Simulate a runner/TUI restart: a fresh runner over the same persistent
-       store still sees both scheduled actions. *)
+    (* Simulate a runner/TUI restart: a fresh runner over the same persistent store still
+       sees both scheduled actions. *)
     let%bind restarted = Deferred.return (Runner.create ~store ~deps ()) in
     let%bind s1 = Runner.status restarted in
     let%bind () =
-      Deferred.return (check "active after restart" (string_of_int (List.length s1.active)) "2")
+      Deferred.return
+        (check "active after restart" (string_of_int (List.length s1.active)) "2")
     in
     bump 6;
-    (* Past the grace deadline: the pipeline fires one due action on the
-       isolated socket and leaves the sibling window alone. Which window is
-       first is an implementation detail, so we discover the fired window from
-       the durable record and assert the invariants for it and its sibling. *)
+    (* Past the grace deadline: the pipeline fires one due action on the isolated socket
+       and leaves the sibling window alone. Which window is first is an implementation
+       detail, so we discover the fired window from the durable record and assert the
+       invariants for it and its sibling. *)
     let%bind fire = Runner.tick restarted in
     let%bind () =
-      (match fire with
-       | Runner.Reconciled r ->
-         (match r.fired with
-          | Some _ -> Deferred.return (Ok ())
-          | None -> Deferred.return (Error (Error.of_string "no action fired after the deadline")))
-       | Runner.Skipped reason -> Deferred.return (Error (Error.of_string ("fire skipped: " ^ reason))))
+      match fire with
+      | Runner.Reconciled r ->
+        (match r.fired with
+         | Some _ -> Deferred.return (Ok ())
+         | None ->
+           Deferred.return (Error (Error.of_string "no action fired after the deadline")))
+      | Runner.Skipped reason ->
+        Deferred.return (Error (Error.of_string ("fire skipped: " ^ reason)))
     in
     let%bind s2 = Runner.status restarted in
     let%bind () =
-      (match List.find s2.archived ~f:(fun a ->
-         (match a.outcome with
-          | Domain.Fired { dry_run = false ; _ } -> true
-          | _ -> false))
-       with
-       | None -> Deferred.return (Error (Error.of_string "no live fire was archived"))
-       | Some action ->
-         let fired_window = action.window_id in
-         let survivor =
-           if String.equal fired_window victim_id then survivor_id else victim_id
-         in
-         (* The closed window is gone; the sibling window survives. *)
-         let%bind windows = list_windows socket "int" in
-         let ids = window_ids windows in
-         let%bind () =
-           if List.mem ids fired_window ~equal:String.equal
-           then Deferred.return (Error (Error.of_string "fired window still exists"))
-           else if not (List.mem ids survivor ~equal:String.equal)
-           then Deferred.return (Error (Error.of_string "sibling window disappeared"))
-           else Deferred.return (Ok ())
-         in
-         (* A native snapshot of the isolated server was taken before the close. *)
-         let%bind () = check_snapshot dir in
-         (* A failed process observation must not replace the saved snapshot. *)
-         let pointer = Filename.concat dir "snapshots/last-good" in
-         let before = Core_unix.readlink pointer in
-         let broken_codex = Codex.create ~codex_home:dir ~executable_candidates:[]
-           ~process_executable:"/nonexistent/tmux-recovery-ps" in
-         let snapshots = Tmux_recovery_application.Snapshot.create
-           ~socket_name:socket ~native_directory:(Filename.concat dir "snapshots")
-           ~runtime_directory:(Filename.concat dir "runtime") ~codex:broken_codex () in
-         let%bind failed_save = Deferred.map
-           (Tmux_recovery_application.Snapshot.save snapshots
-             ~trigger:Tmux_recovery_domain.Native_snapshot.Trigger.Manual)
-           ~f:(fun result -> Ok result) in
-         let%bind () =
-           if Result.is_error failed_save && String.equal before (Core_unix.readlink pointer)
-           then Deferred.return (Ok ())
-           else Deferred.return (Or_error.error_string "failed capture changed last-good")
-         in
-         (* Switch to dry-run. A policy change resets the funnel, so the
-            surviving window must re-accumulate persistence and grace before it
-            can fire. The dry-run fire is recorded and the window survives. *)
-         let%bind () =
-           Runner.configure restarted ~mode:Domain.Mode.Dry_run ~grace_seconds:5
-             ~persistence_seconds:2 ()
-         in
-         (* d0: survivor re-observed (first sample); the closed window is gone. *)
-         let%bind d0 = Runner.tick restarted in
-         let%bind () =
-           (match d0 with
-            | Runner.Reconciled r ->
-              Deferred.return
-                (check "d0 candidates" (string_of_int (Map.length r.state.candidates)) "1")
-            | Runner.Skipped s -> Deferred.return (Error (Error.of_string ("d0 skipped: " ^ s))))
-         in
-         bump 3;
-         (* d1: survivor confirmed (eligibility clock starts). *)
-         let%bind d1 = Runner.tick restarted in
-         let%bind () =
-           (match d1 with
-            | Runner.Reconciled r ->
-              Deferred.return
-                (check "d1 not yet scheduled" (string_of_int (List.length r.state.active)) "0")
-            | Runner.Skipped s -> Deferred.return (Error (Error.of_string ("d1 skipped: " ^ s))))
-         in
-         bump 3;
-         (* d2: survivor scheduled (persistence elapsed). *)
-         let%bind d2 = Runner.tick restarted in
-         let%bind () =
-           (match d2 with
-            | Runner.Reconciled r ->
-              Deferred.return
-                (check "d2 scheduled" (string_of_int (List.length r.state.active)) "1")
-            | Runner.Skipped s -> Deferred.return (Error (Error.of_string ("d2 skipped: " ^ s))))
-         in
-         bump 6;
-         (* d3: past the dry-run grace deadline -> the close is recorded, not done. *)
-         let%bind d3 = Runner.tick restarted in
-         let%bind () =
-           (match d3 with
-            | Runner.Reconciled r ->
-              (match r.fired with
-               | Some _ -> Deferred.return (Ok ())
-               | None -> Deferred.return (Error (Error.of_string "dry-run fire not recorded")))
-            | Runner.Skipped reason ->
-              Deferred.return (Error (Error.of_string ("d3 skipped: " ^ reason))))
-         in
-         let%bind s3 = Runner.status restarted in
-         let%bind () =
-           (match List.find s3.archived ~f:(fun a -> String.equal a.window_id survivor) with
-            | Some action ->
-              (match action.outcome with
-               | Domain.Fired { dry_run = true ; _ } -> Deferred.return (Ok ())
-               | _ ->
-                 Deferred.return
-                   (Error (Error.of_string "dry-run fire was not recorded for the survivor")))
-            | None -> Deferred.return (Error (Error.of_string "survivor action not archived")))
-         in
-         (* Dry-run must never close the window. *)
-         let%bind windows = list_windows socket "int" in
-         let ids = window_ids windows in
-         let%bind () =
-           if List.mem ids survivor ~equal:String.equal
-           then Deferred.return (Ok ())
-           else Deferred.return (Error (Error.of_string "dry-run closed the survivor window"))
-         in
-         Deferred.return (Ok ()))
+      match
+        List.find s2.archived ~f:(fun a ->
+          match a.outcome with
+          | Domain.Fired _ -> true
+          | _ -> false)
+      with
+      | None -> Deferred.return (Error (Error.of_string "no live fire was archived"))
+      | Some action ->
+        let fired_window = action.window_id in
+        let survivor =
+          if String.equal fired_window victim_id then survivor_id else victim_id
+        in
+        (* The closed window is gone; the sibling window survives. *)
+        let%bind windows = list_windows socket "int" in
+        let ids = window_ids windows in
+        let%bind () =
+          if List.mem ids fired_window ~equal:String.equal
+          then Deferred.return (Error (Error.of_string "fired window still exists"))
+          else if not (List.mem ids survivor ~equal:String.equal)
+          then Deferred.return (Error (Error.of_string "sibling window disappeared"))
+          else Deferred.return (Ok ())
+        in
+        (* A native snapshot of the isolated server was taken before the close. *)
+        let%bind () = check_snapshot dir in
+        (* A failed process observation must not replace the saved snapshot. *)
+        let pointer = Filename.concat dir "snapshots/last-good" in
+        let before = Core_unix.readlink pointer in
+        let broken_codex =
+          Codex.create
+            ~codex_home:dir
+            ~executable_candidates:[]
+            ~process_executable:"/nonexistent/tmux-recovery-ps"
+        in
+        let snapshots =
+          Tmux_recovery_application.Snapshot.create
+            ~socket_name:socket
+            ~native_directory:(Filename.concat dir "snapshots")
+            ~runtime_directory:(Filename.concat dir "runtime")
+            ~codex:broken_codex
+            ()
+        in
+        let%bind failed_save =
+          Deferred.map
+            (Tmux_recovery_application.Snapshot.save
+               snapshots
+               ~trigger:Tmux_recovery_domain.Native_snapshot.Trigger.Manual)
+            ~f:(fun result -> Ok result)
+        in
+        let%bind () =
+          if Result.is_error failed_save
+             && String.equal before (Core_unix.readlink pointer)
+          then Deferred.return (Ok ())
+          else Deferred.return (Or_error.error_string "failed capture changed last-good")
+        in
+        (* A legacy policy can disagree with the last saved live state. Its overdue
+           schedule must be discarded even if the user configures live immediately,
+           without an intervening migration tick. *)
+        let legacy_policy =
+          match Domain.config_to_yojson s2.policy with
+          | `Assoc fields ->
+            `Assoc
+              (("mode", `String "dry-run")
+               :: List.Assoc.remove fields ~equal:String.equal "mode")
+          | _ -> assert false
+        in
+        Out_channel.write_all
+          (Autonomy_store.policy_path store)
+          ~data:(Yojson.Safe.to_string legacy_policy);
+        let%bind migrated = Runner.status restarted in
+        let%bind () =
+          Deferred.return
+            (check
+               "legacy pending discarded"
+               (string_of_int (List.length migrated.active))
+               "0")
+        in
+        let%bind () = Runner.configure restarted ~mode:Domain.Mode.Live () in
+        let%bind d0 = Runner.tick restarted in
+        let%bind () =
+          match d0 with
+          | Runner.Reconciled r ->
+            Deferred.return
+              (check
+                 "fresh sample after migration"
+                 (string_of_int (List.length r.state.active))
+                 "0")
+          | Runner.Skipped reason -> Deferred.return (Or_error.error_string reason)
+        in
+        bump 3;
+        let%bind _ = Runner.tick restarted in
+        bump 3;
+        let%bind d2 = Runner.tick restarted in
+        let%bind () =
+          match d2 with
+          | Runner.Reconciled r ->
+            Deferred.return
+              (check
+                 "fresh persistence schedules survivor"
+                 (string_of_int (List.length r.state.active))
+                 "1")
+          | Runner.Skipped reason -> Deferred.return (Or_error.error_string reason)
+        in
+        let%bind () = Runner.configure restarted ~mode:Domain.Mode.Off () in
+        bump 6;
+        let%bind d3 = Runner.tick restarted in
+        let%bind () =
+          match d3 with
+          | Runner.Skipped _ -> Deferred.return (Ok ())
+          | Runner.Reconciled _ ->
+            Deferred.return (Or_error.error_string "off mode did not skip")
+        in
+        let%bind s3 = Runner.status restarted in
+        let%bind () =
+          if List.is_empty s3.active && List.is_empty s3.candidates
+          then Deferred.return (Ok ())
+          else Deferred.return (Or_error.error_string "off mode retained pending work")
+        in
+        let%bind windows = list_windows socket "int" in
+        let%bind () =
+          if List.mem (window_ids windows) survivor ~equal:String.equal
+          then Deferred.return (Ok ())
+          else
+            Deferred.return
+              (Or_error.error_string "migration or off mode closed the survivor")
+        in
+        Deferred.return (Ok ())
     in
     Deferred.return (Ok ())
   in
@@ -311,7 +359,10 @@ let run_all () =
     Deferred.bind (cleanup ()) ~f:(fun () -> Deferred.return result))
 ;;
 
-let never (x : 'a) = (match x with _ -> Stdlib.exit 1)
+let never (x : 'a) =
+  match x with
+  | _ -> Stdlib.exit 1
+;;
 
 let () =
   let d = run_all () in
@@ -327,10 +378,12 @@ let () =
         Stdlib.exit 1)
   in
   let _ =
-    Deferred.bind (Clock_ns.after (Time_ns.Span.of_int_sec 60)) ~f:(fun _ ->
-      print_endline "TIMEOUT: 60s elapsed without completion";
-      Out_channel.flush stdout;
-      Stdlib.exit 1)
+    Deferred.bind
+      (Clock_ns.after (Time_ns.Span.of_int_sec 60))
+      ~f:(fun _ ->
+        print_endline "TIMEOUT: 60s elapsed without completion";
+        Out_channel.flush stdout;
+        Stdlib.exit 1)
   in
   never (Scheduler.go ())
 ;;

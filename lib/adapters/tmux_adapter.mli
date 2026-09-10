@@ -39,22 +39,22 @@ val restart_approved
 (** Close a single tmux window (used by autonomous cleanup after a snapshot). *)
 val close_window : config -> window_id:string -> unit Or_error.t Deferred.t
 
-(** Window IDs currently viewed by any client (attached or detached). A window
-    on this list must never be a cleanup candidate. An absent server yields []. *)
+(** Window IDs currently viewed by any client (attached or detached). A window on this
+    list must never be a cleanup candidate. An absent server yields []. *)
 val viewed_window_ids : config -> string list Or_error.t Deferred.t
 
-(** Positive tmux [pane_dead] evidence. Missing/invalid observations are errors;
-    a missing pane is never inferred to have exited. *)
+(** Positive tmux [pane_dead] evidence. Missing/invalid observations are errors; a missing
+    pane is never inferred to have exited. *)
 val exited_pane_ids : config -> String.Set.t Or_error.t Deferred.t
 
-(** Fingerprint of a window's activity: pane IDs, pane PIDs, current commands,
-    and the most recent captured output of each pane. Any change between ticks
-    resets the quiescence persistence period. *)
+(** Fingerprint of a window's activity: pane IDs, pane PIDs, current commands, and the
+    most recent captured output of each pane. Any change between ticks resets the
+    quiescence persistence period. *)
 val activity_signature : config -> window_id:string -> string Or_error.t Deferred.t
 
-(** Stable identity of the tmux server instance: socket plus every session,
-    window, and pane ID. A server restart renumbers IDs, so a reused @id can
-    never be mistaken for the original target. *)
+(** Stable identity of the tmux server instance: socket plus every session, window, and
+    pane ID. A server restart renumbers IDs, so a reused @id can never be mistaken for the
+    original target. *)
 val server_identity : config -> string Or_error.t Deferred.t
 
 val resume_codex

@@ -176,12 +176,25 @@ let observe config =
   let%bind version_result = Process.run ~prog:config.executable ~args:[ "-V" ] () in
   let version = Result.ok version_result |> Option.map ~f:String.strip in
   let args = socket_args config.socket_name @ [ "list-panes"; "-a"; "-F"; format ] in
-  let%map result = Process.run_lines ~prog:config.executable ~args () in
+  let%bind result = Process.run_lines ~prog:config.executable ~args () in
   match result with
-  | Ok rows -> parse_rows ~socket_name:config.socket_name ~version rows
+  | Ok rows -> return (parse_rows ~socket_name:config.socket_name ~version rows)
   | Error error when no_server error ->
-    Ok (Workspace.empty_live ?socket:config.socket_name ?version ())
-  | Error error -> Error error
+    return (Ok (Workspace.empty_live ?socket:config.socket_name ?version ()))
+  | Error error ->
+    if String.is_substring (Error.to_string_hum error) ~substring:"no current target"
+    then (
+      (* With exit-empty off, tmux can be running without sessions. list-panes fails in
+         that state; positively verify the empty session inventory before treating the
+         target as empty. Other failures stay errors. *)
+      let args =
+        socket_args config.socket_name @ [ "list-sessions"; "-F"; "#{session_id}" ]
+      in
+      let%map sessions = Process.run_lines ~prog:config.executable ~args () in
+      match sessions with
+      | Ok [] -> parse_rows ~socket_name:config.socket_name ~version []
+      | Ok (_ :: _) | Error _ -> Error error)
+    else return (Error error)
 ;;
 
 let sanitize_capture_line line =
@@ -656,15 +669,15 @@ let close_window config ~window_id =
   run config [ "kill-window"; "-t"; window_id ] >>| Or_error.map ~f:ignore
 ;;
 
-(** Window IDs currently viewed by any client (attached or detached). A window
-    on this list must never be a cleanup candidate. *)
+(** Window IDs currently viewed by any client (attached or detached). A window on this
+    list must never be a cleanup candidate. *)
 let viewed_window_ids config =
   run_lines config [ "list-clients"; "-F"; "#{window_id}" ]
   >>| fun result ->
-  (match result with
-   | Ok lines -> Ok (List.filter lines ~f:(fun l -> not (String.is_empty l)))
-   | Error error when no_server error -> Ok []
-   | Error _ as error -> error)
+  match result with
+  | Ok lines -> Ok (List.filter lines ~f:(fun l -> not (String.is_empty l)))
+  | Error error when no_server error -> Ok []
+  | Error _ as error -> error
 ;;
 
 let exited_pane_ids config =
@@ -686,45 +699,57 @@ let digest_lines prefix lines =
   Sha256.digest_string (String.concat ~sep:"\n" (prefix @ lines))
 ;;
 
-(** Fingerprint of a window's activity: pane IDs, pane PIDs, current commands,
-    and the most recent captured output of each pane. Any change between ticks
-    resets the quiescence persistence period. *)
+(** Fingerprint of a window's activity: pane IDs, pane PIDs, current commands, and the
+    most recent captured output of each pane. Any change between ticks resets the
+    quiescence persistence period. *)
 let activity_signature config ~window_id =
   Deferred.bind
-    (run_lines config
-       [ "list-panes"; "-t"; window_id; "-F"; "#{pane_id}|#{pane_pid}|#{pane_current_command}" ])
+    (run_lines
+       config
+       [ "list-panes"
+       ; "-t"
+       ; window_id
+       ; "-F"
+       ; "#{pane_id}|#{pane_pid}|#{pane_current_command}"
+       ])
     ~f:(fun pane_lines_result ->
-      (match pane_lines_result with
-       | Error _ as error -> return error
-       | Ok pane_lines ->
-         let pane_ids =
-           List.map pane_lines ~f:(fun line -> String.split line ~on:'|' |> List.hd_exn)
-         in
-         Deferred.List.map pane_ids ~f:(fun pane_id ->
-           run_lines config [ "capture-pane"; "-t"; pane_id; "-p"; "-S"; "-80" ])
-           ~how:`Sequential
-         >>| fun captures ->
-         let parts =
-           pane_lines
-           :: List.map captures ~f:(fun result ->
-                (match result with
-                 | Ok lines -> List.map lines ~f:sanitize_capture_line
-                 | Error _ -> [ "<capture unavailable>" ]))
-         in
-         Ok (digest_lines [ window_id ] (List.concat parts))))
+      match pane_lines_result with
+      | Error _ as error -> return error
+      | Ok pane_lines ->
+        let pane_ids =
+          List.map pane_lines ~f:(fun line -> String.split line ~on:'|' |> List.hd_exn)
+        in
+        Deferred.List.map
+          pane_ids
+          ~f:(fun pane_id ->
+            run_lines config [ "capture-pane"; "-t"; pane_id; "-p"; "-S"; "-80" ])
+          ~how:`Sequential
+        >>| fun captures ->
+        let parts =
+          pane_lines
+          :: List.map captures ~f:(fun result ->
+            match result with
+            | Ok lines -> List.map lines ~f:sanitize_capture_line
+            | Error _ -> [ "<capture unavailable>" ])
+        in
+        Ok (digest_lines [ window_id ] (List.concat parts)))
 ;;
 
-(** Stable identity of the tmux server instance: socket plus every session,
-    window, and pane ID. A server restart renumbers IDs, so a reused @id can
-    never be mistaken for the original target. *)
+(** Stable identity of the tmux server instance: socket plus every session, window, and
+    pane ID. A server restart renumbers IDs, so a reused @id can never be mistaken for the
+    original target. *)
 let server_identity config =
   run_lines config [ "list-panes"; "-a"; "-F"; "#{session_id}|#{window_id}|#{pane_id}" ]
   >>| fun result ->
-  (match result with
-   | Ok lines ->
-     Ok (digest_lines [ Option.value config.socket_name ~default:"default" ] (List.sort lines ~compare:String.compare))
-   | Error error when no_server error -> Ok (digest_lines [ Option.value config.socket_name ~default:"default" ] [])
-   | Error _ as error -> error)
+  match result with
+  | Ok lines ->
+    Ok
+      (digest_lines
+         [ Option.value config.socket_name ~default:"default" ]
+         (List.sort lines ~compare:String.compare))
+  | Error error when no_server error ->
+    Ok (digest_lines [ Option.value config.socket_name ~default:"default" ] [])
+  | Error _ as error -> error
 ;;
 
 let resume_codex config ~pane_id ~cwd ~executable ~thread_id ~bypass_approvals =

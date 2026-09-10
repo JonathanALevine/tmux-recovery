@@ -7,4 +7,5 @@
   tmux_recovery_adapters
   tmux_recovery_application
   tmux_recovery_domain)
- (preprocess (pps ppx_jane)))
+ (preprocess
+  (pps ppx_jane)))

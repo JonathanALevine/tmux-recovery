@@ -3,18 +3,16 @@ open Async
 module App_recovery = Tmux_recovery_application.Recovery
 module Autonomy_runner = Tmux_recovery_application.Autonomy
 module Domain_autonomy = Tmux_recovery_domain.Autonomy
-module App_migrate = Tmux_recovery_application.Migrate
 module App_service = Tmux_recovery_application.Service
 module App_snapshot = Tmux_recovery_application.Snapshot
 module Native_snapshot = Tmux_recovery_domain.Native_snapshot
-module Migration = Tmux_recovery_domain.Migration
 module Recovery = Tmux_recovery_domain.Recovery
 module Service = Tmux_recovery_domain.Service
 module Snapshot = Tmux_recovery_domain.Snapshot
 module Workspace = Tmux_recovery_domain.Workspace
 
 let schema_version = "1"
-let version = "0.3.0-dev.23"
+let version = "0.3.0-dev.24"
 let build_time = Build_stamp.build_time
 
 let envelope ~command ?(warnings = []) data =
@@ -88,14 +86,6 @@ let socket_param =
 
 let json_param =
   Command.Param.flag "--json" Command.Param.no_arg ~doc:" emit stable versioned JSON"
-;;
-
-(* Older installed services and scripts still pass this flag. *)
-let legacy_approve_param =
-  Command.Param.flag
-    "--approve"
-    Command.Param.no_arg
-    ~doc:" deprecated compatibility flag; commands execute by default"
 ;;
 
 let service socket_name = App_recovery.create ?socket_name ()
@@ -357,8 +347,6 @@ let snapshots_save_command =
          "--trigger"
          (optional_with_default "manual" string)
          ~doc:"REASON manual, timer, or shutdown"
-     and dry_run =
-       flag "--dry-run" no_arg ~doc:" show the exact save plan without writing"
      and quiet = flag "--quiet" no_arg ~doc:" suppress successful human-readable output"
      and json = json_param in
      fun () ->
@@ -367,80 +355,42 @@ let snapshots_save_command =
        let snapshots =
          App_snapshot.create ?native_directory ?socket_name ~tool_version:version ()
        in
-       if dry_run
-       then (
-         let%map preparation = App_snapshot.prepare_save snapshots ~trigger in
-         match preparation with
-         | Noop reason ->
-           if json
-           then
-             envelope
-               ~command:"snapshots save"
-               (`Assoc
-                 [ "dry_run", `Bool true; "noop", `Bool true; "reason", `String reason ])
-             |> print_json
-           else printf "No snapshot would be written: %s.\n" reason
-         | Ready (_, plan) ->
-           if json
-           then
-             envelope
-               ~command:"snapshots save"
-               (`Assoc
-                 [ "dry_run", `Bool true
-                 ; "noop", `Bool false
-                 ; "plan", Native_snapshot.save_plan_to_yojson plan
-                 ])
-             |> print_json
-           else (
-             printf "Native snapshot save plan\n";
-             printf "ID:          %s\n" (Snapshot.Id.to_string plan.id);
-             printf "Directory:   %s\n" plan.directory;
-             printf "Trigger:     %s\n" (Native_snapshot.Trigger.to_string plan.trigger);
-             printf
-               "Workspace:   %d sessions, %d windows, %d panes\n"
-               plan.session_count
-               plan.window_count
-               plan.pane_count))
-       else (
-         let%map result = App_snapshot.save snapshots ~trigger in
-         match result with
-         | Save_noop reason ->
-           if json
-           then
-             envelope
-               ~command:"snapshots save"
-               (`Assoc
-                 [ "saved", `Bool false; "noop", `Bool true; "reason", `String reason ])
-             |> print_json
-           else if not quiet
-           then printf "No snapshot written: %s.\n" reason
-         | Saved summary ->
-           if json
-           then
-             envelope
-               ~command:"snapshots save"
-               (`Assoc
-                 [ "saved", `Bool true; "snapshot", Snapshot.summary_to_yojson summary ])
-             |> print_json
-           else if not quiet
-           then (
-             printf "Saved %s\n" (Snapshot.Id.to_string summary.id);
-             printf
-               "Workspace: %d sessions, %d windows, %d panes\n"
-               summary.session_count
-               summary.window_count
-               summary.pane_count)))
+       let%map result = App_snapshot.save snapshots ~trigger in
+       match result with
+       | Save_noop reason ->
+         if json
+         then
+           envelope
+             ~command:"snapshots save"
+             (`Assoc
+               [ "saved", `Bool false; "noop", `Bool true; "reason", `String reason ])
+           |> print_json
+         else if not quiet
+         then printf "No snapshot written: %s.\n" reason
+       | Saved summary ->
+         if json
+         then
+           envelope
+             ~command:"snapshots save"
+             (`Assoc
+               [ "saved", `Bool true; "snapshot", Snapshot.summary_to_yojson summary ])
+           |> print_json
+         else if not quiet
+         then (
+           printf "Saved %s\n" (Snapshot.Id.to_string summary.id);
+           printf
+             "Workspace: %d sessions, %d windows, %d panes\n"
+             summary.session_count
+             summary.window_count
+             summary.pane_count))
 ;;
 
 let snapshots_restore_command =
   Command.async_or_error
-    ~summary:"Plan or perform a guarded native snapshot restore"
+    ~summary:"Restore a guarded native snapshot"
     (let%map_open.Command selector = anon (maybe ("SNAPSHOT|latest|last-good" %: string))
      and socket_name = socket_param
      and native_directory = native_snapshot_directory_param
-     and dry_run =
-       flag "--dry-run" no_arg ~doc:" show the restore plan without changing tmux"
-     and _approve = legacy_approve_param
      and no_applications =
        flag
          "--no-applications"
@@ -461,7 +411,7 @@ let snapshots_restore_command =
        in
        let service_history = App_service.create () in
        let%bind target_has_sessions =
-         if if_empty && not dry_run
+         if if_empty
          then (
            let%map workspace = App_recovery.workspace (service socket_name) in
            not (Map.is_empty workspace.sessions))
@@ -487,66 +437,37 @@ let snapshots_restore_command =
          return ())
        else (
          let%bind id = App_snapshot.resolve_native snapshots selector in
-         if dry_run
+         let%bind result =
+           App_snapshot.restore snapshots id ~launch_applications:(not no_applications)
+         in
+         let%map () =
+           App_service.record_restore_run
+             service_history
+             (App_service.Restored (Snapshot.Id.to_string result.snapshot_id))
+         in
+         if json
+         then
+           envelope
+             ~command:"snapshots restore"
+             ~warnings:result.application_warnings
+             (`Assoc
+               [ "restored", `Bool true
+               ; "snapshot", `String (Snapshot.Id.to_string result.snapshot_id)
+               ; "sessions", `Int result.session_count
+               ; "windows", `Int result.window_count
+               ; "panes", `Int result.pane_count
+               ; "applications", `Bool (not no_applications)
+               ])
+           |> print_json
+         else if not quiet
          then (
-           let%map plan = App_snapshot.prepare_restore snapshots id in
-           if json
-           then
-             envelope
-               ~command:"snapshots restore"
-               (`Assoc
-                 [ "dry_run", `Bool true
-                 ; "plan", Native_snapshot.restore_plan_to_yojson plan
-                 ])
-             |> print_json
-           else if not quiet
-           then (
-             let workspace = plan.snapshot.workspace in
-             printf "Native snapshot restore plan\n";
-             printf "Snapshot:    %s\n" (Snapshot.Id.to_string plan.snapshot.id);
-             printf
-               "Target:      %s\n"
-               (Option.value plan.socket_name ~default:"default tmux socket");
-             printf
-               "Workspace:   %d sessions, %d windows, %d panes\n"
-               (Map.length workspace.sessions)
-               (Map.length workspace.windows)
-               (Map.length workspace.panes);
-             Recovery.counts plan.recovery
-             |> List.iter ~f:(fun (action, count) ->
-               printf "%-12s %d\n" (Recovery.Action.label action) count);
-             List.iter plan.recovery.warnings ~f:(printf "warning: %s\n")))
-         else (
-           let%bind result =
-             App_snapshot.restore snapshots id ~launch_applications:(not no_applications)
-           in
-           let%map () =
-             App_service.record_restore_run
-               service_history
-               (App_service.Restored (Snapshot.Id.to_string result.snapshot_id))
-           in
-           if json
-           then
-             envelope
-               ~command:"snapshots restore"
-               ~warnings:result.application_warnings
-               (`Assoc
-                 [ "snapshot", `String (Snapshot.Id.to_string result.snapshot_id)
-                 ; "sessions", `Int result.session_count
-                 ; "windows", `Int result.window_count
-                 ; "panes", `Int result.pane_count
-                 ; "applications", `Bool (not no_applications)
-                 ])
-             |> print_json
-           else if not quiet
-           then (
-             printf "Restored %s\n" (Snapshot.Id.to_string result.snapshot_id);
-             printf
-               "Workspace: %d sessions, %d windows, %d panes\n"
-               result.session_count
-               result.window_count
-               result.pane_count;
-             List.iter result.application_warnings ~f:(printf "warning: %s\n")))))
+           printf "Restored %s\n" (Snapshot.Id.to_string result.snapshot_id);
+           printf
+             "Workspace: %d sessions, %d windows, %d panes\n"
+             result.session_count
+             result.window_count
+             result.pane_count;
+           List.iter result.application_warnings ~f:(printf "warning: %s\n"))))
 ;;
 
 let snapshots_validate_command =
@@ -578,38 +499,32 @@ let snapshots_validate_command =
 
 let snapshots_prune_command =
   Command.async_or_error
-    ~summary:"Preview or apply rolling native snapshot retention"
+    ~summary:"Apply rolling native snapshot retention"
     (let%map_open.Command native_directory = native_snapshot_directory_param
-     and apply = flag "--apply" no_arg ~doc:" delete the reviewed retention candidates"
-     and dry_run = flag "--dry-run" no_arg ~doc:" preview retention (the default)"
      and json = json_param in
      fun () ->
-       if apply && dry_run
-       then Deferred.Or_error.error_string "choose either --dry-run or --apply"
+       let%map candidates =
+         App_snapshot.prune (App_snapshot.create ?native_directory ())
+       in
+       let%map.Or_error candidates in
+       if json
+       then
+         envelope
+           ~command:"snapshots prune"
+           (`Assoc
+             [ "applied", `Bool true
+             ; "snapshots", `List (List.map candidates ~f:Snapshot.summary_to_yojson)
+             ])
+         |> print_json
+       else if List.is_empty candidates
+       then print_endline "No native snapshots are eligible for pruning."
        else (
-         let%map candidates =
-           App_snapshot.prune (App_snapshot.create ?native_directory ()) ~apply
-         in
-         let%map.Or_error candidates in
-         if json
-         then
-           envelope
-             ~command:"snapshots prune"
-             (`Assoc
-               [ "applied", `Bool apply
-               ; "snapshots", `List (List.map candidates ~f:Snapshot.summary_to_yojson)
-               ])
-           |> print_json
-         else if List.is_empty candidates
-         then print_endline "No native snapshots are eligible for pruning."
-         else (
-           printf
-             "%s %d native snapshot%s:\n"
-             (if apply then "Pruned" else "Would prune")
-             (List.length candidates)
-             (if List.length candidates = 1 then "" else "s");
-           List.iter candidates ~f:(fun summary ->
-             printf "  %s\n" (Snapshot.Id.to_string summary.id)))))
+         printf
+           "Pruned %d native snapshot%s:\n"
+           (List.length candidates)
+           (if List.length candidates = 1 then "" else "s");
+         List.iter candidates ~f:(fun summary ->
+           printf "  %s\n" (Snapshot.Id.to_string summary.id))))
 ;;
 
 let snapshots_import_command =
@@ -618,8 +533,6 @@ let snapshots_import_command =
     (let%map_open.Command legacy_id = anon ("LEGACY_ID" %: string)
      and directory = snapshot_directory_param
      and native_directory = native_snapshot_directory_param
-     and dry_run = flag "--dry-run" no_arg ~doc:" validate and show the import plan"
-     and _approve = legacy_approve_param
      and json = json_param in
      fun () ->
        let open Deferred.Or_error.Let_syntax in
@@ -627,45 +540,23 @@ let snapshots_import_command =
        let snapshots =
          App_snapshot.create ?directory ?native_directory ~tool_version:version ()
        in
-       if dry_run
-       then (
-         let%map _, plan = App_snapshot.prepare_import_resurrect snapshots legacy_id in
-         if json
-         then
-           envelope
-             ~command:"snapshots import-resurrect"
-             (`Assoc
-               [ "dry_run", `Bool true
-               ; "legacy", `String (Snapshot.Id.to_string legacy_id)
-               ; "plan", Native_snapshot.save_plan_to_yojson plan
-               ])
-           |> print_json
-         else (
-           printf "Would import %s\n" (Snapshot.Id.to_string legacy_id);
-           printf "Native ID: %s\n" (Snapshot.Id.to_string plan.id);
-           printf
-             "Workspace: %d sessions, %d windows, %d panes\n"
-             plan.session_count
-             plan.window_count
-             plan.pane_count))
+       let%map summary = App_snapshot.import_resurrect snapshots legacy_id in
+       if json
+       then
+         envelope
+           ~command:"snapshots import-resurrect"
+           (Snapshot.summary_to_yojson summary)
+         |> print_json
        else (
-         let%map summary = App_snapshot.import_resurrect snapshots legacy_id in
-         if json
-         then
-           envelope
-             ~command:"snapshots import-resurrect"
-             (Snapshot.summary_to_yojson summary)
-           |> print_json
-         else (
-           printf
-             "Imported %s as %s\n"
-             (Snapshot.Id.to_string legacy_id)
-             (Snapshot.Id.to_string summary.id);
-           printf
-             "Workspace: %d sessions, %d windows, %d panes\n"
-             summary.session_count
-             summary.window_count
-             summary.pane_count)))
+         printf
+           "Imported %s as %s\n"
+           (Snapshot.Id.to_string legacy_id)
+           (Snapshot.Id.to_string summary.id);
+         printf
+           "Workspace: %d sessions, %d windows, %d panes\n"
+           summary.session_count
+           summary.window_count
+           summary.pane_count))
 ;;
 
 let snapshots_command =
@@ -766,23 +657,20 @@ let service_sync_command =
          "--source"
          (optional_with_default Sys.executable_name string)
          ~doc:"PATH executable to stage (defaults to the running executable)"
-     and dry_run = flag "--dry-run" no_arg ~doc:" show paths and hash without writing"
-     and _approve = legacy_approve_param
      and json = json_param in
      fun () ->
        let open Deferred.Or_error.Let_syntax in
        let services = App_service.create () in
        let%bind plan = App_service.sync_plan services ~source ~version in
-       let%bind () = if dry_run then return () else App_service.sync services plan in
+       let%bind () = App_service.sync services plan in
        if json
        then
          envelope
            ~command:"service sync"
-           (`Assoc
-             [ "applied", `Bool (not dry_run); "plan", Service.sync_plan_to_yojson plan ])
+           (`Assoc [ "applied", `Bool true; "plan", Service.sync_plan_to_yojson plan ])
          |> print_json
        else (
-         printf "%s stable runtime\n" (if dry_run then "Would stage" else "Staged");
+         print_endline "Staged stable runtime";
          printf "Source:      %s\n" plan.source;
          printf "Destination: %s\n" plan.destination;
          printf "Current:     %s\n" plan.current;
@@ -793,7 +681,7 @@ let service_sync_command =
 let service_rollback_command =
   Command.async_or_error
     ~summary:"Swap the stable service runtime back to its previous version"
-    (let%map_open.Command _approve = legacy_approve_param in
+    (let%map_open.Command () = return () in
      fun () ->
        let%map result = App_service.rollback (App_service.create ()) in
        let%map.Or_error () = result in
@@ -803,27 +691,20 @@ let service_rollback_command =
 let service_enable_command =
   Command.async_or_error
     ~summary:"Install and load managed native services after conflict checks"
-    (let%map_open.Command dry_run =
-       flag "--dry-run" no_arg ~doc:" show the enable plan without changing services"
-     and _approve = legacy_approve_param
-     and json = json_param in
+    (let%map_open.Command json = json_param in
      fun () ->
        let open Deferred.Or_error.Let_syntax in
        let services = App_service.create () in
        let%bind plan = App_service.plan services in
-       let%bind () = if dry_run then return () else App_service.enable services plan in
+       let%bind () = App_service.enable services plan in
        if json
        then
          envelope
            ~command:"service enable"
-           (`Assoc
-             [ "applied", `Bool (not dry_run); "plan", Service.plan_to_yojson plan ])
+           (`Assoc [ "applied", `Bool true; "plan", Service.plan_to_yojson plan ])
          |> print_json
        else (
-         printf
-           "%s managed %s services.\n"
-           (if dry_run then "Would enable" else "Enabled")
-           (Service.manager_label plan.manager);
+         printf "Enabled managed %s services.\n" (Service.manager_label plan.manager);
          List.iter plan.files ~f:(fun file -> printf "  %s\n" file.Service.path);
          if not (List.is_empty plan.conflicts)
          then (
@@ -835,15 +716,13 @@ let service_enable_command =
 let service_disable_command =
   Command.async_or_error
     ~summary:"Unload managed native services without deleting snapshot data"
-    (let%map_open.Command dry_run =
-       flag "--dry-run" no_arg ~doc:" show service-manager disable commands"
-     and _approve = legacy_approve_param in
+    (let%map_open.Command () = return () in
      fun () ->
        let open Deferred.Or_error.Let_syntax in
        let services = App_service.create () in
        let%bind plan = App_service.plan services in
-       let%bind () = if dry_run then return () else App_service.disable services plan in
-       printf "%s service-manager commands:\n" (if dry_run then "Would run" else "Ran");
+       let%bind () = App_service.disable services plan in
+       print_endline "Ran service-manager commands:";
        List.iter plan.disable_commands ~f:(fun command ->
          printf "  %s %s\n" command.program (String.concat command.arguments ~sep:" "));
        return ())
@@ -858,68 +737,6 @@ let service_command =
     ; "rollback", service_rollback_command
     ; "enable", service_enable_command
     ; "disable", service_disable_command
-    ]
-;;
-
-let print_migration_plan (plan : Migration.plan) =
-  printf "Manager:          %s\n" (Service.manager_label plan.manager);
-  printf "Rollback bundle:  %s\n" plan.backup_directory;
-  print_endline "Legacy assets:";
-  List.iter plan.assets ~f:(fun asset ->
-    printf
-      "  %-18s %-7s %s\n"
-      (Migration.asset_kind_label asset.kind)
-      (if asset.loaded then "loaded" else if asset.exists then "present" else "missing")
-      asset.path);
-  print_endline "Legacy disable commands:";
-  List.iter plan.disable_commands ~f:(fun command ->
-    printf "  %s %s\n" command.program (String.concat command.arguments ~sep:" "));
-  printf "Managed definitions: %d\n" (List.length plan.managed_services.files)
-;;
-
-let migrate_plan_command =
-  Command.async_or_error
-    ~summary:"Inventory legacy assets and render a reversible migration plan"
-    (let%map_open.Command json = json_param in
-     fun () ->
-       let%map plan = App_migrate.plan (App_migrate.create ()) in
-       let%map.Or_error plan in
-       if json
-       then envelope ~command:"migrate plan" (Migration.to_yojson plan) |> print_json
-       else print_migration_plan plan)
-;;
-
-let migrate_apply_command =
-  Command.async_or_error
-    ~summary:"Back up and replace loaded legacy automation with managed services"
-    (let%map_open.Command _approve = legacy_approve_param in
-     fun () ->
-       let migrate = App_migrate.create () in
-       let open Deferred.Or_error.Let_syntax in
-       let%bind plan = App_migrate.plan migrate in
-       let%map backup = App_migrate.apply migrate plan in
-       printf "Native service cutover succeeded.\nRollback bundle: %s\n" backup)
-;;
-
-let migrate_rollback_command =
-  Command.async_or_error
-    ~summary:"Disable managed services and reload the backed-up legacy definitions"
-    (let%map_open.Command _approve = legacy_approve_param in
-     fun () ->
-       let migrate = App_migrate.create () in
-       let open Deferred.Or_error.Let_syntax in
-       let%bind plan = App_migrate.plan migrate in
-       let%map () = App_migrate.rollback migrate plan in
-       print_endline "Managed services disabled and legacy automation reloaded.")
-;;
-
-let migrate_command =
-  Command.group
-    ~summary:"Plan, apply, or roll back legacy recovery migration"
-    [ "status", migrate_plan_command
-    ; "plan", migrate_plan_command
-    ; "apply", migrate_apply_command
-    ; "rollback", migrate_rollback_command
     ]
 ;;
 
@@ -992,7 +809,8 @@ let doctor_command =
              else [%string "%{List.length services.conflicts#Int} conflict(s)"] )
          ; ( "mutation safety"
            , `Pass
-           , "guarded save/restore and service mutations require explicit approval" )
+           , "snapshot integrity, occupied-target protection, operation locks, and \
+              service conflicts are checked" )
          ]
        in
        if json
@@ -1023,9 +841,9 @@ let doctor_command =
        return ())
 ;;
 
-(** Reconcile the autonomous pipeline once (one tick under the store lock) and
-    report the outcome. This is the same entry point the autonomy timer service
-    runs; the TUI also reconciles on refresh. *)
+(** Reconcile the autonomous pipeline once (one tick under the store lock) and report the
+    outcome. This is the same entry point the autonomy timer service runs; the TUI also
+    reconciles on refresh. *)
 let autonomy_tick_command =
   Command.async_or_error
     ~summary:"Run one autonomous-cleanup reconcile cycle"
@@ -1047,25 +865,25 @@ let autonomy_tick_command =
              | Autonomy_runner.Reconciled r ->
                (match r.fired with
                 | None ->
-                  (if not quiet
-                   then
-                     printf
-                       "no due actions (%d candidate(s) in funnel; policy: %s)\n"
-                       (List.length status.candidates)
-                       (Domain_autonomy.Mode.label r.policy.mode);
-                  ())
+                  if not quiet
+                  then
+                    printf
+                      "no due actions (%d candidate(s) in funnel; policy: %s)\n"
+                      (List.length status.candidates)
+                      (Domain_autonomy.Mode.label r.policy.mode);
+                  ()
                 | Some id ->
-                  (if not quiet then printf "processed %s\n" id;
-                  ()))
+                  if not quiet then printf "processed %s\n" id;
+                  ())
            in
-           Deferred.return (Ok ())
-         )))
+           Deferred.return (Ok ()))))
 ;;
 
 let autonomy_status_command =
   Command.async_or_error
     ~summary:"Show the persistent autonomy policy, funnel, and audit"
-    (let%map_open.Command socket_name = socket_param and json = json_param in
+    (let%map_open.Command socket_name = socket_param
+     and json = json_param in
      fun () ->
        let runner = Autonomy_runner.create ?socket_name () |> Or_error.ok_exn in
        Deferred.Or_error.bind (Autonomy_runner.status runner) ~f:(fun status ->
@@ -1078,47 +896,59 @@ let autonomy_status_command =
                    (`Assoc
                      [ "policy", Domain_autonomy.config_to_yojson status.policy
                      ; "paused", `Bool status.paused
-                     ; "active",
-                         `List (List.map status.active ~f:(fun _action -> `Null))
-                     ; "audit", `List (List.map status.audit ~f:(fun line -> `String line))
+                     ; ( "active"
+                       , `List
+                           (List.map status.active ~f:(fun action ->
+                              `Assoc
+                                [ "id", `String action.id
+                                ; "window_id", `String action.window_id
+                                ; "reason", `String action.reason
+                                ; ( "scheduled_at"
+                                  , `String (Time_ns.to_string_utc action.scheduled_at) )
+                                ; ( "deadline"
+                                  , `String (Time_ns.to_string_utc action.deadline) )
+                                ; "outcome", `String "scheduled"
+                                ])) )
+                     ; ( "audit"
+                       , `List (List.map status.audit ~f:(fun line -> `String line)) )
                      ])
                  |> print_json
                else (
                  let mode =
-                   (match status.policy.mode with
-                    | Domain_autonomy.Mode.Off -> "off"
-                    | Domain_autonomy.Mode.Dry_run -> "dry-run"
-                    | Domain_autonomy.Mode.Live -> "live")
+                   match status.policy.mode with
+                   | Domain_autonomy.Mode.Off -> "off"
+                   | Domain_autonomy.Mode.Live -> "live"
                  in
-                 printf "policy:   %s · grace %ds · persistence %ds · snapshot %s%s\n"
+                 printf
+                   "policy:   %s · grace %ds · persistence %ds · snapshot %s%s\n"
                    mode
                    status.policy.grace_seconds
                    status.policy.persistence_seconds
-                   (if status.policy.snapshot_before_fire then "before fire" else "disabled")
+                   (if status.policy.snapshot_before_fire
+                    then "before fire"
+                    else "disabled")
                    (if status.paused then " · PAUSED" else "");
                  if List.is_empty status.active
                  then print_endline "pending:  (none)"
                  else
                    List.iter status.active ~f:(fun action ->
-                     printf "pending:  %s %s (deadline %s)\n"
+                     printf
+                       "pending:  %s %s (deadline %s)\n"
                        action.id
                        action.window_id
                        (Time_ns.to_string_utc action.deadline));
                  if List.is_empty status.candidates
                  then print_endline "funnel:   (empty)"
                  else
-                   List.iter
-                     status.candidates
-                     ~f:(fun (window_id, since, suppressed) ->
-                       printf
-                         "funnel:   %s %s%s\n"
-                         window_id
-                         (match since with
-                          | Some t -> "eligible since " ^ Time_ns.to_string_utc t
-                          | None -> "observing")
-                         (if suppressed then " (suppressed this cycle)" else ""));
-                 if List.is_empty status.audit
-                 then print_endline "audit:    (no entries)";
+                   List.iter status.candidates ~f:(fun (window_id, since, suppressed) ->
+                     printf
+                       "funnel:   %s %s%s\n"
+                       window_id
+                       (match since with
+                        | Some t -> "eligible since " ^ Time_ns.to_string_utc t
+                        | None -> "observing")
+                       (if suppressed then " (suppressed this cycle)" else ""));
+                 if List.is_empty status.audit then print_endline "audit:    (no entries)";
                  List.iter (List.take status.audit 10) ~f:(fun line ->
                    printf "audit:    %s\n" line))))))
 ;;
@@ -1154,65 +984,52 @@ let autonomy_resume_command =
          Deferred.return (Ok (print_endline "resumed"))))
 ;;
 
-(** Configure the persistent autonomy policy. Live mode requires an explicit
-    --approve: everything before that is dry-run. *)
+(** Configure the persistent autonomy policy directly. *)
 let autonomy_configure_command =
   Command.async_or_error
     ~summary:"Configure the persistent autonomy policy"
     (let%map_open.Command socket_name = socket_param
-     and mode =
-       Command.Param.flag
-         "--mode"
-         (Command.Param.optional Command.Param.string)
-         ~doc:"MODE off, dry-run, or live (live requires --approve)"
+     and mode = flag "--mode" (optional string) ~doc:"MODE off or live"
      and grace =
-       Command.Param.flag
+       flag
          "--grace"
-         (Command.Param.optional Command.Param.int)
+         (optional int)
          ~doc:"SECONDS grace countdown before a scheduled close fires"
      and persistence =
-       Command.Param.flag
+       flag
          "--persistence"
-         (Command.Param.optional Command.Param.int)
+         (optional int)
          ~doc:"SECONDS a window must stay an idle, unrecoverable candidate"
      and snapshot =
-       Command.Param.flag
+       flag
          "--snapshot-before-fire"
-         (Command.Param.optional Command.Param.bool)
+         (optional bool)
          ~doc:"YES|NO take a native snapshot just before a live close"
-     and approve =
-       Command.Param.flag
-         "--approve"
-         Command.Param.no_arg
-         ~doc:" approve live mode (without it, live is rejected)"
      in
      fun () ->
-       (match mode with
-        | None -> Deferred.return (Ok ())
-        | Some mode ->
-          (match Domain_autonomy.Mode.of_string (String.lowercase mode) with
-           | Error _ ->
-             Deferred.return
-               (Error
-                  (Error.of_string
-                     ("invalid --mode " ^ mode ^ " (expected off, dry-run, or live)")))
-           | Ok mode ->
-             if (match mode with Domain_autonomy.Mode.Live -> true | _ -> false) && not approve
-             then
-               Deferred.return
-                 (Error
-                    (Error.of_string
-                       "refusing live mode without --approve; the pipeline closes                         tmux windows when live"))
-             else (
-               let runner = Autonomy_runner.create ?socket_name () |> Or_error.ok_exn in
-               Deferred.Or_error.bind
-                 (Autonomy_runner.configure runner ~mode ?grace_seconds:grace
-                        ?persistence_seconds:persistence ?snapshot_before_fire:snapshot ())
-                     ~f:(fun () ->
-                       Deferred.return
-                         (Ok
-                            (printf "autonomy policy updated (mode: %s)\n"
-                               (Domain_autonomy.Mode.label mode))))))))
+       let open Deferred.Or_error.Let_syntax in
+       let%bind mode =
+         (match mode with
+          | None -> Ok None
+          | Some mode ->
+            Domain_autonomy.Mode.of_string (String.lowercase mode)
+            |> Or_error.map ~f:Option.some)
+         |> Deferred.return
+       in
+       let%bind runner = Autonomy_runner.create ?socket_name () |> Deferred.return in
+       let%bind () =
+         Autonomy_runner.configure
+           runner
+           ?mode
+           ?grace_seconds:grace
+           ?persistence_seconds:persistence
+           ?snapshot_before_fire:snapshot
+           ()
+       in
+       let%map status = Autonomy_runner.status runner in
+       printf
+         "autonomy policy updated (mode: %s)\n"
+         (Domain_autonomy.Mode.label status.policy.mode))
 ;;
 
 let autonomy_command =
@@ -1237,7 +1054,6 @@ let commands =
   ; "snapshots", snapshots_command
   ; "service", service_command
   ; "autonomy", autonomy_command
-  ; "migrate", migrate_command
   ; "doctor", doctor_command
   ]
 ;;

@@ -43,7 +43,6 @@ let restore_definition definition =
 ;;
 
 let autonomy_definition definition = contains_any definition.name [ "autonomy" ]
-;;
 
 let config_value contents key =
   String.split_lines contents
@@ -106,9 +105,7 @@ let status_from_inventory inventory =
   in
   let has_managed_save = List.exists managed_definitions ~f:save_definition in
   let has_managed_restore = List.exists managed_definitions ~f:restore_definition in
-  let has_managed_autonomy =
-    List.exists managed_definitions ~f:autonomy_definition
-  in
+  let has_managed_autonomy = List.exists managed_definitions ~f:autonomy_definition in
   let has_legacy_assets =
     (not (List.is_empty legacy)) || not (List.is_empty inventory.legacy_scripts)
   and has_active_legacy =

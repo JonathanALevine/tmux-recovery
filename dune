@@ -1,0 +1,3 @@
+; Local investigation artifacts are not project sources.
+
+(dirs :standard \ dev)
