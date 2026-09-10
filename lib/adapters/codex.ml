@@ -4,7 +4,8 @@ module Recovery = Tmux_recovery_domain.Recovery
 module Workspace = Tmux_recovery_domain.Workspace
 
 type config =
-  { state_database : string
+  { codex_home : string
+  ; state_database : string
   ; logs_database : string
   ; executable_candidates : string list
   ; process_executable : string
@@ -23,7 +24,8 @@ type capture =
   }
 
 let create ~codex_home ~executable_candidates ~process_executable =
-  { state_database = Filename.concat codex_home "state_5.sqlite"
+  { codex_home
+  ; state_database = Filename.concat codex_home "state_5.sqlite"
   ; logs_database = Filename.concat codex_home "logs_2.sqlite"
   ; executable_candidates
   ; process_executable
@@ -64,6 +66,7 @@ let with_readonly_database path f =
   | `Yes ->
     Or_error.try_with (fun () ->
       let database = Sqlite3.db_open ~mode:`READONLY path in
+      Sqlite3.busy_timeout database 1000;
       Exn.protect
         ~f:(fun () -> f database)
         ~finally:(fun () -> ignore (Sqlite3.db_close database : bool)))
@@ -110,17 +113,19 @@ let state_by_thread database thread_id =
     database
     [%string
       "SELECT id, cwd, approval_mode, sandbox_policy FROM threads WHERE id = %{sql_text \
-       thread_id} AND archived = 0 LIMIT 1"]
+       thread_id} AND archived = 0 AND source IN ('cli', 'vscode') LIMIT 1"]
     resume_of_row
 ;;
 
 let latest_state_by_cwd database cwd =
   let current =
     "SELECT id, cwd, approval_mode, sandbox_policy FROM threads WHERE cwd = ? AND \
-     archived = 0 ORDER BY updated_at_ms DESC, updated_at DESC, id DESC LIMIT 1"
+     archived = 0 AND source IN ('cli', 'vscode') ORDER BY updated_at_ms DESC, \
+     updated_at DESC, id DESC LIMIT 1"
   and legacy =
     "SELECT id, cwd, approval_mode, sandbox_policy FROM threads WHERE cwd = ? AND \
-     archived = 0 ORDER BY updated_at DESC, id DESC LIMIT 1"
+     archived = 0 AND source IN ('cli', 'vscode') ORDER BY updated_at DESC, id DESC \
+     LIMIT 1"
   in
   let query sql =
     query_one
@@ -243,15 +248,65 @@ let descendant_pids processes root =
   walk 0 root Int.Set.empty |> fst
 ;;
 
+(* Writer locks identify the conversation actually open now, including after /resume. Log
+   retention, child-agent activity, and stale argv cannot change this identity. *)
+let thread_locks_by_pid ~codex_home lines =
+  let directory = Filename.concat codex_home "thread-writer-locks" in
+  let _, locks =
+    List.fold lines ~init:(None, Int.Map.empty) ~f:(fun (pid, locks) line ->
+      if String.is_prefix line ~prefix:"p"
+      then Int.of_string_opt (String.drop_prefix line 1), locks
+      else if String.is_prefix line ~prefix:"n"
+      then (
+        let path = String.drop_prefix line 1 in
+        match pid, String.chop_suffix (Filename.basename path) ~suffix:".lock" with
+        | Some pid, Some thread_id when String.equal (Filename.dirname path) directory ->
+          (match
+             Recovery.Codex_resume.create ~thread_id ~cwd:"/" ~bypass_approvals:false
+           with
+           | Error _ -> pid |> Option.some, locks
+           | Ok _ ->
+             ( Some pid
+             , Map.update locks pid ~f:(fun existing ->
+                 Set.add (Option.value existing ~default:String.Set.empty) thread_id) ))
+        | _ -> pid, locks)
+      else pid, locks)
+  in
+  Map.filter_map locks ~f:(fun ids ->
+    if Set.length ids = 1 then Set.min_elt ids else None)
+;;
+
 let capture config workspace =
-  let%map processes =
+  let%bind processes =
     Process.run_lines
       ~prog:config.process_executable
-      ~args:[ "-axo"; "pid=,ppid=,command=" ]
+      ~args:[ "-ww"; "-axo"; "pid=,ppid=,command=" ]
       ()
   in
+  let process_scan_failed = Result.is_error processes in
   let processes =
     Result.ok processes |> Option.value ~default:[] |> List.filter_map ~f:parse_process
+  in
+  let codex_pids =
+    List.filter processes ~f:(fun process -> command_is_codex process.command)
+    |> List.map ~f:(fun process -> Int.to_string process.pid)
+  in
+  let%map open_files =
+    if List.is_empty codex_pids
+    then return (Ok [])
+    else
+      Process.run_lines
+        ~prog:
+          (match Sys_unix.file_exists "/usr/sbin/lsof" with
+           | `Yes -> "/usr/sbin/lsof"
+           | `No | `Unknown -> "lsof")
+        ~args:[ "-n"; "-P"; "-w"; "-p"; String.concat codex_pids ~sep:","; "-Fpn" ]
+        ()
+  in
+  let locks =
+    thread_locks_by_pid
+      ~codex_home:config.codex_home
+      (Result.ok open_files |> Option.value ~default:[])
   in
   let detected_panes =
     Map.data workspace.Workspace.panes
@@ -269,44 +324,41 @@ let capture config workspace =
         String.equal
           (pane.current_command |> Filename.basename |> String.lowercase)
           "codex"
-        || Map.find workspace.windows pane.window_id
-           |> Option.exists ~f:(fun window ->
-             String.equal (String.lowercase window.Workspace.Window.name) "codex")
+        || (process_scan_failed
+            && Map.find workspace.windows pane.window_id
+               |> Option.exists ~f:(fun window ->
+                 String.equal (String.lowercase window.Workspace.Window.name) "codex"))
         || List.exists related_processes ~f:(fun (_, process) ->
           command_is_codex process.command)
       in
       if not detected then None else Some (pane, related_processes))
   in
-  let panes_per_cwd =
-    List.fold detected_panes ~init:String.Map.empty ~f:(fun counts (pane, _) ->
-      Map.update counts pane.Workspace.Pane.cwd ~f:(function
-        | None -> 1
-        | Some count -> count + 1))
-  in
   let resumes =
     detected_panes
     |> List.filter_map ~f:(fun (pane, related_processes) ->
-      let pids =
-        related_processes
-        |> List.sort ~compare:(fun (left, _) (right, _) -> Int.descending left right)
-        |> List.map ~f:(fun (_, process) -> process.pid)
+      let related_processes =
+        List.filter related_processes ~f:(fun (_, process) ->
+          command_is_codex process.command)
+        |> List.sort ~compare:(fun (left, _) (right, _) -> Int.ascending left right)
       in
+      let pids = related_processes |> List.map ~f:(fun (_, process) -> process.pid) in
       let explicit_thread_id =
-        List.find_map related_processes ~f:(fun (_, process) ->
-          explicit_resume_thread_id process.command)
-      in
-      let allow_cwd_fallback =
-        Map.find panes_per_cwd pane.cwd |> Option.value ~default:0 |> Int.equal 1
+        match List.find_map pids ~f:(Map.find locks) with
+        | Some _ as thread -> thread
+        | None ->
+          List.find_map related_processes ~f:(fun (_, process) ->
+            explicit_resume_thread_id process.command)
       in
       lookup_for_processes
         ?explicit_thread_id
-        ~allow_cwd_fallback
+        ~allow_cwd_fallback:false
         config
         ~pids
         ~fallback_cwd:pane.cwd
       |> Result.ok
       |> Option.join
-      |> Option.map ~f:(fun resume -> pane.id, resume))
+      |> Option.map ~f:(fun resume ->
+        pane.id, { resume with Recovery.Codex_resume.cwd = pane.cwd }))
     |> String.Map.of_alist_reduce ~f:(fun _ right -> right)
   in
   { resumes

@@ -89,6 +89,12 @@ let with_codex_databases f =
         state
         "INSERT INTO threads VALUES ('019f8c7e-0000-7000-8000-000000000002', \
          '/tmp/project', 20, 20000, 'never', '{\"type\":\"danger-full-access\"}', 0)";
+      sqlite_exec state "ALTER TABLE threads ADD COLUMN source TEXT DEFAULT 'cli'";
+      sqlite_exec
+        state
+        "INSERT INTO threads VALUES ('019f8c7e-0000-7000-8000-000000000003', \
+         '/tmp/project', 30, 30000, 'never', '{\"type\":\"disabled\"}', 0, \
+         '{\"subagent\":{}}')";
       assert (Sqlite3.db_close state);
       let logs = Sqlite3.db_open (Filename.concat root "logs_2.sqlite") in
       sqlite_exec
@@ -185,7 +191,7 @@ let%test_unit "cwd fallback can be disabled when same-cwd Codex panes are ambigu
     assert (Option.is_none resume))
 ;;
 
-let%test_unit "a Codex-named window remains detected after its process exits" =
+let%test_unit "an exited Codex window does not block new last-good snapshots" =
   with_codex_databases (fun config ->
     let session : Workspace.Session.t = { id = "$1"; name = "work"; attached = false }
     and window : Workspace.Window.t = { id = "@1"; name = "codex"; layout = "" }
@@ -217,8 +223,56 @@ let%test_unit "a Codex-named window remains detected after its process exits" =
     let capture =
       Thread_safe.block_on_async_exn (fun () -> Codex.capture config workspace)
     in
+    assert (not (Set.mem capture.detected_panes "%1"));
+    [%test_eq: int] (Map.length capture.resumes) 0;
+    let unavailable_process_scan =
+      Codex.create
+        ~codex_home:"/nonexistent/tmux-recovery-codex-test"
+        ~executable_candidates:[]
+        ~process_executable:"/nonexistent/tmux-recovery-ps-test"
+    in
+    let capture =
+      Thread_safe.block_on_async_exn (fun () ->
+        Codex.capture unavailable_process_scan workspace)
+    in
     assert (Set.mem capture.detected_panes "%1");
-    [%test_eq: int] (Map.length capture.resumes) 1)
+    [%test_eq: int] (Map.length capture.resumes) 0)
+;;
+
+let%test_unit "writer locks require an exact directory and unambiguous process" =
+  let first = "019f8c7e-0000-7000-8000-000000000001"
+  and second = "019f8c7e-0000-7000-8000-000000000002" in
+  let lock id = "n/tmp/codex/thread-writer-locks/" ^ id ^ ".lock" in
+  let found =
+    Codex.thread_locks_by_pid
+      ~codex_home:"/tmp/codex"
+      [ "p42"
+      ; lock first
+      ; lock first
+      ; "p43"
+      ; lock first
+      ; lock second
+      ; "p44"
+      ; "n/tmp/other/thread-writer-locks/" ^ first ^ ".lock"
+      ; "p45"
+      ; lock "not-a-thread"
+      ]
+  in
+  [%test_eq: string option] (Map.find found 42) (Some first);
+  [%test_eq: int] (Map.length found) 1
+;;
+
+let%test_unit "child agent threads are never restored as interactive chats" =
+  with_codex_databases (fun config ->
+    let resume =
+      Codex.lookup_for_processes
+        config
+        ~explicit_thread_id:"019f8c7e-0000-7000-8000-000000000003"
+        ~pids:[]
+        ~fallback_cwd:"/tmp/project"
+      |> Or_error.ok_exn
+    in
+    assert (Option.is_none resume))
 ;;
 
 let native_fixture ~codex_unresolved ~id ~created_at =

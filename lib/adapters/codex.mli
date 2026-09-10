@@ -40,6 +40,7 @@ val lookup_for_processes
   -> Recovery.Codex_resume.t option Or_error.t
 
 val explicit_resume_thread_id : string -> string option
+val thread_locks_by_pid : codex_home:string -> string list -> string Int.Map.t
 
 (** Capture the smallest durable resume record for each detected Codex pane. Provider
     failures degrade individual panes instead of failing the workspace save. *)

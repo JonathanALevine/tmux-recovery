@@ -734,6 +734,8 @@ let resume_codex config ~pane_id ~cwd ~executable ~thread_id ~bypass_approvals =
     ; safe_cwd cwd
     ; executable
     ; "resume"
+    ; "-C"
+    ; cwd
     ; thread_id
     ]
     @ if bypass_approvals then [ "--dangerously-bypass-approvals-and-sandbox" ] else []
