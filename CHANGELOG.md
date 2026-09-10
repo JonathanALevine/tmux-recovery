@@ -18,7 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   settings are preserved.
 - Enter expands/collapses tree branches. Details follow selection automatically;
   Tab switches focus to scroll the read-only detail viewer with up/down and
-  Home/End. A ◀ arrow marks focus while panel heading colors remain unchanged.
+  Home/End. A ▶ arrow before the heading marks focus while its color remains unchanged.
+  The focus-switch hints read `Tab detail` and `Tab navigation`.
   Left/right, Shift-Tab, and Page Up/Down are unbound. Narrow terminals
   show navigation above details. Status groups recovery warnings in an Affected
   panes section with each application's location, cause, and recovery result.
