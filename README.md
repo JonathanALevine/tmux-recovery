@@ -65,7 +65,9 @@ offers `snapshot` and `snapshots`.
 
 Run `tmux-recovery` to open the TUI. Select an item in the tree to view its
 details or live pane output. The detail pane follows the selection automatically.
-Tab switches focus between navigation and the read-only detail viewer. The footer
+Tab switches focus between navigation and the read-only detail viewer. A bright
+blue, heavy rule beneath the active heading marks focus; the inactive rule is
+muted and thin. Both rules keep their space when focus moves. The footer
 shows `Tab detail · ↑/↓ navigate` when navigation has focus and
 `Tab navigation · ↑/↓ scroll` when detail has focus. Headings align with their
 pane's content, keeping the same position and color in both modes. On narrow terminals,
