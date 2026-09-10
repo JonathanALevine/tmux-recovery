@@ -14,7 +14,11 @@
 
 (library
  (name tui_refresh_spam_tests)
- (modules refresh_spam_test navigation_test detail_scroll_test)
+ (modules
+  refresh_spam_test
+  navigation_test
+  detail_scroll_test
+  affected_panes_test)
  (libraries
   async
   bonsai_test
