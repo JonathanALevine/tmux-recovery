@@ -81,8 +81,7 @@ let () =
   Bonsai_term_test.set_dimensions warning { width = 40; height = 14 };
   Handle.recompute_view_until_stable warning;
   Bonsai_term_test.send_event warning (Key_press { key = Home; mods = [] });
-  Bonsai_term_test.send_event warning (Key_press { key = Page `Down; mods = [] });
-  move_down warning 3;
+  move_down warning 10;
   show_view warning;
   print_endline "--- EMPTY STATUS ---";
   let empty =

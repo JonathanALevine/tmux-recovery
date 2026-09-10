@@ -210,7 +210,6 @@ type action =
   | Move of int * int
   | Toggle_focus
   | Scroll_detail_to of int
-  | Scroll_detail_by of int * int
   | Clamp_detail_offset of int
   | Toggle_expanded
   | Refresh_started
@@ -292,10 +291,8 @@ let apply_action _context model action =
          | Navigation -> Detail
          | Detail -> Navigation)
     }
-  | (Scroll_detail_to _ | Scroll_detail_by _) when equal_focus model.focus Navigation ->
-    model
+  | Scroll_detail_to _ when equal_focus model.focus Navigation -> model
   | Scroll_detail_to detail_offset -> { model with detail_offset }
-  | Scroll_detail_by (delta, maximum) -> scroll_by delta maximum
   | Clamp_detail_offset maximum ->
     { model with detail_offset = Int.min model.detail_offset maximum }
   | Move (delta, maximum) when equal_focus model.focus Detail -> scroll_by delta maximum
@@ -462,15 +459,11 @@ let crop_to view ~width ~height =
   View.crop ~r ~b view
 ;;
 
-let panel ?(focused = false) ~title ~width ~height body =
-  let title = (if focused then "● " else "") ^ title in
+let panel ?(focused = false) ?(suffix = "") ~title ~width ~height body =
+  let title = title ^ (if focused then " ◀" else "") ^ suffix in
   let title =
     View.text
-      ~attrs:
-        [ Attr.bold
-        ; Attr.fg (if focused then selected_text else cyan)
-        ; Attr.bg terminal_background
-        ]
+      ~attrs:[ Attr.bold; Attr.fg cyan; Attr.bg terminal_background ]
       (" " ^ title ^ String.make (Int.max 0 (width - String.length title - 1)) ' ')
   in
   let content = View.vcat (title :: body) |> crop_to ~width ~height in
@@ -1051,17 +1044,17 @@ let detail_viewport model dimensions =
 let render_detail model viewport =
   let { body; width; height; capacity; total; offset; maximum } = viewport in
   let title = if is_preview model.selected then "PREVIEW" else "DETAIL" in
-  let title =
+  let suffix =
     if maximum = 0 || capacity = 0
-    then title
+    then ""
     else
       [%string
-        "%{title} · %{offset + 1#Int}–%{Int.min total (offset + \
-         capacity)#Int}/%{total#Int}"]
+        " · %{offset + 1#Int}–%{Int.min total (offset + capacity)#Int}/%{total#Int}"]
   in
   panel
     ~focused:(equal_focus model.focus Detail)
     ~title
+    ~suffix
     ~width
     ~height
     [ View.crop ~t:offset body |> crop_to ~width ~height:capacity ]
@@ -1077,8 +1070,7 @@ let render model ({ Dimensions.width; height } as dimensions) =
          " Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c \
           cancel · p pause "
        | Detail ->
-         " Tab tree · ↑/↓ scroll · PgUp/PgDn · Home/End · r refresh · q quit · c cancel \
-          · p pause ")
+         " Tab tree · ↑/↓ scroll · Home/End · r refresh · q quit · c cancel · p pause ")
   in
   let body_height = Int.max 1 (height - 1) in
   let body =
@@ -1233,7 +1225,6 @@ let app
       let scroll_to offset =
         inject (Scroll_detail_to (Int.clamp_exn offset ~min:0 ~max:viewport.maximum))
       in
-      let scroll_by delta = inject (Scroll_detail_by (delta, viewport.maximum)) in
       let move delta = inject (Move (delta, viewport.maximum)) in
       let cancel_oldest () =
         match model.autonomy.active with
@@ -1276,12 +1267,6 @@ let app
       | Key_press { key = Arrow `Down; mods = [] } -> move 1
       | Key_press { key = Arrow `Up; mods = [] } -> move (-1)
       | Key_press { key = Enter; mods = [] } -> inject Toggle_expanded
-      | Key_press { key = Page direction; mods = [] } ->
-        let delta = Int.max 1 (viewport.capacity - 1) in
-        scroll_by
-          (match direction with
-           | `Down -> delta
-           | `Up -> -delta)
       | Key_press { key = Home; mods = [] } -> scroll_to 0
       | Key_press { key = End; mods = [] } -> scroll_to viewport.maximum
       | Key_press { key = ASCII 'r' | ASCII 'R'; mods = [] } ->
