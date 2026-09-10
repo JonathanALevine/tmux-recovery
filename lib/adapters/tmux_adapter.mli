@@ -43,6 +43,10 @@ val close_window : config -> window_id:string -> unit Or_error.t Deferred.t
     on this list must never be a cleanup candidate. An absent server yields []. *)
 val viewed_window_ids : config -> string list Or_error.t Deferred.t
 
+(** Positive tmux [pane_dead] evidence. Missing/invalid observations are errors;
+    a missing pane is never inferred to have exited. *)
+val exited_pane_ids : config -> String.Set.t Or_error.t Deferred.t
+
 (** Fingerprint of a window's activity: pane IDs, pane PIDs, current commands,
     and the most recent captured output of each pane. Any change between ticks
     resets the quiescence persistence period. *)

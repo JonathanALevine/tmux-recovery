@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Recover current interactive Codex conversations from their writer locks, keep
+  moved working directories, reject child-agent references, and avoid guessing
+  conversations from directory recency. Exited Codex-named shells no longer
+  prevent good snapshots from advancing.
+- Preserve process, writer-lock, and database failures as observation errors.
+  Failed observations cannot replace a good snapshot or advance cleanup; pending
+  cleanup is cancelled and must accumulate persistence and grace again.
+- Autonomous cleanup requires every pane in the target window to be positively
+  exited according to tmux and unrecoverable. Live and recoverable sibling panes
+  protect the entire window, including during both fire-time checks.
+- Run the real-tmux integration test using the configured tmux executable on
+  macOS and Linux, propagate command errors, and fail on timeout.
+
 ## [0.3.0] - 2026-01-01
 
 ### Added

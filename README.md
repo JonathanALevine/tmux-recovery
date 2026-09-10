@@ -115,5 +115,13 @@ opam exec -- dune build @all
 opam exec -- dune runtest --force
 ```
 
+Codex capture requires `ps` and `lsof` alongside tmux. On Debian/Ubuntu, install
+`tmux procps lsof`; macOS includes `ps` and `lsof`.
+
+Autonomous cleanup defaults to dry-run. It only considers unviewed windows whose
+panes have all exited and have no recovery action. Live Codex processes and live
+or recoverable sibling panes are protected. Observation failures cancel pending
+cleanup; recovery starts a new persistence and grace period.
+
 Snapshots are stored under
 `~/.local/share/tmux-recovery/snapshots/` by default.

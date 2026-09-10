@@ -137,15 +137,15 @@ let%test_unit "detect flags only blocked windows that no client is viewing" =
   and recovery = test_plan () in
   (* The client views @1, so even though @2's session $2 is unattached and @1's
      session $1 is attached, only the exact viewed window is protected. *)
-  let found = Autonomy.detect ~workspace ~recovery ~viewed:[ "@1" ] in
+  let found = Autonomy.detect ~workspace ~recovery ~exited_panes:(String.Set.of_list [ "%1"; "%2" ]) ~viewed:[ "@1" ] in
   [%test_eq: (string * string * string) list]
     found
     [ "@2", "$2", "no durable Codex thread reference was captured for this pane" ];
   (* Nothing viewed: both blocked windows are candidates. *)
-  let found = Autonomy.detect ~workspace ~recovery ~viewed:[] in
+  let found = Autonomy.detect ~workspace ~recovery ~exited_panes:(String.Set.of_list [ "%1"; "%2" ]) ~viewed:[] in
   [%test_eq: int] (List.length found) 2;
   (* Viewing @2 protects exactly that window. *)
-  let found = Autonomy.detect ~workspace ~recovery ~viewed:[ "@2" ] in
+  let found = Autonomy.detect ~workspace ~recovery ~exited_panes:(String.Set.of_list [ "%1"; "%2" ]) ~viewed:[ "@2" ] in
   [%test_eq: string list]
     (List.map found ~f:(fun (w, _, _) -> w))
     [ "@1" ]
@@ -439,4 +439,24 @@ let%test_unit "state serializes to and from yojson without loss" =
   (match Autonomy.state_of_yojson (`String "garbage") with
    | Error _ -> ()
    | Ok _ -> failwith "expected a parse failure")
+;;
+
+let%test_unit "missing thread identity never makes a live pane disposable" =
+  let workspace = test_workspace () in
+  let recovery = Recovery.plan workspace in
+  [%test_eq: int]
+    (List.length (Autonomy.detect ~workspace ~recovery ~viewed:[]
+      ~exited_panes:String.Set.empty)) 0
+;;
+
+let%test_unit "one live or recoverable sibling protects the entire window" =
+  let workspace = test_workspace () in
+  let pane = Map.find_exn workspace.panes "%3" in
+  let sibling = { pane with Workspace.Pane.window_id = "@2"; index = 1 } in
+  let workspace = { workspace with panes = Map.set workspace.panes ~key:"%3" ~data:sibling } in
+  let recovery = Recovery.plan workspace in
+  List.iter [ [ "%2" ]; [ "%2"; "%3" ] ] ~f:(fun exited ->
+    let found = Autonomy.detect ~workspace ~recovery ~viewed:[]
+      ~exited_panes:(String.Set.of_list exited) in
+    assert (List.is_empty found))
 ;;

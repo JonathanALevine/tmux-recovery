@@ -12,6 +12,7 @@ type deps =
   ; observe : unit -> Workspace.t Or_error.t Deferred.t
   ; plan : Workspace.t -> Recovery.plan Or_error.t Deferred.t
   ; viewed : unit -> string list Or_error.t Deferred.t
+  ; exited_panes : unit -> String.Set.t Or_error.t Deferred.t
   ; signature : window_id:string -> string Or_error.t Deferred.t
   ; server_identity : unit -> string Or_error.t Deferred.t
   ; snapshot_save : unit -> Domain_snapshot.summary Or_error.t Deferred.t
@@ -48,12 +49,13 @@ let default_deps ?socket_name ?now ?snapshot_dir () =
   ; plan =
       (fun workspace ->
        Deferred.map (Codex.capture codex workspace) ~f:(fun capture ->
-         Ok
-           (Recovery.plan
-              ~codex_resumes:capture.resumes
-              ~codex_detected:capture.detected_panes
-              workspace)))
+         match capture.observation_errors with
+         | _ :: _ as errors -> Error (Error.of_list errors)
+         | [] ->
+           Ok (Recovery.plan ~codex_resumes:capture.resumes
+             ~codex_detected:capture.detected_panes workspace)))
   ; viewed = (fun () -> Tmux_adapter.viewed_window_ids tmux)
+  ; exited_panes = (fun () -> Tmux_adapter.exited_pane_ids tmux)
   ; signature = (fun ~window_id -> Tmux_adapter.activity_signature tmux ~window_id)
   ; server_identity = (fun () -> Tmux_adapter.server_identity tmux)
   ; snapshot_save =
@@ -148,7 +150,8 @@ let observe_candidate t ~window_id =
   let%bind workspace = t.deps.observe () in
   let%bind plan = t.deps.plan workspace in
   let%bind viewed = t.deps.viewed () in
-  let detected = Autonomy.detect ~workspace ~recovery:plan ~viewed in
+  let%bind exited_panes = t.deps.exited_panes () in
+  let detected = Autonomy.detect ~workspace ~recovery:plan ~viewed ~exited_panes in
   (match List.find detected ~f:(fun (id, _, _) -> String.equal id window_id) with
    | None ->
      Deferred.return
@@ -261,17 +264,22 @@ let tick t =
        (match state.paused with
         | true -> Deferred.return (Ok (Skipped "autonomy is paused"))
         | false ->
-          let%bind workspace = t.deps.observe () in
-          let%bind plan = t.deps.plan workspace in
-          let%bind viewed = t.deps.viewed () in
-          let detected = Autonomy.detect ~workspace ~recovery:plan ~viewed in
-          let%bind candidates =
+          let observation =
+            let%bind workspace = t.deps.observe () in
+            let%bind plan = t.deps.plan workspace in
+            let%bind viewed = t.deps.viewed () in
+            let%bind exited_panes = t.deps.exited_panes () in
+            let detected = Autonomy.detect ~workspace ~recovery:plan ~viewed ~exited_panes in
             Deferred.map
               (Deferred.List.map detected ~how:`Sequential
                  ~f:(fun (window_id, session_id, reason) ->
                    candidate_of t workspace ~window_id ~session_id ~reason))
-              ~f:(fun results -> Ok (List.filter_map results ~f:Fn.id))
+              ~f:(fun results -> Ok (List.filter_opt results))
           in
+          let%bind observation = Deferred.map observation ~f:(fun result -> Ok result) in
+          (* Lost observation cancels the funnel, including previously due actions.
+             Recovery must start a new persistence/grace cycle after an outage. *)
+          let candidates = Result.ok observation |> Option.value ~default:[] in
           let now = t.deps.now () in
           let state = Autonomy.tick ~now ~candidates state in
           let%bind state, fired =
@@ -296,7 +304,9 @@ let tick t =
           in
           let%bind () = Deferred.return (Autonomy_store.save_state t.store state) in
           let%bind () = Deferred.return (Autonomy_store.sync_audit_unlocked t.store (Autonomy.audit state)) in
-          Deferred.return (Ok (Reconciled { policy = state.config; state; fired })))))
+          Deferred.return
+            (Result.map observation ~f:(fun _ ->
+              Reconciled { policy = state.config; state; fired })))))
 ;;
 
 let status t =

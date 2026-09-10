@@ -23,9 +23,15 @@ let plan t =
   | Error _ as error -> return error
   | Ok workspace ->
     let%map capture = Codex.capture t.codex workspace in
+    let plan =
+      Domain_recovery.plan
+        ~codex_resumes:capture.resumes
+        ~codex_detected:capture.detected_panes
+        workspace
+    in
     Ok
-      (Domain_recovery.plan
-         ~codex_resumes:capture.resumes
-         ~codex_detected:capture.detected_panes
-         workspace)
+      { plan with
+        warnings =
+          plan.warnings @ List.map capture.observation_errors ~f:Error.to_string_hum
+      }
 ;;

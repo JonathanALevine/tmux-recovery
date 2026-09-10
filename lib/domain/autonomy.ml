@@ -143,7 +143,7 @@ let paused (state : state) = state.paused
 
 let window_panes workspace ~window_id = Workspace.panes_for_window workspace ~window_id
 
-let detect ~(workspace : Workspace.t) ~(recovery : Recovery.plan) ~viewed =
+let detect ~(workspace : Workspace.t) ~(recovery : Recovery.plan) ~viewed ~exited_panes =
   let action_by_pane =
     List.fold recovery.decisions ~init:String.Map.empty ~f:(fun acc decision ->
       Map.set acc ~key:decision.pane_id ~data:decision)
@@ -152,8 +152,17 @@ let detect ~(workspace : Workspace.t) ~(recovery : Recovery.plan) ~viewed =
   workspace.windows
   |> Map.data
   |> List.filter_map ~f:(fun window ->
+    let panes = window_panes workspace ~window_id:window.id in
+    let all_eligible =
+      not (List.is_empty panes)
+      && List.for_all panes ~f:(fun pane ->
+        Set.mem exited_panes pane.Workspace.Pane.id
+        && Map.find action_by_pane pane.id
+           |> Option.exists ~f:(fun decision ->
+             Recovery.Action.equal decision.action Recovery.Action.Blocked))
+    in
     let blocked =
-      window_panes workspace ~window_id:window.id
+      panes
       |> List.find_map ~f:(fun pane ->
         match Map.find action_by_pane pane.Workspace.Pane.id with
         | Some decision when Recovery.Action.equal decision.action Recovery.Action.Blocked
@@ -165,6 +174,7 @@ let detect ~(workspace : Workspace.t) ~(recovery : Recovery.plan) ~viewed =
     | Some decision ->
       (match Set.mem viewed window.id with
        | true -> None
+       | false when not all_eligible -> None
        | false ->
          let links =
            List.filter workspace.window_links ~f:(fun link ->

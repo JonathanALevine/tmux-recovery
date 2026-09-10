@@ -15,6 +15,8 @@ type launch =
 type capture =
   { resumes : Recovery.Codex_resume.t String.Map.t
   ; detected_panes : String.Set.t
+  ; observation_errors : Error.t list
+  (** Provider failures, distinct from a successful lookup with no thread. *)
   }
 
 val create
@@ -45,6 +47,15 @@ val thread_locks_by_pid : codex_home:string -> string list -> string Int.Map.t
 (** Capture the smallest durable resume record for each detected Codex pane. Provider
     failures degrade individual panes instead of failing the workspace save. *)
 val capture : config -> Workspace.t -> capture Deferred.t
+
+(** Resolve a captured process/open-file inventory. Shared by live capture and
+    deterministic provider regression tests. Database reads are synchronous. *)
+val capture_from_observations
+  :  config
+  -> Workspace.t
+  -> processes:string list Or_error.t
+  -> open_files:string list Or_error.t
+  -> capture
 
 (** Revalidate the provider record and installed executable immediately before launch. *)
 val validate : config -> Recovery.Codex_resume.t -> launch Or_error.t Deferred.t

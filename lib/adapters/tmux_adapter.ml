@@ -667,6 +667,21 @@ let viewed_window_ids config =
    | Error _ as error -> error)
 ;;
 
+let exited_pane_ids config =
+  let open Deferred.Or_error.Let_syntax in
+  let%bind lines =
+    run_lines config [ "list-panes"; "-a"; "-F"; "#{pane_id}|#{pane_dead}" ]
+  in
+  List.map lines ~f:(fun line ->
+    match String.split line ~on:'|' with
+    | [ id; "1" ] when String.is_prefix id ~prefix:"%" -> Ok (Some id)
+    | [ id; "0" ] when String.is_prefix id ~prefix:"%" -> Ok None
+    | _ -> Or_error.error_string "could not determine whether tmux panes have exited")
+  |> Or_error.combine_errors
+  |> Or_error.map ~f:(fun ids -> List.filter_opt ids |> String.Set.of_list)
+  |> Deferred.return
+;;
+
 let digest_lines prefix lines =
   Sha256.digest_string (String.concat ~sep:"\n" (prefix @ lines))
 ;;

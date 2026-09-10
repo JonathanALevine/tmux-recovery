@@ -137,6 +137,7 @@ let autonomy_runner =
       ; observe = (fun () -> Deferred.return (Ok workspace))
       ; plan = (fun ws -> Deferred.return (Ok (Recovery.plan ws)))
       ; viewed = (fun () -> Deferred.return (Ok []))
+      ; exited_panes = (fun () -> Deferred.return (Ok String.Set.empty))
       ; signature = (fun ~window_id:_ -> Deferred.return (Ok "fixture"))
       ; server_identity = (fun () -> Deferred.return (Ok "fixture"))
       ; snapshot_save =

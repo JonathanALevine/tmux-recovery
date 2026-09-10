@@ -16,7 +16,7 @@ open Async
 module Runner = Tmux_recovery_application.Autonomy
 module Domain = Tmux_recovery_domain.Autonomy
 
-let tmux = "/usr/bin/tmux"
+let tmux = Sys.getenv "TMUX_RECOVERY_TMUX" |> Option.value ~default:"tmux"
 
 (** [let%bind] for ['a Or_error.t Deferred.t] chains. *)
 module Let_syntax = struct
@@ -28,8 +28,8 @@ end
     stay intact. A non-zero exit is surfaced as an error. *)
 let run_tmux socket args =
   Deferred.bind
-    (Process.run_lines ~prog:tmux ~args:("-L" :: socket :: args) ())
-    ~f:(fun _output -> Deferred.return (Ok ()))
+    (Process.run_lines ~prog:tmux ~args:([ "-L"; socket; "-f"; "/dev/null" ] @ args) ())
+    ~f:(fun output -> Deferred.return (Or_error.map output ~f:(fun _ -> ())))
 ;;
 
 let list_windows socket session =
@@ -39,16 +39,12 @@ let list_windows socket session =
     ()
 ;;
 
-(** Create a window whose pane runs a process posing as "codex" (argv[0]).
-    Codex detection matches the process command, finds no durable thread
-    reference, and the recovery plan marks the pane blocked: the window is
-    exactly the "idle, unrecoverable" candidate the autonomy funnel tracks. *)
-let make_blocked_window socket session ~name =
+(** Retain an exited Codex pane. Only positive pane_dead evidence can make a
+    blocked pane disposable; the test never asks cleanup to kill a live agent. *)
+let make_blocked_window socket session ~name ~program =
   let%bind () = run_tmux socket [ "new-window"; "-t"; session; "-n"; name; "-c"; "/tmp" ] in
-  let%bind () =
-    run_tmux socket [ "send-keys"; "-t"; (session ^ ":" ^ name); "exec -a codex sleep 600"; "C-m" ]
-  in
-  (* Give the pane time to exec so [pane_current_command] reads "codex". *)
+  let%bind () = run_tmux socket [ "set-option"; "-w"; "-t"; session ^ ":" ^ name; "remain-on-exit"; "on" ] in
+  let%bind () = run_tmux socket [ "respawn-pane"; "-k"; "-t"; session ^ ":" ^ name; program ] in
   Clock_ns.after (Time_ns.Span.of_int_sec 1) >>| fun _ -> Ok ()
 ;;
 
@@ -114,10 +110,13 @@ let run_all () =
       Deferred.unit)
   in
   let body : unit Or_error.t Deferred.t =
-    let _ = Core_unix.mkdir ~perm:0o755 dir in
+    let _ = Core_unix.mkdir ~perm:0o700 dir in
+    let program = Filename.concat dir "codex" in
+    Out_channel.write_all program ~data:"#!/bin/sh\nexit 0\n";
+    Core_unix.chmod program ~perm:0o700;
     let%bind () = run_tmux socket [ "new-session"; "-d"; "-s"; "int"; "-x"; "100"; "-y"; "30" ] in
-    let%bind () = make_blocked_window socket "int" ~name:"victim" in
-    let%bind () = make_blocked_window socket "int" ~name:"keep" in
+    let%bind () = make_blocked_window socket "int" ~name:"victim" ~program in
+    let%bind () = make_blocked_window socket "int" ~name:"keep" ~program in
     let%bind lines = list_windows socket "int" in
     let%bind victim_id = Deferred.return (window_id_of lines "victim") in
     let%bind survivor_id = Deferred.return (window_id_of lines "keep") in
@@ -132,6 +131,20 @@ let run_all () =
       Runner.configure runner ~mode:Domain.Mode.Live ~grace_seconds:5 ~persistence_seconds:2
         ~snapshot_before_fire:true ()
     in
+    (* A live shell sibling protects an otherwise exited/blocked window. *)
+    let%bind () = run_tmux socket [ "split-window"; "-d"; "-t"; "int:victim"; "-c"; "/tmp" ] in
+    let%bind protected_tick = Runner.tick runner in
+    let%bind () =
+      (match protected_tick with
+       | Runner.Reconciled r ->
+         Deferred.return (check "mixed window protected"
+           (string_of_int (Map.length r.state.candidates)) "1")
+       | Runner.Skipped reason -> Deferred.return (Error (Error.of_string reason)))
+    in
+    let%bind () = run_tmux socket [ "kill-pane"; "-t"; "int:victim.1" ] in
+    (* Reset the fixture's funnel before the lifecycle assertions below. *)
+    let%bind () = Runner.pause runner in
+    let%bind () = Runner.resume runner in
     (* t0: first quiescence sample for both windows. *)
     let%bind t0 = Runner.tick runner in
     let%bind () =
@@ -205,6 +218,23 @@ let run_all () =
          in
          (* A native snapshot of the isolated server was taken before the close. *)
          let%bind () = check_snapshot dir in
+         (* A failed process observation must not replace the saved snapshot. *)
+         let pointer = Filename.concat dir "snapshots/last-good" in
+         let before = Core_unix.readlink pointer in
+         let broken_codex = Codex.create ~codex_home:dir ~executable_candidates:[]
+           ~process_executable:"/nonexistent/tmux-recovery-ps" in
+         let snapshots = Tmux_recovery_application.Snapshot.create
+           ~socket_name:socket ~native_directory:(Filename.concat dir "snapshots")
+           ~runtime_directory:(Filename.concat dir "runtime") ~codex:broken_codex () in
+         let%bind failed_save = Deferred.map
+           (Tmux_recovery_application.Snapshot.save snapshots
+             ~trigger:Tmux_recovery_domain.Native_snapshot.Trigger.Manual)
+           ~f:(fun result -> Ok result) in
+         let%bind () =
+           if Result.is_error failed_save && String.equal before (Core_unix.readlink pointer)
+           then Deferred.return (Ok ())
+           else Deferred.return (Or_error.error_string "failed capture changed last-good")
+         in
          (* Switch to dry-run. A policy change resets the funnel, so the
             surviving window must re-accumulate persistence and grace before it
             can fire. The dry-run fire is recorded and the window survives. *)
@@ -289,15 +319,18 @@ let () =
     Deferred.bind d ~f:(function
       | Ok () ->
         print_endline "PASS: autonomous pipeline end-to-end (isolated socket)";
+        Out_channel.flush stdout;
         Stdlib.exit 0
       | Error e ->
         print_endline ("FAIL: " ^ Error.to_string_hum e);
+        Out_channel.flush stdout;
         Stdlib.exit 1)
   in
   let _ =
     Deferred.bind (Clock_ns.after (Time_ns.Span.of_int_sec 60)) ~f:(fun _ ->
       print_endline "TIMEOUT: 60s elapsed without completion";
-      Deferred.unit)
+      Out_channel.flush stdout;
+      Stdlib.exit 1)
   in
   never (Scheduler.go ())
 ;;

@@ -21,6 +21,7 @@ type launch =
 type capture =
   { resumes : Recovery.Codex_resume.t String.Map.t
   ; detected_panes : String.Set.t
+  ; observation_errors : Error.t list
   }
 
 let create ~codex_home ~executable_candidates ~process_executable =
@@ -153,14 +154,18 @@ let thread_for_pid database pid =
 ;;
 
 let thread_for_processes config pids =
-  with_readonly_database config.logs_database (fun database ->
-    List.find_map pids ~f:(fun pid ->
-      match thread_for_pid database pid with
-      | Ok (Some thread_id) -> Some thread_id
-      | Ok None | Error _ -> None)
-    |> Option.some
-    |> Or_error.return)
-  |> Or_error.map ~f:Option.join
+  match pids with
+  | [] -> Ok None
+  | _ ->
+    with_readonly_database config.logs_database (fun database ->
+      let rec find = function
+        | [] -> Ok None
+        | pid :: rest ->
+          (match thread_for_pid database pid with
+           | Ok None -> find rest
+           | (Ok (Some _) | Error _) as result -> result)
+      in
+      find pids)
 ;;
 
 let lookup_for_processes
@@ -179,14 +184,16 @@ let lookup_for_processes
   | None ->
     let from_process =
       match thread_for_processes config pids with
-      | Error _ | Ok None -> Ok None
+      | Error _ as error -> error
+      | Ok None -> Ok None
       | Ok (Some thread_id) -> state_by_thread_id thread_id
     in
     (match from_process with
      | Ok (Some _) as result -> result
      | (Error _ | Ok None) when allow_cwd_fallback ->
        lookup_latest_for_cwd config ~cwd:fallback_cwd
-     | Error _ | Ok None -> Ok None)
+     | Error _ as error -> error
+     | Ok None -> Ok None)
 ;;
 
 type process =
@@ -250,7 +257,7 @@ let descendant_pids processes root =
 
 (* Writer locks identify the conversation actually open now, including after /resume. Log
    retention, child-agent activity, and stale argv cannot change this identity. *)
-let thread_locks_by_pid ~codex_home lines =
+let thread_lock_sets_by_pid ~codex_home lines =
   let directory = Filename.concat codex_home "thread-writer-locks" in
   let _, locks =
     List.fold lines ~init:(None, Int.Map.empty) ~f:(fun (pid, locks) line ->
@@ -272,39 +279,37 @@ let thread_locks_by_pid ~codex_home lines =
         | _ -> pid, locks)
       else pid, locks)
   in
-  Map.filter_map locks ~f:(fun ids ->
-    if Set.length ids = 1 then Set.min_elt ids else None)
+  locks
 ;;
 
-let capture config workspace =
-  let%bind processes =
-    Process.run_lines
-      ~prog:config.process_executable
-      ~args:[ "-ww"; "-axo"; "pid=,ppid=,command=" ]
-      ()
+let thread_locks_by_pid ~codex_home lines =
+  thread_lock_sets_by_pid ~codex_home lines
+  |> Map.filter_map ~f:(fun ids -> if Set.length ids = 1 then Set.min_elt ids else None)
+;;
+
+let parse_processes lines =
+  Or_error.bind lines ~f:(fun lines ->
+    List.filter lines ~f:(fun line -> not (String.is_empty (String.strip line)))
+    |> List.map ~f:(fun line ->
+      Or_error.of_option
+        (parse_process line)
+        ~error:(Error.of_string "could not parse the process inventory"))
+    |> Or_error.combine_errors)
+;;
+
+let capture_from_observations config workspace ~processes ~open_files =
+  let processes = parse_processes processes in
+  let errors = ref [] in
+  let record_error label = function
+    | Ok _ -> ()
+    | Error error -> errors := Error.tag error ~tag:label :: !errors
   in
+  record_error "process scan failed" processes;
+  record_error "Codex writer-lock scan failed" open_files;
   let process_scan_failed = Result.is_error processes in
-  let processes =
-    Result.ok processes |> Option.value ~default:[] |> List.filter_map ~f:parse_process
-  in
-  let codex_pids =
-    List.filter processes ~f:(fun process -> command_is_codex process.command)
-    |> List.map ~f:(fun process -> Int.to_string process.pid)
-  in
-  let%map open_files =
-    if List.is_empty codex_pids
-    then return (Ok [])
-    else
-      Process.run_lines
-        ~prog:
-          (match Sys_unix.file_exists "/usr/sbin/lsof" with
-           | `Yes -> "/usr/sbin/lsof"
-           | `No | `Unknown -> "lsof")
-        ~args:[ "-n"; "-P"; "-w"; "-p"; String.concat codex_pids ~sep:","; "-Fpn" ]
-        ()
-  in
+  let processes = Result.ok processes |> Option.value ~default:[] in
   let locks =
-    thread_locks_by_pid
+    thread_lock_sets_by_pid
       ~codex_home:config.codex_home
       (Result.ok open_files |> Option.value ~default:[])
   in
@@ -342,19 +347,28 @@ let capture config workspace =
         |> List.sort ~compare:(fun (left, _) (right, _) -> Int.ascending left right)
       in
       let pids = related_processes |> List.map ~f:(fun (_, process) -> process.pid) in
-      let explicit_thread_id =
-        match List.find_map pids ~f:(Map.find locks) with
-        | Some _ as thread -> thread
-        | None ->
-          List.find_map related_processes ~f:(fun (_, process) ->
-            explicit_resume_thread_id process.command)
+      let held_locks = List.find_map pids ~f:(Map.find locks) in
+      let resume =
+        match held_locks with
+        | Some ids when Set.length ids <> 1 ->
+          Or_error.error_string "Codex process holds ambiguous conversation writer locks"
+        | _ ->
+          let explicit_thread_id =
+            match held_locks with
+            | Some ids -> Set.min_elt ids
+            | None ->
+              List.find_map related_processes ~f:(fun (_, process) ->
+                explicit_resume_thread_id process.command)
+          in
+          lookup_for_processes
+            ?explicit_thread_id
+            ~allow_cwd_fallback:false
+            config
+            ~pids
+            ~fallback_cwd:pane.cwd
       in
-      lookup_for_processes
-        ?explicit_thread_id
-        ~allow_cwd_fallback:false
-        config
-        ~pids
-        ~fallback_cwd:pane.cwd
+      record_error ("Codex identity lookup failed for " ^ pane.id) resume;
+      resume
       |> Result.ok
       |> Option.join
       |> Option.map ~f:(fun resume ->
@@ -365,7 +379,38 @@ let capture config workspace =
   ; detected_panes =
       List.map detected_panes ~f:(fun (pane, _) -> pane.Workspace.Pane.id)
       |> String.Set.of_list
+  ; observation_errors = List.rev !errors
   }
+;;
+
+let capture config workspace =
+  let%bind processes =
+    Process.run_lines
+      ~prog:config.process_executable
+      ~args:[ "-ww"; "-axo"; "pid=,ppid=,command=" ]
+      ()
+  in
+  let codex_pids =
+    parse_processes processes
+    |> Result.ok
+    |> Option.value ~default:[]
+    |> List.filter ~f:(fun process -> command_is_codex process.command)
+    |> List.map ~f:(fun process -> Int.to_string process.pid)
+  in
+  let%bind open_files =
+    if List.is_empty codex_pids
+    then return (Ok [])
+    else
+      Process.run_lines
+        ~prog:
+          (match Sys_unix.file_exists "/usr/sbin/lsof" with
+           | `Yes -> "/usr/sbin/lsof"
+           | `No | `Unknown -> "lsof")
+        ~args:[ "-n"; "-P"; "-w"; "-p"; String.concat codex_pids ~sep:","; "-Fpn" ]
+        ()
+  in
+  In_thread.run (fun () ->
+    capture_from_observations config workspace ~processes ~open_files)
 ;;
 
 let executable config =

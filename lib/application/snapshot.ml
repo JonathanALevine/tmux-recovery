@@ -159,16 +159,19 @@ let prepare_save t ~trigger =
               capture.detected_panes
               (Map.keys capture.resumes |> String.Set.of_list)
           in
-          Domain.create
-            ~codex_resumes:capture.resumes
-            ~codex_unresolved
-            ~id
-            ~created_at
-            ~trigger
-            ~tool_version:t.tool_version
-            workspace
-          |> Or_error.map ~f:(fun snapshot ->
-            Ready (snapshot, Domain.save_plan ~directory:t.native.directory snapshot))))
+          if not (List.is_empty capture.observation_errors)
+          then Error (Error.of_list capture.observation_errors)
+          else
+            Domain.create
+              ~codex_resumes:capture.resumes
+              ~codex_unresolved
+              ~id
+              ~created_at
+              ~trigger
+              ~tool_version:t.tool_version
+              workspace
+            |> Or_error.map ~f:(fun snapshot ->
+              Ready (snapshot, Domain.save_plan ~directory:t.native.directory snapshot))))
 ;;
 
 let save t ~trigger =

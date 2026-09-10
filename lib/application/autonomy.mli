@@ -8,6 +8,7 @@ type deps =
   ; observe : unit -> Tmux_recovery_domain.Workspace.t Or_error.t Deferred.t
   ; plan : Tmux_recovery_domain.Workspace.t -> Tmux_recovery_domain.Recovery.plan Or_error.t Deferred.t
   ; viewed : unit -> string list Or_error.t Deferred.t
+  ; exited_panes : unit -> String.Set.t Or_error.t Deferred.t
   ; signature : window_id:string -> string Or_error.t Deferred.t
   ; server_identity : unit -> string Or_error.t Deferred.t
   ; snapshot_save : unit -> Domain_snapshot.summary Or_error.t Deferred.t

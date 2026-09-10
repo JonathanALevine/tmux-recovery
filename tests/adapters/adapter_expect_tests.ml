@@ -70,7 +70,7 @@ let rec remove_tree path =
 
 let sqlite_exec database sql = Sqlite3.exec database sql |> Sqlite3.Rc.check
 
-let with_codex_databases f =
+let with_codex_fixture f =
   let root = Core_unix.mkdtemp "/tmp/tmux-recovery-codex-XXXXXX" in
   Exn.protect
     ~finally:(fun () -> remove_tree root)
@@ -116,8 +116,10 @@ let with_codex_databases f =
           ~executable_candidates:[ "/bin/false" ]
           ~process_executable:"ps"
       in
-      f config)
+      f config root)
 ;;
+
+let with_codex_databases f = with_codex_fixture (fun config _ -> f config)
 
 let%test_unit "Codex provider lookup prefers the exact process thread" =
   with_codex_databases (fun config ->
@@ -841,11 +843,13 @@ let%test_unit "managed systemd units use direct native entrypoints" =
     Systemd.status_from_inventory
       { definitions
       ; active =
-          [ "tmux-recovery-save.timer"; "tmux-recovery-restore.service"
+          [ "tmux-recovery-save.timer"
+          ; "tmux-recovery-restore.service"
           ; "tmux-recovery-autonomy.timer"
           ]
       ; enabled =
-          [ "tmux-recovery-save.timer"; "tmux-recovery-restore.service"
+          [ "tmux-recovery-save.timer"
+          ; "tmux-recovery-restore.service"
           ; "tmux-recovery-autonomy.timer"
           ]
       ; legacy_scripts = []
@@ -856,8 +860,203 @@ let%test_unit "managed systemd units use direct native entrypoints" =
     status.periodic_save.command
     (Some "tmux-recovery snapshot --trigger timer --quiet");
   [%test_eq: string option]
-    status.autonomy.command (Some "tmux-recovery autonomy tick --quiet");
+    status.autonomy.command
+    (Some "tmux-recovery autonomy tick --quiet");
   [%test_eq: string option]
     status.login_restore.command
     (Some "tmux-recovery restore --approve --if-empty --quiet")
+;;
+
+module Autonomy = Tmux_recovery_domain.Autonomy
+
+let first = "019f8c7e-0000-7000-8000-000000000001"
+let second = "019f8c7e-0000-7000-8000-000000000002"
+let child = "019f8c7e-0000-7000-8000-000000000003"
+
+let workspace ?(two = false) () =
+  let pane id index pid : Workspace.Pane.t =
+    { id
+    ; window_id = "@1"
+    ; index
+    ; active = index = 0
+    ; title = ""
+    ; cwd = "/tmp/moved project"
+    ; current_command = "zsh"
+    ; pid = Some pid
+    ; tty = None
+    }
+  in
+  Workspace.create
+    ~source:Live
+    ~server:{ available = true; socket = Some "fixture"; version = None }
+    [ { Workspace.Session.id = "$1"; name = "test"; attached = false } ]
+    [ { Workspace.Window.id = "@1"; name = "codex"; layout = "fixture" } ]
+    [ { Workspace.Window_link.id = "$1/@1"
+      ; session_id = "$1"
+      ; window_id = "@1"
+      ; index = 0
+      ; active = true
+      }
+    ]
+    (pane "%1" 0 10 :: (if two then [ pane "%2" 1 30 ] else []))
+  |> Result.map_error ~f:(String.concat ~sep:"; ")
+  |> Result.ok_or_failwith
+;;
+
+let lock root id = "n" ^ Filename.concat root ("thread-writer-locks/" ^ id ^ ".lock")
+
+let capture config workspace processes open_files =
+  Codex.capture_from_observations
+    config
+    workspace
+    ~processes:(Ok processes)
+    ~open_files:(Ok open_files)
+;;
+
+let%test_unit "writer identity overrides stale resume arguments and child activity" =
+  with_codex_fixture (fun config root ->
+    let result =
+      capture
+        config
+        (workspace ())
+        [ "10 1 zsh"; "20 10 codex resume " ^ first; "21 20 codex resume " ^ child ]
+        [ "p20"; lock root second; "p21"; lock root child ]
+    in
+    let resume = Map.find_exn result.resumes "%1" in
+    [%test_eq: string] resume.thread_id second;
+    [%test_eq: string] resume.cwd "/tmp/moved project";
+    assert (List.is_empty result.observation_errors))
+;;
+
+let%test_unit "same-directory panes retain distinct conversations" =
+  with_codex_fixture (fun config root ->
+    let result =
+      capture
+        config
+        (workspace ~two:true ())
+        [ "10 1 zsh"; "20 10 codex"; "30 1 zsh"; "40 30 codex" ]
+        [ "p20"; lock root first; "p40"; lock root second ]
+    in
+    [%test_eq: string] (Map.find_exn result.resumes "%1").thread_id first;
+    [%test_eq: string] (Map.find_exn result.resumes "%2").thread_id second)
+;;
+
+let%test_unit "ambiguous writer locks never fall back to stale argv" =
+  with_codex_fixture (fun config root ->
+    let result =
+      capture
+        config
+        (workspace ())
+        [ "10 1 zsh"; "20 10 codex resume " ^ first ]
+        [ "p20"; lock root first; lock root second ]
+    in
+    assert (Map.is_empty result.resumes);
+    assert (not (List.is_empty result.observation_errors)))
+;;
+
+let%test_unit "provider outages are distinct from a successful missing-thread lookup" =
+  with_codex_fixture (fun config _ ->
+    let workspace = workspace () in
+    let processes = [ "10 1 zsh"; "20 10 codex" ] in
+    let healthy = capture config workspace processes [] in
+    assert (Map.is_empty healthy.resumes);
+    assert (List.is_empty healthy.observation_errors);
+    let failed =
+      Codex.capture_from_observations
+        config
+        workspace
+        ~processes:(Ok processes)
+        ~open_files:(Or_error.error_string "lsof unavailable")
+    in
+    assert (not (List.is_empty failed.observation_errors));
+    let failed_scan =
+      Codex.capture_from_observations
+        config
+        workspace
+        ~processes:(Or_error.error_string "ps unavailable")
+        ~open_files:(Ok [])
+    in
+    assert (not (List.is_empty failed_scan.observation_errors));
+    assert (Set.mem failed_scan.detected_panes "%1");
+    let plan =
+      Recovery.plan
+        ~codex_resumes:failed_scan.resumes
+        ~codex_detected:failed_scan.detected_panes
+        workspace
+    in
+    assert (
+      List.is_empty
+        (Autonomy.detect
+           ~workspace
+           ~recovery:plan
+           ~viewed:[]
+           ~exited_panes:String.Set.empty)))
+;;
+
+let%test_unit "database failures remain observable instead of appearing threadless" =
+  with_codex_fixture (fun config root ->
+    Core_unix.unlink (Filename.concat root "state_5.sqlite");
+    let result =
+      capture
+        config
+        (workspace ())
+        [ "10 1 zsh"; "20 10 codex" ]
+        [ "p20"; lock root first ]
+    in
+    assert (Map.is_empty result.resumes);
+    assert (not (List.is_empty result.observation_errors)))
+;;
+
+let%test_unit "capture never guesses a latest conversation from its directory" =
+  with_codex_fixture (fun config _ ->
+    let workspace = workspace () in
+    let panes =
+      Map.map workspace.panes ~f:(fun pane -> { pane with cwd = "/tmp/project" })
+    in
+    let result =
+      capture config { workspace with panes } [ "10 1 zsh"; "20 10 codex" ] []
+    in
+    assert (Map.is_empty result.resumes))
+;;
+
+let%test_unit "resume sends the moved directory as a single explicit Codex argument" =
+  let root = Core_unix.mkdtemp "/tmp/tmux-recovery-resume-XXXXXX" in
+  Exn.protect
+    ~finally:(fun () -> remove_tree root)
+    ~f:(fun () ->
+      let cwd = Filename.concat root "moved project" in
+      Core_unix.mkdir cwd ~perm:0o700;
+      let script = Filename.concat root "tmux" in
+      let args = Filename.concat root "args" in
+      Out_channel.write_all
+        script
+        ~data:
+          ("#!/bin/sh\nif [ \"$1\" = respawn-pane ]; then printf '%s\\n' \"$@\" > '"
+           ^ args
+           ^ "'; fi\n");
+      Core_unix.chmod script ~perm:0o700;
+      let config : Tmux_adapter.config = { executable = script; socket_name = None } in
+      Thread_safe.block_on_async_exn (fun () ->
+        Tmux_adapter.resume_codex
+          config
+          ~pane_id:"%1"
+          ~cwd
+          ~executable:"/usr/bin/codex"
+          ~thread_id:first
+          ~bypass_approvals:false)
+      |> Or_error.ok_exn;
+      [%test_eq: string list]
+        (In_channel.read_lines args)
+        [ "respawn-pane"
+        ; "-k"
+        ; "-t"
+        ; "%1"
+        ; "-c"
+        ; cwd
+        ; "/usr/bin/codex"
+        ; "resume"
+        ; "-C"
+        ; cwd
+        ; first
+        ])
 ;;

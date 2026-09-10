@@ -6,8 +6,9 @@ open! Core
     window, file access) are injected by the caller. No filesystem, tmux, Async, or
     TUI dependencies live here.
 
-    Safety model: a window is a candidate only while it is (a) unrecoverable (a
-    [Recovery.Blocked] decision in the window), (b) not viewed by any tmux client
+    Safety model: a window is a candidate only while (a) every pane has positively
+    exited according to tmux and has a [Recovery.Blocked] decision, (b) it is not
+    viewed by any tmux client
     (the exact window, not merely its containing session), and (c) quiescent
     (repeated unchanged activity observations). A candidate fully eligible
     continuously for the persistence threshold is scheduled as an action with a
@@ -140,14 +141,17 @@ val empty : config:config -> state
 val paused : state -> bool
 
 (** [detect ~workspace ~recovery ~viewed] returns (window_id, session_id, reason)
-    for every window with at least one [Recovery.Blocked] decision that is not
-    currently viewed by a tmux client. [viewed] holds the exact window IDs clients
+    for windows whose panes are all confirmed exited and all [Recovery.Blocked],
+    and which are not currently viewed by a client. Missing exit evidence and
+    any live or recoverable sibling protect the entire window. [viewed] holds
+    the exact window IDs clients
     are looking at (from [tmux list-clients]); a window in an attached session is
     still a candidate when no client views that exact window. *)
 val detect
   :  workspace:Workspace.t
   -> recovery:Recovery.plan
   -> viewed:string list
+  -> exited_panes:String.Set.t
   -> (string * string * string) list
 
 (** Advance the engine by one tick using the candidates observed now.

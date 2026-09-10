@@ -41,6 +41,8 @@ type world =
   (** [blocked_after]: the workspace returned by observe call #n keeps @2
       blocked while n <= blocked_after; later observes report @2 recoverable. *)
   ; blocked_after : int ref
+  ; plan_error_after : int ref
+  ; exited_ref : String.Set.t ref
   ; viewed_ref : string list ref
   ; sig_ref : (string * string) list ref
   (** Optional (window_id, signature) overrides; the default signature is "s1". *)
@@ -53,6 +55,8 @@ let default_world () =
   { now_ref = ref t0
   ; observed_count = ref 0
   ; blocked_after = ref 1_000_000
+  ; plan_error_after = ref 1_000_000
+  ; exited_ref = ref (String.Set.singleton "%2")
   ; viewed_ref = ref []
   ; sig_ref = ref []
   ; snapshot_ref = ref (Some snapshot_id)
@@ -96,7 +100,11 @@ let make_deps (world : world) : Runner.deps =
        world.observed_count := get world.observed_count + 1;
        let blocked = get world.observed_count <= get world.blocked_after in
        Deferred.return (Ok (workspace ~blocked ())))
-  ; plan = (fun workspace -> Deferred.return (Ok (Recovery.plan workspace)))
+  ; plan = (fun workspace ->
+      Deferred.return (if get world.observed_count > get world.plan_error_after
+        then Or_error.error_string "process inventory unavailable"
+        else Ok (Recovery.plan workspace)))
+  ; exited_panes = (fun () -> Deferred.return (Ok (get world.exited_ref)))
   ; viewed = (fun () -> Deferred.return (Ok (get world.viewed_ref)))
   ; signature =
       (fun ~window_id ->
@@ -443,4 +451,47 @@ let%test_unit "a close failure is recorded as Failed and closes nothing" =
      | Autonomy.Failed _ -> ()
      | _ -> failwith "a failed close must be recorded as Failed")
   )
+;;
+
+let%test_unit "live unresolved Codex is never scheduled or closed" =
+  with_world ~f:(fun world runner ->
+    configure runner ~mode:Autonomy.Mode.Live ~grace_seconds:0 ~persistence_seconds:0 ();
+    world.exited_ref := String.Set.empty;
+    List.iter [0; 1; 10000] ~f:(fun seconds ->
+      world.now_ref := at seconds;
+      ignore (tick runner : Runner.tick_result));
+    assert (List.is_empty (status runner).active);
+    assert (List.is_empty (get world.closed_ref)))
+;;
+
+let%test_unit "an observation outage cancels pending cleanup and restarts persistence" =
+  with_world ~f:(fun world runner ->
+    configure runner ~mode:Autonomy.Mode.Live ~grace_seconds:100 ~persistence_seconds:10 ();
+    List.iter [0; 1; 11] ~f:(fun seconds ->
+      world.now_ref := at seconds;
+      ignore (tick runner : Runner.tick_result));
+    world.plan_error_after := 3;
+    world.now_ref := at 111;
+    assert (Result.is_error (await (Runner.tick runner)));
+    assert (List.is_empty (status runner).active);
+    assert (is_cancelled (outcome_of runner ~id:"act-1"));
+    world.plan_error_after := 1_000_000;
+    world.now_ref := at 10000;
+    ignore (tick runner : Runner.tick_result);
+    assert (List.is_empty (status runner).active);
+    assert (List.is_empty (get world.closed_ref)))
+;;
+
+let%test_unit "provider failures at either fire recheck abort the close" =
+  List.iter [4; 5] ~f:(fun healthy_observations ->
+    with_world ~f:(fun world runner ->
+      configure runner ~mode:Autonomy.Mode.Live ~grace_seconds:100 ~persistence_seconds:10 ();
+      List.iter [0; 1; 11] ~f:(fun seconds ->
+        world.now_ref := at seconds;
+        ignore (tick runner : Runner.tick_result));
+      world.plan_error_after := healthy_observations;
+      world.now_ref := at 111;
+      ignore (tick runner : Runner.tick_result);
+      assert (is_aborted (outcome_of runner ~id:"act-1"));
+      assert (List.is_empty (get world.closed_ref))))
 ;;
