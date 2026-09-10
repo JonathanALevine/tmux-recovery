@@ -208,10 +208,12 @@ let initial_data = Ok workspace, Ok (Recovery.plan workspace), snapshots, servic
 let make_app_with_reload
   ?(capture_pane = fun ~pane_id:_ -> Effect.return (Ok []))
   ?(exit = fun () -> Effect.Ignore)
+  ?(initial_data = initial_data)
   ~reload
   ()
   =
   let service = App_recovery.create ~socket_name:"tmux-recovery-golden-test" () in
+  let initial, initial_recovery, initial_snapshots, initial_services = initial_data in
   fun ~dimensions graph ->
     Tui.app
       ~capture_pane
@@ -219,9 +221,10 @@ let make_app_with_reload
       ~autonomy_runner
       ~initial_autonomy
       ~service
-      ~initial:workspace
-      ~initial_snapshots:snapshots
-      ~initial_services:services
+      ~initial:(Or_error.ok_exn initial)
+      ~initial_recovery:(Or_error.ok_exn initial_recovery)
+      ~initial_snapshots
+      ~initial_services
       ~exit
       ~dimensions
       graph
@@ -248,6 +251,51 @@ let warning_app =
     }
   in
   make_app ~initial_recovery:(Some recovery) ~snapshots ~services
+;;
+
+let many_warnings_data =
+  let original_pane = Map.find_exn workspace.Workspace.panes "%1" in
+  let panes =
+    List.init 30 ~f:(fun index ->
+      { original_pane with
+        id = [%string "%%{index + 1#Int}"]
+      ; index
+      ; active = index = 0
+      ; current_command = "codex"
+      })
+  in
+  let workspace =
+    Workspace.create
+      ~source:workspace.source
+      ~server:workspace.server
+      (Map.data workspace.sessions)
+      (Map.data workspace.windows)
+      workspace.window_links
+      panes
+    |> Result.map_error ~f:(String.concat ~sep:"; ")
+    |> Result.ok_or_failwith
+  in
+  let decisions =
+    List.map panes ~f:(fun pane ->
+      { Recovery.pane_id = pane.id
+      ; observed = "codex"
+      ; action = Blocked
+      ; executable = None
+      ; argv = []
+      ; fidelity = "shell fallback"
+      ; reason = [%string "Cannot resume application in pane %{pane.id}."]
+      ; rule_id = None
+      })
+  in
+  let recovery : Recovery.plan = { source = Live; decisions; warnings = [] } in
+  Ok workspace, Ok recovery, snapshots, services
+;;
+
+let many_warnings_app =
+  make_app_with_reload
+    ~initial_data:many_warnings_data
+    ~reload:(fun () -> Effect.return many_warnings_data)
+    ()
 ;;
 
 let empty_app =

@@ -14,13 +14,14 @@
 
 (library
  (name tui_refresh_spam_tests)
- (modules refresh_spam_test navigation_test)
+ (modules refresh_spam_test navigation_test detail_scroll_test)
  (libraries
   async
   bonsai_test
   bonsai_term
   bonsai_term_test
   core
+  tmux_recovery_domain
   tmux_recovery_tui_fixture)
  (inline_tests)
  (preprocess

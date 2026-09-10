@@ -17,8 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   remain distinguishable from actual closures. Explicit live/off and paused
   settings are preserved.
 - Enter expands/collapses tree branches. Details follow selection automatically;
-  remove left/right bindings and the separate detail-focus mode. Narrow terminals
-  show navigation above details.
+  Tab switches focus to scroll the read-only detail viewer with up/down, Page
+  Up/Down, and Home/End. Left/right and Shift-Tab are unbound. Narrow terminals
+  show navigation above details. Status groups recovery warnings in an Affected
+  panes section with each application's location, cause, and recovery result.
 - Bare `tmux-recovery` opens the TUI; remove the redundant `ui` command and the
   one-time `migrate` command family. Existing migration backup data is retained.
 - Remove `scripts/check-version.sh`. The release workflow checks the built
