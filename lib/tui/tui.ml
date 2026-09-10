@@ -463,7 +463,7 @@ let navigation_height body_height =
   Int.min 6 (Int.max (panel_header_height + 1) (body_height / 4))
 ;;
 
-let panel ~focused ?(suffix = "") ~title ~width ~height body =
+let panel ?(suffix = "") ~title ~width ~height body =
   let title = title ^ suffix in
   let title =
     View.text
@@ -472,8 +472,7 @@ let panel ~focused ?(suffix = "") ~title ~width ~height body =
   in
   let rule =
     View.text
-      ~attrs:
-        [ Attr.fg (if focused then selected_bg else muted); Attr.bg terminal_background ]
+      ~attrs:[ Attr.fg terminal_foreground; Attr.bg terminal_background ]
       (String.concat (List.init (Int.max 0 width) ~f:(fun _ -> "━")))
   in
   let content = View.vcat (title :: rule :: body) |> crop_to ~width ~height in
@@ -521,12 +520,7 @@ let render_navigation model ~width ~height =
       first_visible
       (Int.min (List.length rows) (first_visible + row_capacity))
   in
-  panel
-    ~focused:(equal_focus model.focus Navigation)
-    ~title:"NAVIGATION"
-    ~width
-    ~height
-    rows
+  panel ~title:"NAVIGATION" ~width ~height rows
 ;;
 
 type detail_line =
@@ -1063,7 +1057,6 @@ let render_detail model viewport =
         " · %{offset + 1#Int}–%{Int.min total (offset + capacity)#Int}/%{total#Int}"]
   in
   panel
-    ~focused:(equal_focus model.focus Detail)
     ~title
     ~suffix
     ~width
