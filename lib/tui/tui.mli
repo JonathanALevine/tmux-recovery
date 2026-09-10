@@ -4,14 +4,14 @@ module Autonomy_runner = Tmux_recovery_application.Autonomy
 
 (** The interactive navigator. Tab toggles focus between navigation and read-only detail.
     Up/down select a tree row or scroll detail. Enter expands or collapses navigation
-    branches, including the affected-pane list under Status; leaves/detail ignore Enter.
-    Details follow selection automatically; narrow terminals stack the tree above the
-    detail viewer. Shift-Tab, Page Up/Down, and left/right are unbound. The autonomy
-    pipeline itself is service-owned and disk-persisted; the TUI is a viewer and
-    controller over it. [autonomy_runner] is the application runner backed by the
-    persistent store: refreshes reconcile the pipeline (one tick) and the view shows the
-    persisted policy, the eligibility funnel, pending actions, and the recent audit. [c]
-    cancels a pending action and [p] pauses or resumes the pipeline. *)
+    branches, or the inline affected-pane list when Status detail has focus. Other leaves
+    and details ignore Enter. Details follow selection automatically; narrow terminals
+    stack the tree above the detail viewer. Shift-Tab, Page Up/Down, and left/right are
+    unbound. The autonomy pipeline itself is service-owned and disk-persisted; the TUI is
+    a viewer and controller over it. [autonomy_runner] is the application runner backed by
+    the persistent store: refreshes reconcile the pipeline (one tick) and the view shows
+    the persisted policy, the eligibility funnel, pending actions, and the recent audit.
+    [c] cancels a pending action and [p] pauses or resumes the pipeline. *)
 val app
   :  ?capture_pane:(pane_id:string -> string list Or_error.t Effect.t)
   -> ?reload:

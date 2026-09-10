@@ -78,17 +78,21 @@ let () =
   in
   Bonsai_term_test.set_dimensions affected { width = 100; height = 22 };
   Handle.recompute_view_until_stable affected;
-  move_down affected 4;
-  print_endline "--- AFFECTED PANES COLLAPSED ---";
+  move_down affected 3;
+  Bonsai_term_test.send_event affected (Key_press { key = Tab; mods = [] });
+  Bonsai_term_test.send_event affected (Key_press { key = Enter; mods = [] });
+  print_endline "--- AFFECTED PANES COLLAPSED IN STATUS ---";
   show_view affected;
   Bonsai_term_test.send_event affected (Key_press { key = Enter; mods = [] });
-  print_endline "--- AFFECTED PANES EXPANDED ---";
-  show_view affected;
-  move_down affected 1;
-  print_endline "--- AFFECTED PANE SELECTED ---";
+  print_endline "--- AFFECTED PANES EXPANDED IN STATUS ---";
   show_view affected;
   Bonsai_term_test.set_dimensions affected { width = 40; height = 14 };
-  print_endline "--- NARROW AFFECTED PANE ---";
+  Handle.recompute_view_until_stable affected;
+  Bonsai_term_test.send_event affected (Key_press { key = Enter; mods = [] });
+  print_endline "--- NARROW AFFECTED PANES COLLAPSED ---";
+  show_view affected;
+  Bonsai_term_test.send_event affected (Key_press { key = Enter; mods = [] });
+  print_endline "--- NARROW AFFECTED PANES EXPANDED ---";
   show_view affected;
   print_endline "--- FOCUSED STATUS DETAILS ---";
   Bonsai_term_test.send_event warning (Key_press { key = Tab; mods = [] });
