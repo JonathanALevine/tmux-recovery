@@ -477,8 +477,7 @@ let panel ~focused ?(suffix = "") ~title ~width ~height body =
     View.text
       ~attrs:
         [ Attr.fg (if focused then selected_bg else muted); Attr.bg terminal_background ]
-      (String.concat
-         (List.init (Int.max 0 width) ~f:(fun _ -> if focused then "━" else "─")))
+      (String.concat (List.init (Int.max 0 width) ~f:(fun _ -> "━")))
   in
   let content = View.vcat (title :: rule :: body) |> crop_to ~width ~height in
   let backdrop =
@@ -1097,7 +1096,7 @@ let render model ({ Dimensions.width; height } as dimensions) =
         List.init body_height ~f:(fun _ ->
           View.text
             ~attrs:[ Attr.fg terminal_foreground; Attr.bg terminal_background ]
-            "│")
+            "┃")
         |> View.vcat
       in
       View.hcat
@@ -1111,7 +1110,7 @@ let render model ({ Dimensions.width; height } as dimensions) =
       let divider =
         View.text
           ~attrs:[ Attr.fg terminal_foreground; Attr.bg terminal_background ]
-          (String.concat (List.init width ~f:(fun _ -> "─")))
+          (String.concat (List.init width ~f:(fun _ -> "━")))
       in
       View.vcat
         [ render_navigation model ~width ~height:navigation_height
