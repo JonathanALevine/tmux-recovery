@@ -1,6 +1,6 @@
   $ ./render_fixture.exe
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │ ▶ NAVIGATION                               │   DETAIL                                              │
+  │NAVIGATION                                  │DETAIL                                                 │
   │  Overview                                  │tmux-recovery                                          │
   │▾ Sessions  [online]                        │A conservative recovery control plane for tmux.        │
   │  ▸ development  [attached]                 │                                                       │
@@ -25,7 +25,7 @@
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- MOVED ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │ ▶ NAVIGATION                               │   DETAIL                                              │
+  │NAVIGATION                                  │DETAIL                                                 │
   │  Overview                                  │Sessions                                               │
   │▾ Sessions  [online]                        │Source: live                                           │
   │  ▸ development  [attached]                 │Server: running                                        │
@@ -50,7 +50,7 @@
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- WINDOW SELECTED ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │ ▶ NAVIGATION                               │   PREVIEW                                             │
+  │NAVIGATION                                  │PREVIEW                                                │
   │  Overview                                  │monitoring                                             │
   │▾ Sessions  [online]                        │Window 0 · active pane 0 · btop                        │
   │  ▾ development  [attached]                 │                                                       │
@@ -75,7 +75,7 @@
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- PANE SELECTED ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │ ▶ NAVIGATION                               │   PREVIEW                                             │
+  │NAVIGATION                                  │PREVIEW                                                │
   │  Overview                                  │Pane 0                                                 │
   │▾ Sessions  [online]                        │Typed ID: %1                                           │
   │  ▾ development  [attached]                 │Working directory: /Users/demo                         │
@@ -100,13 +100,13 @@
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- NARROW PANE ---
   ┌────────────────────────────────────────────────────────────┐
-  │ ▶ NAVIGATION                                               │
+  │NAVIGATION                                                  │
   │▾ Sessions  [online]                                        │
   │  ▾ development  [attached]                                 │
   │    ▾ 0:monitoring  [active]                                │
   │      ▸ pane 0  [active]                                    │
   │────────────────────────────────────────────────────────────│
-  │   PREVIEW                                                  │
+  │PREVIEW                                                     │
   │Pane 0                                                      │
   │Typed ID: %1                                                │
   │Working directory: /Users/demo                              │
@@ -125,11 +125,11 @@
   └────────────────────────────────────────────────────────────┘
   --- SHORT NARROW PANE ---
   ┌────────────────────────────────────────┐
-  │ ▶ NAVIGATION                           │
+  │NAVIGATION                              │
   │    ▾ 0:monitoring  [active]            │
   │      ▸ pane 0  [active]                │
   │────────────────────────────────────────│
-  │   PREVIEW                              │
+  │PREVIEW                                 │
   │Pane 0 · btop                           │
   │Recovery: restart                       │
   │Latest pane output                      │
@@ -142,7 +142,7 @@
   └────────────────────────────────────────┘
   --- RESIZED WIDE AGAIN ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │ ▶ NAVIGATION                               │   PREVIEW                                             │
+  │NAVIGATION                                  │PREVIEW                                                │
   │  Overview                                  │Pane 0                                                 │
   │▾ Sessions  [online]                        │Typed ID: %1                                           │
   │  ▾ development  [attached]                 │Working directory: /Users/demo                         │
@@ -167,7 +167,7 @@
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- STATUS ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │ ▶ NAVIGATION                               │   DETAIL · 1–20/54                                    │
+  │NAVIGATION                                  │DETAIL · 1–20/54                                       │
   │  Overview                                  │Status                                                 │
   │▾ Sessions  [online]                        │Recovery readiness, snapshot history, and automation.  │
   │  ▸ development  [attached]                 │                                                       │
@@ -192,7 +192,7 @@
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- STATUS WITH APPLICATION WARNING ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │ ▶ NAVIGATION                               │   DETAIL · 1–20/58                                    │
+  │NAVIGATION                                  │DETAIL · 1–20/58                                       │
   │  Overview                                  │Status                                                 │
   │▾ Sessions  [online]                        │Recovery readiness, snapshot history, and automation.  │
   │  ▸ development  [attached]                 │                                                       │
@@ -217,7 +217,7 @@
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- FOCUSED STATUS DETAILS ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │   NAVIGATION                               │ ▶ DETAIL · 1–20/58                                    │
+  │NAVIGATION                                  │DETAIL · 1–20/58                                       │
   │  Overview                                  │Status                                                 │
   │▾ Sessions  [online]                        │Recovery readiness, snapshot history, and automation.  │
   │  ▸ development  [attached]                 │                                                       │
@@ -242,7 +242,7 @@
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- STATUS SCROLLED TO END ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │   NAVIGATION                               │ ▶ DETAIL · 39–58/58                                   │
+  │NAVIGATION                                  │DETAIL · 39–58/58                                      │
   │  Overview                                  │tmux_recovery_1784597559000000000_0123abcd.snapshot    │
   │▾ Sessions  [online]                        │Runtime version: 0.3.0-dev.14                          │
   │  ▸ development  [attached]                 │Last result: launchctl exit status 0                   │
@@ -267,11 +267,11 @@
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- NARROW AFFECTED PANES ---
   ┌────────────────────────────────────────┐
-  │   NAVIGATION                           │
+  │NAVIGATION                              │
   │  ▸ development  [attached]             │
   │  Status  [attention]                   │
   │────────────────────────────────────────│
-  │ ▶ DETAIL · 11–18/68                    │
+  │DETAIL · 11–18/68                       │
   │                                        │
   │Affected panes (1)                      │
   │                                        │
@@ -284,7 +284,7 @@
   └────────────────────────────────────────┘
   --- EMPTY STATUS ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │ ▶ NAVIGATION                               │   DETAIL · 1–20/46                                    │
+  │NAVIGATION                                  │DETAIL · 1–20/46                                       │
   │  Overview                                  │Status                                                 │
   │▾ Sessions  [online]                        │Recovery readiness, snapshot history, and automation.  │
   │  ▸ development  [attached]                 │                                                       │
@@ -309,7 +309,7 @@
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- UNAVAILABLE STATUS ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │ ▶ NAVIGATION                               │   DETAIL · 1–20/40                                    │
+  │NAVIGATION                                  │DETAIL · 1–20/40                                       │
   │  Overview                                  │Status                                                 │
   │▾ Sessions  [online]                        │Recovery readiness, snapshot history, and automation.  │
   │  ▸ development  [attached]                 │                                                       │
