@@ -460,7 +460,7 @@ let crop_to view ~width ~height =
 ;;
 
 let panel ?(focused = false) ?(suffix = "") ~title ~width ~height body =
-  let title = title ^ (if focused then " ◀" else "") ^ suffix in
+  let title = (if focused then "▶ " else "") ^ title ^ suffix in
   let title =
     View.text
       ~attrs:[ Attr.bold; Attr.fg cyan; Attr.bg terminal_background ]
@@ -1070,7 +1070,8 @@ let render model ({ Dimensions.width; height } as dimensions) =
          " Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c \
           cancel · p pause "
        | Detail ->
-         " Tab tree · ↑/↓ scroll · Home/End · r refresh · q quit · c cancel · p pause ")
+         " Tab navigation · ↑/↓ scroll · Home/End · r refresh · q quit · c cancel · p \
+          pause ")
   in
   let body_height = Int.max 1 (height - 1) in
   let body =
