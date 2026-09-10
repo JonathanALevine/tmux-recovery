@@ -66,14 +66,17 @@ offers `snapshot` and `snapshots`.
 Run `tmux-recovery` to open the TUI. Select an item in the tree to view its
 details or live pane output. The detail pane follows the selection automatically.
 Tab switches focus between navigation and the read-only detail viewer. A heavy
-rule in the selected navigation row's blue marks focus; the inactive rule is
-muted and thin. Both rules keep their space when focus moves. The footer
+rule in the selected navigation row's blue marks focus; the inactive rule and
+dividers are gray. Both rules keep their space when focus moves. The footer
 shows `Tab detail · ↑/↓ navigate` when navigation has focus and
 `Tab navigation · ↑/↓ scroll` when detail has focus. Headings align with their
 pane's content, keeping the same position and color in both modes. On narrow terminals,
 details appear below the tree. Long details scroll as one view, with the visible
-line range in the heading. Status includes an **Affected panes** section identifying applications
-that cannot resume, their locations, causes, and expected recovery results.
+line range in the heading. Under **Status**, **Affected panes** is a collapsible
+navigation list, initially closed. Press Enter to expand it, then use Up/Down to
+select a pane and view its location, application, cause, and recovery consequence
+in the detail viewer. Refresh retains the selected pane while it remains affected;
+if it recovers or disappears, selection returns to the Affected panes list.
 Use the CLI to save and restore workspaces or manage background services.
 
 | Key | Action |
