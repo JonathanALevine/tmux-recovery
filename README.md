@@ -66,7 +66,8 @@ offers `snapshot` and `snapshots`.
 Run `tmux-recovery` to open the TUI. Select an item in the tree to view its
 details or live pane output. The detail pane follows the selection automatically.
 Tab switches focus between navigation and the read-only detail viewer; a ▶ arrow
-before the panel heading marks focus without changing its color. The footer shows
+before the panel heading marks focus without changing its color. Its space stays
+reserved so headings remain aligned when focus moves. The footer shows
 `Tab detail` or `Tab navigation` for the other pane. On narrow terminals,
 details appear below the tree. Long details scroll as one view, with the visible
 line range in the heading. Status includes an **Affected panes** section identifying applications
