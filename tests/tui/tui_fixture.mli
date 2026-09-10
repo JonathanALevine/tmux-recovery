@@ -12,12 +12,14 @@ type reload_result =
   * Service.t Or_error.t
 
 val initial_data : reload_result
+val many_warnings_data : reload_result
 
 (** Build the TUI with an injected [reload] so tests can observe and control refresh
     concurrency. *)
 val make_app_with_reload
   :  ?capture_pane:(pane_id:string -> string list Or_error.t Effect.t)
   -> ?exit:(unit -> unit Effect.t)
+  -> ?initial_data:reload_result
   -> reload:(unit -> reload_result Effect.t)
   -> unit
   -> dimensions:Dimensions.t Bonsai.t
@@ -30,6 +32,11 @@ val app
   -> view:View.t Bonsai.t * handler:(Event.t -> unit Effect.t) Bonsai.t
 
 val warning_app
+  :  dimensions:Dimensions.t Bonsai.t
+  -> local_ Bonsai.graph
+  -> view:View.t Bonsai.t * handler:(Event.t -> unit Effect.t) Bonsai.t
+
+val many_warnings_app
   :  dimensions:Dimensions.t Bonsai.t
   -> local_ Bonsai.graph
   -> view:View.t Bonsai.t * handler:(Event.t -> unit Effect.t) Bonsai.t

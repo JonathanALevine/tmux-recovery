@@ -64,14 +64,21 @@ offers `snapshot` and `snapshots`.
 ## TUI commands
 
 Run `tmux-recovery` to open the TUI. Select an item in the tree to view its
-details or live pane output. The detail pane follows the selection automatically;
-it has no separate focus mode. On narrow terminals it appears below the tree.
+details or live pane output. The detail pane follows the selection automatically.
+Tab switches focus between the tree and the read-only detail viewer; a dot in the
+panel heading marks the focused pane. On narrow terminals details appear below
+the tree. Long details scroll as one view, with the visible line range in the
+heading. Status includes an **Affected panes** section identifying applications
+that cannot resume, their locations, causes, and expected recovery results.
 Use the CLI to save and restore workspaces or manage background services.
 
 | Key | Action |
 | --- | --- |
-| <kbd>↑</kbd> / <kbd>↓</kbd> | Move through the workspace tree |
-| <kbd>Enter</kbd> | Expand/collapse a branch; no action on items without children |
+| <kbd>Tab</kbd> | Switch focus between navigation and detail |
+| <kbd>↑</kbd> / <kbd>↓</kbd> | Move through the tree, or scroll the focused detail viewer |
+| <kbd>Enter</kbd> | Expand/collapse a navigation branch; no action on leaves or in detail |
+| <kbd>Page Up</kbd> / <kbd>Page Down</kbd> | Scroll detail by a page |
+| <kbd>Home</kbd> / <kbd>End</kbd> | Jump to the top/bottom of detail |
 | <kbd>r</kbd> | Refresh workspace, snapshot, service, and pane-preview data |
 | <kbd>c</kbd> | Cancel a pending autonomous cleanup action |
 | <kbd>p</kbd> | Pause/resume autonomous cleanup |
@@ -79,6 +86,8 @@ Use the CLI to save and restore workspaces or manage background services.
 | <kbd>Ctrl</kbd>+<kbd>C</kbd> | Quit |
 
 Run `tmux-recovery --socket NAME` to view a named tmux socket.
+Shift-Tab and left/right are unbound. Changing the selected tree item resets
+detail scrolling; refresh and resizing keep the position within the available content.
 Without an interactive terminal, bare `tmux-recovery` prints help.
 
 ## Essential CLI commands

@@ -54,6 +54,11 @@ type pane_preview =
   | Ready of preview_request * string list
   | Failed of preview_request * string
 
+type focus =
+  | Navigation
+  | Detail
+[@@deriving equal]
+
 let decisions_by_pane (plan : Recovery.plan) =
   List.fold plan.decisions ~init:String.Map.empty ~f:(fun decisions decision ->
     Map.set decisions ~key:decision.Recovery.pane_id ~data:decision)
@@ -192,6 +197,8 @@ type model =
   ; snapshots : Snapshot.catalog Or_error.t
   ; services : Service.t Or_error.t
   ; selected : Page_ref.t
+  ; focus : focus
+  ; detail_offset : int
   ; expanded : Page_ref.Set.t
   ; message : string option
   ; preview_generation : int
@@ -200,7 +207,11 @@ type model =
   }
 
 type action =
-  | Move of int
+  | Move of int * int
+  | Toggle_focus
+  | Scroll_detail_to of int
+  | Scroll_detail_by of int * int
+  | Clamp_detail_offset of int
   | Toggle_expanded
   | Refresh_started
   | Replace_data of
@@ -240,6 +251,8 @@ let with_selected model selected =
   let same_pane = [%equal: string option] previous_pane selected_pane in
   { model with
     selected
+  ; detail_offset =
+      (if Page_ref.equal model.selected selected then model.detail_offset else 0)
   ; message = None
   ; preview_generation = (model.preview_generation + if same_pane then 0 else 1)
   ; pane_preview = (if same_pane then model.pane_preview else No_preview)
@@ -267,8 +280,26 @@ let apply_action _context model action =
   in
   let current_index = selected_index visible model.selected in
   let current = List.nth visible current_index in
+  let scroll_by delta maximum =
+    let offset = Int.min model.detail_offset maximum in
+    { model with detail_offset = Int.clamp_exn (offset + delta) ~min:0 ~max:maximum }
+  in
   match action with
-  | Move delta ->
+  | Toggle_focus ->
+    { model with
+      focus =
+        (match model.focus with
+         | Navigation -> Detail
+         | Detail -> Navigation)
+    }
+  | (Scroll_detail_to _ | Scroll_detail_by _) when equal_focus model.focus Navigation ->
+    model
+  | Scroll_detail_to detail_offset -> { model with detail_offset }
+  | Scroll_detail_by (delta, maximum) -> scroll_by delta maximum
+  | Clamp_detail_offset maximum ->
+    { model with detail_offset = Int.min model.detail_offset maximum }
+  | Move (delta, maximum) when equal_focus model.focus Detail -> scroll_by delta maximum
+  | Move (delta, _) ->
     let next_index =
       Int.clamp_exn
         (current_index + delta)
@@ -282,6 +313,7 @@ let apply_action _context model action =
         ~f:(fun item -> item.node.page)
     in
     with_selected model selected
+  | Toggle_expanded when equal_focus model.focus Detail -> model
   | Toggle_expanded ->
     (match current with
      | Some { node = { page; children = _ :: _; _ }; _ } ->
@@ -326,6 +358,8 @@ let apply_action _context model action =
     ; services
     ; expanded
     ; selected
+    ; detail_offset =
+        (if Page_ref.equal model.selected selected then model.detail_offset else 0)
     ; message =
         Some
           (if unavailable = 0
@@ -428,10 +462,15 @@ let crop_to view ~width ~height =
   View.crop ~r ~b view
 ;;
 
-let panel ~title ~width ~height body =
+let panel ?(focused = false) ~title ~width ~height body =
+  let title = (if focused then "● " else "") ^ title in
   let title =
     View.text
-      ~attrs:[ Attr.bold; Attr.fg cyan; Attr.bg terminal_background ]
+      ~attrs:
+        [ Attr.bold
+        ; Attr.fg (if focused then selected_text else cyan)
+        ; Attr.bg terminal_background
+        ]
       (" " ^ title ^ String.make (Int.max 0 (width - String.length title - 1)) ' ')
   in
   let content = View.vcat (title :: body) |> crop_to ~width ~height in
@@ -479,18 +518,36 @@ let render_navigation model ~width ~height =
       first_visible
       (Int.min (List.length rows) (first_visible + row_capacity))
   in
-  panel ~title:"NAVIGATION" ~width ~height rows
+  panel
+    ~focused:(equal_focus model.focus Navigation)
+    ~title:"NAVIGATION"
+    ~width
+    ~height
+    rows
 ;;
 
+type detail_line =
+  { text : string option
+  ; view : View.t
+  }
+
 let plain ?(color = text_color) text =
-  View.text ~attrs:[ Attr.fg color; Attr.bg terminal_background ] text
+  { text = Some text
+  ; view = View.text ~attrs:[ Attr.fg color; Attr.bg terminal_background ] text
+  }
 ;;
 
 let heading text =
-  View.text ~attrs:[ Attr.bold; Attr.fg cyan; Attr.bg terminal_background ] text
+  { text = Some text
+  ; view = View.text ~attrs:[ Attr.bold; Attr.fg cyan; Attr.bg terminal_background ] text
+  }
 ;;
 
-let field name value = View.hcat [ plain ~color:muted (name ^ ": "); plain value ]
+let field name value =
+  { text = Some (name ^ ": " ^ value)
+  ; view = View.hcat [ (plain ~color:muted (name ^ ": ")).view; (plain value).view ]
+  }
+;;
 
 let lookup_link workspace id =
   List.find workspace.Workspace.window_links ~f:(fun link -> String.equal link.id id)
@@ -581,7 +638,8 @@ let pane_preview_lines
        | lines ->
          lines
          |> newest_lines_that_fit ~line_limit
-         |> List.map ~f:(fun line -> Ansi_renderer.render (Ansi_text.parse line)))
+         |> List.map ~f:(fun line ->
+           { text = None; view = Ansi_renderer.render (Ansi_text.parse line) }))
     | Failed ((requested_pane, _), error) when String.equal requested_pane pane_id ->
       [ plain ~color:amber ("Preview unavailable: " ^ error) ]
     | No_preview | Loading _ | Ready _ | Failed _ ->
@@ -714,18 +772,18 @@ let detail_lines model ~height =
            blocked"]
       else [%string "WARN · %{blocked_count#Int} shell fallback(s) · details below"]
     in
-    let application_warnings =
+    let affected_panes =
       List.concat_map blocked ~f:(fun decision ->
         let cause =
           match decision.rule_id with
           | Some "adapter:codex:missing-thread" -> "Codex has no durable thread ID."
           | Some _ | None -> decision.reason
         in
-        [ plain
+        [ plain ""
+        ; plain
             ~color:amber
-            [%string
-              "Affected pane: %{pane_location workspace decision.pane_id} \
-               (%{decision.observed})"]
+            [%string "%{pane_location workspace decision.pane_id} · %{decision.pane_id}"]
+        ; field "Application" decision.observed
         ; plain ~color:amber ("Cause: " ^ cause)
         ; plain ~color:amber "Recovery: shell only; the application will not resume."
         ])
@@ -900,7 +958,10 @@ let detail_lines model ~height =
            workspace.windows#Int} window(s) · %{Map.length workspace.panes#Int} pane(s)"]
     ; field "Applications" application_health
     ]
-    @ application_warnings
+    @ [ plain ""; heading [%string "Affected panes (%{blocked_count#Int})"] ]
+    @ (if blocked_count = 0
+       then [ plain ~color:muted "No applications require shell-only recovery." ]
+       else affected_panes)
     @ [ plain "" ]
     @ snapshot_lines
     @ [ plain "" ]
@@ -913,33 +974,117 @@ let detail_lines model ~height =
       ]
 ;;
 
-let render_detail model ~width ~height =
+let detail_dimensions { Dimensions.width; height } =
+  let body_height = Int.max 1 (height - 1) in
+  if width >= 84
+  then
+    { Dimensions.width = Int.max 1 (width - Int.min 44 (width / 2) - 1)
+    ; height = body_height
+    }
+  else (
+    let navigation_height = Int.min 6 (Int.max 2 (body_height / 4)) in
+    { Dimensions.width; height = Int.max 1 (body_height - navigation_height - 1) })
+;;
+
+let is_preview = function
+  | Page_ref.Resource (Window_link _ | Pane _ | Application _) -> true
+  | Overview | Resource (Workspace _ | Session _) | Status -> false
+;;
+
+(* Wrap at word boundaries in terminal columns, preserving field/warning colors. Long
+   paths without spaces can still wrap; live pane output retains its original columns. *)
+let wrap_detail_line { text; view } ~width =
+  let width = Int.max 1 width in
+  let columns = View.width view in
+  let breaks =
+    Option.value_map text ~default:[] ~f:(fun text ->
+      String.split text ~on:' '
+      |> List.folding_map ~init:0 ~f:(fun offset word ->
+        let ending = offset + View.width (View.text word) in
+        ending + 1, ending))
+  in
+  let rec wrap start =
+    if columns - start <= width
+    then [ View.crop ~l:start view ]
+    else (
+      let boundary =
+        List.filter breaks ~f:(fun pos -> pos > start && pos <= start + width)
+        |> List.last
+      in
+      let ending = Option.value boundary ~default:(start + width) in
+      let next = ending + if Option.is_some boundary then 1 else 0 in
+      View.crop ~l:start ~r:(columns - ending) view :: wrap next)
+  in
+  View.vcat (wrap 0)
+;;
+
+type detail_viewport =
+  { body : View.t
+  ; width : int
+  ; height : int
+  ; capacity : int
+  ; total : int
+  ; offset : int
+  ; maximum : int
+  }
+
+let detail_viewport model dimensions =
+  let { Dimensions.width; height } = detail_dimensions dimensions in
   let message =
     Option.value_map model.message ~default:[] ~f:(fun message ->
       [ plain ""; plain ~color:amber message ])
   in
-  panel
-    ~title:
-      (match model.selected with
-       | Resource (Window_link _ | Pane _ | Application _) -> "PREVIEW"
-       | Overview | Resource (Workspace _ | Session _) | Status -> "DETAIL")
-    ~width
-    ~height
-    (detail_lines model ~height @ message)
+  let lines = detail_lines model ~height @ message in
+  let body =
+    (if is_preview model.selected
+     then List.map lines ~f:(fun line -> line.view)
+     else List.map lines ~f:(wrap_detail_line ~width))
+    |> View.vcat
+  in
+  let capacity = Int.max 0 (height - 1) in
+  let total = View.height body in
+  let maximum = Int.max 0 (total - capacity) in
+  let offset = Int.clamp_exn model.detail_offset ~min:0 ~max:maximum in
+  { body; width; height; capacity; total; offset; maximum }
 ;;
 
-let render model { Dimensions.width; height } =
+let render_detail model viewport =
+  let { body; width; height; capacity; total; offset; maximum } = viewport in
+  let title = if is_preview model.selected then "PREVIEW" else "DETAIL" in
+  let title =
+    if maximum = 0 || capacity = 0
+    then title
+    else
+      [%string
+        "%{title} · %{offset + 1#Int}–%{Int.min total (offset + \
+         capacity)#Int}/%{total#Int}"]
+  in
+  panel
+    ~focused:(equal_focus model.focus Detail)
+    ~title
+    ~width
+    ~height
+    [ View.crop ~t:offset body |> crop_to ~width ~height:capacity ]
+;;
+
+let render model ({ Dimensions.width; height } as dimensions) =
+  let viewport = detail_viewport model dimensions in
   let help =
     View.text
       ~attrs:[ Attr.fg muted; Attr.bg terminal_background ]
-      " ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause "
+      (match model.focus with
+       | Navigation ->
+         " Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c \
+          cancel · p pause "
+       | Detail ->
+         " Tab tree · ↑/↓ scroll · PgUp/PgDn · Home/End · r refresh · q quit · c cancel \
+          · p pause ")
   in
   let body_height = Int.max 1 (height - 1) in
   let body =
     if width >= 84
     then (
       let navigation_width = Int.min 44 (width / 2) in
-      let detail_width = Int.max 1 (width - navigation_width - 1) in
       let divider =
         List.init body_height ~f:(fun _ ->
           View.text
@@ -950,13 +1095,11 @@ let render model { Dimensions.width; height } =
       View.hcat
         [ render_navigation model ~width:navigation_width ~height:body_height
         ; divider
-        ; render_detail model ~width:detail_width ~height:body_height
+        ; render_detail model viewport
         ])
     else (
-      (* Keep selection and its details visible together. The tree scrolls to the selected
-         row, while the remaining space belongs to the passive viewer. *)
+      (* Keep the tree and the read-only detail viewer visible in either focus mode. *)
       let navigation_height = Int.min 6 (Int.max 2 (body_height / 4)) in
-      let detail_height = Int.max 1 (body_height - navigation_height - 1) in
       let divider =
         View.text
           ~attrs:[ Attr.fg terminal_foreground; Attr.bg terminal_background ]
@@ -965,7 +1108,7 @@ let render model { Dimensions.width; height } =
       View.vcat
         [ render_navigation model ~width ~height:navigation_height
         ; divider
-        ; render_detail model ~width ~height:detail_height
+        ; render_detail model viewport
         ])
   in
   View.vcat [ crop_to body ~width ~height:body_height; crop_to help ~width ~height:1 ]
@@ -1010,6 +1153,8 @@ let app
         ; snapshots = initial_snapshots
         ; services = initial_services
         ; selected = Overview
+        ; focus = Navigation
+        ; detail_offset = 0
         ; expanded
         ; message = None
         ; preview_generation = 0
@@ -1019,6 +1164,17 @@ let app
       ~apply_action
       graph
   in
+  let maximum_offset =
+    let%arr model and dimensions in
+    (detail_viewport model dimensions).maximum
+  in
+  Bonsai.Edge.on_change
+    ~equal:Int.equal
+    maximum_offset
+    ~callback:
+      (let%arr inject in
+       fun maximum -> inject (Clamp_detail_offset maximum))
+    graph;
   let preview_target =
     let%arr model in
     pane_id_of_page model.workspace model.selected
@@ -1071,8 +1227,14 @@ let app
     render model dimensions
   in
   let handler =
-    let%arr model and inject and refresh in
+    let%arr model and inject and refresh and dimensions in
     fun (event : Event.t) ->
+      let viewport = detail_viewport model dimensions in
+      let scroll_to offset =
+        inject (Scroll_detail_to (Int.clamp_exn offset ~min:0 ~max:viewport.maximum))
+      in
+      let scroll_by delta = inject (Scroll_detail_by (delta, viewport.maximum)) in
+      let move delta = inject (Move (delta, viewport.maximum)) in
       let cancel_oldest () =
         match model.autonomy.active with
         | [] -> Effect.Ignore
@@ -1110,9 +1272,18 @@ let app
                  (model.autonomy, Some (Error.to_string_hum error |> String.strip))))
       in
       match event with
-      | Key_press { key = Arrow `Down; mods = [] } -> inject (Move 1)
-      | Key_press { key = Arrow `Up; mods = [] } -> inject (Move (-1))
+      | Key_press { key = Tab; mods = [] } -> inject Toggle_focus
+      | Key_press { key = Arrow `Down; mods = [] } -> move 1
+      | Key_press { key = Arrow `Up; mods = [] } -> move (-1)
       | Key_press { key = Enter; mods = [] } -> inject Toggle_expanded
+      | Key_press { key = Page direction; mods = [] } ->
+        let delta = Int.max 1 (viewport.capacity - 1) in
+        scroll_by
+          (match direction with
+           | `Down -> delta
+           | `Up -> -delta)
+      | Key_press { key = Home; mods = [] } -> scroll_to 0
+      | Key_press { key = End; mods = [] } -> scroll_to viewport.maximum
       | Key_press { key = ASCII 'r' | ASCII 'R'; mods = [] } ->
         if !refreshing
         then Effect.Ignore

@@ -2,13 +2,15 @@ open! Core
 open Bonsai_term
 module Autonomy_runner = Tmux_recovery_application.Autonomy
 
-(** The interactive navigator. Up/down select a tree row, Enter expands or collapses
-    branches, and leaves ignore Enter. Details follow the selected row automatically;
-    narrow terminals stack the tree above the passive detail viewer. The autonomy pipeline
-    itself is service-owned and disk-persisted; the TUI is a viewer and controller over
-    it. [autonomy_runner] is the application runner backed by the persistent store:
-    refreshes reconcile the pipeline (one tick) and the view shows the persisted policy,
-    the eligibility funnel, pending actions, and the recent audit. [c] cancels a pending
+(** The interactive navigator. Tab toggles focus between navigation and read-only detail.
+    Up/down select a tree row or scroll detail; Page Up/Down and Home/End scroll detail.
+    Enter expands or collapses navigation branches, and leaves/detail ignore Enter.
+    Details follow selection automatically; narrow terminals stack the tree above the
+    detail viewer. Shift-Tab and left/right are unbound. The autonomy pipeline itself is
+    service-owned and disk-persisted; the TUI is a viewer and controller over it.
+    [autonomy_runner] is the application runner backed by the persistent store: refreshes
+    reconcile the pipeline (one tick) and the view shows the persisted policy, the
+    eligibility funnel, pending actions, and the recent audit. [c] cancels a pending
     action and [p] pauses or resumes the pipeline. *)
 val app
   :  ?capture_pane:(pane_id:string -> string list Or_error.t Effect.t)
