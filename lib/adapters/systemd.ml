@@ -381,7 +381,7 @@ Description=Restore the last good tmux-recovery workspace
 Type=oneshot
 Environment=TMUX_RECOVERY_TMUX=%{tmux_path}
 Environment="PATH=%{runtime_path}"
-ExecStart=%{binary_path} restore --approve --if-empty --quiet
+ExecStart=%{binary_path} restore --if-empty --quiet
 RemainAfterExit=true
 
 [Install]

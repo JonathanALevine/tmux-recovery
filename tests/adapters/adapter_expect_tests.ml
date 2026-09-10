@@ -714,7 +714,7 @@ let%test_unit "managed launchd definitions call only the stable binary" =
     (Some "tmux-recovery autonomy tick --quiet");
   [%test_eq: string option]
     status.login_restore.command
-    (Some "tmux-recovery restore --approve --if-empty --quiet")
+    (Some "tmux-recovery restore --if-empty --quiet")
 ;;
 
 let unit ~name ~contents = { Systemd.name; path = "/fixtures/systemd/" ^ name; contents }
@@ -831,7 +831,7 @@ let%test_unit "managed systemd units use direct native entrypoints" =
   assert (
     String.is_substring
       contents
-      ~substring:"ExecStart=/managed/current/tmux-recovery restore --approve");
+      ~substring:"ExecStart=/managed/current/tmux-recovery restore --if-empty --quiet");
   assert (not (String.is_substring contents ~substring:"tmux-recovery snapshots"));
   assert (String.is_substring contents ~substring:"RandomizedDelaySec=30s");
   assert (
@@ -864,7 +864,7 @@ let%test_unit "managed systemd units use direct native entrypoints" =
     (Some "tmux-recovery autonomy tick --quiet");
   [%test_eq: string option]
     status.login_restore.command
-    (Some "tmux-recovery restore --approve --if-empty --quiet")
+    (Some "tmux-recovery restore --if-empty --quiet")
 ;;
 
 module Autonomy = Tmux_recovery_domain.Autonomy

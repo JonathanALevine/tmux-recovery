@@ -104,7 +104,7 @@ let services : Service.t Or_error.t =
         { activation = Loaded
         ; schedule = Some "at login"
         ; definition = Some "/Users/demo/Library/LaunchAgents/com.demo.tmux.plist"
-        ; command = Some "tmux-recovery restore --approve --if-empty --quiet"
+        ; command = Some "tmux-recovery restore --if-empty --quiet"
         }
     ; binary_path =
         Some "/Users/demo/.local/share/tmux-recovery/bin/current/tmux-recovery"

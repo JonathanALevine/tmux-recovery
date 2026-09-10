@@ -330,7 +330,7 @@ let managed_definitions config ~binary_path ~tmux_path ~runtime_path ~log_direct
       "autonomy"
   ; definition
       "org.tmux-recovery.restore"
-      [ binary_path; "restore"; "--approve"; "--if-empty"; "--quiet" ]
+      [ binary_path; "restore"; "--if-empty"; "--quiet" ]
       `Login
       "restore"
   ]

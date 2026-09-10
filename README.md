@@ -63,8 +63,8 @@ offers `snapshot` and `snapshots`.
 
 ## TUI commands
 
-The TUI is read-only. Actions that change tmux or service state stay in the CLI
-and require an explicit approval flag.
+The TUI is read-only. Use the CLI to save and restore workspaces or manage
+background services.
 
 | Key | Action |
 | --- | --- |
@@ -87,18 +87,20 @@ tmux-recovery doctor
 tmux-recovery snapshots list
 
 # Save
-tmux-recovery snapshot --dry-run
 tmux-recovery snapshot
 
 # Restore the last known-good snapshot
-tmux-recovery restore --dry-run
-tmux-recovery restore --approve
+tmux-recovery restore
 
-# Preview or install periodic save and login-restore services
+# Install periodic save and login-restore services
 tmux-recovery service status
-tmux-recovery service sync --dry-run
-tmux-recovery service sync --approve
+tmux-recovery service sync
+tmux-recovery service enable
 ```
+
+These commands execute directly. Add `--dry-run` to preview a save, restore, import,
+or service sync/enable/disable without applying changes. The old `--approve`
+flag is accepted for compatibility but is no longer needed for these commands.
 
 A restore refuses to run when the target already contains sessions. Use
 `--socket recovery-test` to rehearse against a disposable named socket, or

@@ -90,6 +90,14 @@ let json_param =
   Command.Param.flag "--json" Command.Param.no_arg ~doc:" emit stable versioned JSON"
 ;;
 
+(* Older installed services and scripts still pass this flag. *)
+let legacy_approve_param =
+  Command.Param.flag
+    "--approve"
+    Command.Param.no_arg
+    ~doc:" deprecated compatibility flag; commands execute by default"
+;;
+
 let service socket_name = App_recovery.create ?socket_name ()
 
 let snapshot_directory_param =
@@ -432,13 +440,12 @@ let snapshots_restore_command =
      and native_directory = native_snapshot_directory_param
      and dry_run =
        flag "--dry-run" no_arg ~doc:" show the restore plan without changing tmux"
-     and approve =
-       flag "--approve" no_arg ~doc:" approve mutation of an empty target socket"
+     and _approve = legacy_approve_param
      and no_applications =
        flag
          "--no-applications"
          no_arg
-         ~doc:" restore structure and shells without approved application restarts"
+         ~doc:" restore structure and shells without restarting applications"
      and if_empty =
        flag
          "--if-empty"
@@ -509,10 +516,6 @@ let snapshots_restore_command =
              |> List.iter ~f:(fun (action, count) ->
                printf "%-12s %d\n" (Recovery.Action.label action) count);
              List.iter plan.recovery.warnings ~f:(printf "warning: %s\n")))
-         else if not approve
-         then
-           Deferred.Or_error.error_string
-             "restore changes tmux state; review --dry-run and rerun with --approve"
          else (
            let%bind result =
              App_snapshot.restore snapshots id ~launch_applications:(not no_applications)
@@ -616,56 +619,53 @@ let snapshots_import_command =
      and directory = snapshot_directory_param
      and native_directory = native_snapshot_directory_param
      and dry_run = flag "--dry-run" no_arg ~doc:" validate and show the import plan"
-     and approve = flag "--approve" no_arg ~doc:" approve writing the native bundle"
+     and _approve = legacy_approve_param
      and json = json_param in
      fun () ->
        let open Deferred.Or_error.Let_syntax in
-       if Bool.equal dry_run approve
-       then Deferred.Or_error.error_string "choose exactly one of --dry-run or --approve"
-       else (
-         let%bind legacy_id = Snapshot.Id.of_string legacy_id |> Deferred.return in
-         let snapshots =
-           App_snapshot.create ?directory ?native_directory ~tool_version:version ()
-         in
-         if dry_run
-         then (
-           let%map _, plan = App_snapshot.prepare_import_resurrect snapshots legacy_id in
-           if json
-           then
-             envelope
-               ~command:"snapshots import-resurrect"
-               (`Assoc
-                 [ "dry_run", `Bool true
-                 ; "legacy", `String (Snapshot.Id.to_string legacy_id)
-                 ; "plan", Native_snapshot.save_plan_to_yojson plan
-                 ])
-             |> print_json
-           else (
-             printf "Would import %s\n" (Snapshot.Id.to_string legacy_id);
-             printf "Native ID: %s\n" (Snapshot.Id.to_string plan.id);
-             printf
-               "Workspace: %d sessions, %d windows, %d panes\n"
-               plan.session_count
-               plan.window_count
-               plan.pane_count))
+       let%bind legacy_id = Snapshot.Id.of_string legacy_id |> Deferred.return in
+       let snapshots =
+         App_snapshot.create ?directory ?native_directory ~tool_version:version ()
+       in
+       if dry_run
+       then (
+         let%map _, plan = App_snapshot.prepare_import_resurrect snapshots legacy_id in
+         if json
+         then
+           envelope
+             ~command:"snapshots import-resurrect"
+             (`Assoc
+               [ "dry_run", `Bool true
+               ; "legacy", `String (Snapshot.Id.to_string legacy_id)
+               ; "plan", Native_snapshot.save_plan_to_yojson plan
+               ])
+           |> print_json
          else (
-           let%map summary = App_snapshot.import_resurrect snapshots legacy_id in
-           if json
-           then
-             envelope
-               ~command:"snapshots import-resurrect"
-               (Snapshot.summary_to_yojson summary)
-             |> print_json
-           else (
-             printf
-               "Imported %s as %s\n"
-               (Snapshot.Id.to_string legacy_id)
-               (Snapshot.Id.to_string summary.id);
-             printf
-               "Workspace: %d sessions, %d windows, %d panes\n"
-               summary.session_count
-               summary.window_count
-               summary.pane_count))))
+           printf "Would import %s\n" (Snapshot.Id.to_string legacy_id);
+           printf "Native ID: %s\n" (Snapshot.Id.to_string plan.id);
+           printf
+             "Workspace: %d sessions, %d windows, %d panes\n"
+             plan.session_count
+             plan.window_count
+             plan.pane_count))
+       else (
+         let%map summary = App_snapshot.import_resurrect snapshots legacy_id in
+         if json
+         then
+           envelope
+             ~command:"snapshots import-resurrect"
+             (Snapshot.summary_to_yojson summary)
+           |> print_json
+         else (
+           printf
+             "Imported %s as %s\n"
+             (Snapshot.Id.to_string legacy_id)
+             (Snapshot.Id.to_string summary.id);
+           printf
+             "Workspace: %d sessions, %d windows, %d panes\n"
+             summary.session_count
+             summary.window_count
+             summary.pane_count)))
 ;;
 
 let snapshots_command =
@@ -767,49 +767,37 @@ let service_sync_command =
          (optional_with_default Sys.executable_name string)
          ~doc:"PATH executable to stage (defaults to the running executable)"
      and dry_run = flag "--dry-run" no_arg ~doc:" show paths and hash without writing"
-     and approve = flag "--approve" no_arg ~doc:" approve stable runtime mutation"
+     and _approve = legacy_approve_param
      and json = json_param in
      fun () ->
        let open Deferred.Or_error.Let_syntax in
-       if dry_run && approve
-       then Deferred.Or_error.error_string "choose either --dry-run or --approve"
-       else if (not dry_run) && not approve
+       let services = App_service.create () in
+       let%bind plan = App_service.sync_plan services ~source ~version in
+       let%bind () = if dry_run then return () else App_service.sync services plan in
+       if json
        then
-         Deferred.Or_error.error_string
-           "review service sync --dry-run, then rerun with --approve"
+         envelope
+           ~command:"service sync"
+           (`Assoc
+             [ "applied", `Bool (not dry_run); "plan", Service.sync_plan_to_yojson plan ])
+         |> print_json
        else (
-         let services = App_service.create () in
-         let%bind plan = App_service.sync_plan services ~source ~version in
-         let%bind () = if approve then App_service.sync services plan else return () in
-         if json
-         then
-           envelope
-             ~command:"service sync"
-             (`Assoc
-               [ "applied", `Bool approve; "plan", Service.sync_plan_to_yojson plan ])
-           |> print_json
-         else (
-           printf "%s stable runtime\n" (if approve then "Staged" else "Would stage");
-           printf "Source:      %s\n" plan.source;
-           printf "Destination: %s\n" plan.destination;
-           printf "Current:     %s\n" plan.current;
-           printf "SHA-256:     %s\n" plan.sha256);
-         return ()))
+         printf "%s stable runtime\n" (if dry_run then "Would stage" else "Staged");
+         printf "Source:      %s\n" plan.source;
+         printf "Destination: %s\n" plan.destination;
+         printf "Current:     %s\n" plan.current;
+         printf "SHA-256:     %s\n" plan.sha256);
+       return ())
 ;;
 
 let service_rollback_command =
   Command.async_or_error
     ~summary:"Swap the stable service runtime back to its previous version"
-    (let%map_open.Command approve =
-       flag "--approve" no_arg ~doc:" approve stable runtime pointer rollback"
-     in
+    (let%map_open.Command _approve = legacy_approve_param in
      fun () ->
-       if not approve
-       then Deferred.Or_error.error_string "runtime rollback requires --approve"
-       else (
-         let%map result = App_service.rollback (App_service.create ()) in
-         let%map.Or_error () = result in
-         print_endline "Rolled the stable runtime back to the previous version."))
+       let%map result = App_service.rollback (App_service.create ()) in
+       let%map.Or_error () = result in
+       print_endline "Rolled the stable runtime back to the previous version.")
 ;;
 
 let service_enable_command =
@@ -817,34 +805,31 @@ let service_enable_command =
     ~summary:"Install and load managed native services after conflict checks"
     (let%map_open.Command dry_run =
        flag "--dry-run" no_arg ~doc:" show the enable plan without changing services"
-     and approve =
-       flag "--approve" no_arg ~doc:" approve service installation and loading"
+     and _approve = legacy_approve_param
      and json = json_param in
      fun () ->
        let open Deferred.Or_error.Let_syntax in
-       if Bool.equal dry_run approve
-       then Deferred.Or_error.error_string "choose exactly one of --dry-run or --approve"
+       let services = App_service.create () in
+       let%bind plan = App_service.plan services in
+       let%bind () = if dry_run then return () else App_service.enable services plan in
+       if json
+       then
+         envelope
+           ~command:"service enable"
+           (`Assoc
+             [ "applied", `Bool (not dry_run); "plan", Service.plan_to_yojson plan ])
+         |> print_json
        else (
-         let services = App_service.create () in
-         let%bind plan = App_service.plan services in
-         let%bind () = if approve then App_service.enable services plan else return () in
-         if json
-         then
-           envelope
-             ~command:"service enable"
-             (`Assoc [ "applied", `Bool approve; "plan", Service.plan_to_yojson plan ])
-           |> print_json
-         else (
-           printf
-             "%s managed %s services.\n"
-             (if approve then "Enabled" else "Would enable")
-             (Service.manager_label plan.manager);
-           List.iter plan.files ~f:(fun file -> printf "  %s\n" file.Service.path);
-           if not (List.is_empty plan.conflicts)
-           then (
-             print_endline "Blocked by legacy conflicts:";
-             List.iter plan.conflicts ~f:(printf "  %s\n")));
-         return ()))
+         printf
+           "%s managed %s services.\n"
+           (if dry_run then "Would enable" else "Enabled")
+           (Service.manager_label plan.manager);
+         List.iter plan.files ~f:(fun file -> printf "  %s\n" file.Service.path);
+         if not (List.is_empty plan.conflicts)
+         then (
+           print_endline "Blocked by legacy conflicts:";
+           List.iter plan.conflicts ~f:(printf "  %s\n")));
+       return ())
 ;;
 
 let service_disable_command =
@@ -852,19 +837,16 @@ let service_disable_command =
     ~summary:"Unload managed native services without deleting snapshot data"
     (let%map_open.Command dry_run =
        flag "--dry-run" no_arg ~doc:" show service-manager disable commands"
-     and approve = flag "--approve" no_arg ~doc:" approve unloading managed services" in
+     and _approve = legacy_approve_param in
      fun () ->
        let open Deferred.Or_error.Let_syntax in
-       if Bool.equal dry_run approve
-       then Deferred.Or_error.error_string "choose exactly one of --dry-run or --approve"
-       else (
-         let services = App_service.create () in
-         let%bind plan = App_service.plan services in
-         let%bind () = if approve then App_service.disable services plan else return () in
-         printf "%s service-manager commands:\n" (if approve then "Ran" else "Would run");
-         List.iter plan.disable_commands ~f:(fun command ->
-           printf "  %s %s\n" command.program (String.concat command.arguments ~sep:" "));
-         return ()))
+       let services = App_service.create () in
+       let%bind plan = App_service.plan services in
+       let%bind () = if dry_run then return () else App_service.disable services plan in
+       printf "%s service-manager commands:\n" (if dry_run then "Would run" else "Ran");
+       List.iter plan.disable_commands ~f:(fun command ->
+         printf "  %s %s\n" command.program (String.concat command.arguments ~sep:" "));
+       return ())
 ;;
 
 let service_command =
@@ -910,35 +892,25 @@ let migrate_plan_command =
 let migrate_apply_command =
   Command.async_or_error
     ~summary:"Back up and replace loaded legacy automation with managed services"
-    (let%map_open.Command approve =
-       flag "--approve" no_arg ~doc:" approve the reviewed reversible cutover"
-     in
+    (let%map_open.Command _approve = legacy_approve_param in
      fun () ->
-       if not approve
-       then Deferred.Or_error.error_string "migration cutover requires --approve"
-       else (
-         let migrate = App_migrate.create () in
-         let open Deferred.Or_error.Let_syntax in
-         let%bind plan = App_migrate.plan migrate in
-         let%map backup = App_migrate.apply migrate plan in
-         printf "Native service cutover succeeded.\nRollback bundle: %s\n" backup))
+       let migrate = App_migrate.create () in
+       let open Deferred.Or_error.Let_syntax in
+       let%bind plan = App_migrate.plan migrate in
+       let%map backup = App_migrate.apply migrate plan in
+       printf "Native service cutover succeeded.\nRollback bundle: %s\n" backup)
 ;;
 
 let migrate_rollback_command =
   Command.async_or_error
     ~summary:"Disable managed services and reload the backed-up legacy definitions"
-    (let%map_open.Command approve =
-       flag "--approve" no_arg ~doc:" approve rollback to legacy automation"
-     in
+    (let%map_open.Command _approve = legacy_approve_param in
      fun () ->
-       if not approve
-       then Deferred.Or_error.error_string "migration rollback requires --approve"
-       else (
-         let migrate = App_migrate.create () in
-         let open Deferred.Or_error.Let_syntax in
-         let%bind plan = App_migrate.plan migrate in
-         let%map () = App_migrate.rollback migrate plan in
-         print_endline "Managed services disabled and legacy automation reloaded."))
+       let migrate = App_migrate.create () in
+       let open Deferred.Or_error.Let_syntax in
+       let%bind plan = App_migrate.plan migrate in
+       let%map () = App_migrate.rollback migrate plan in
+       print_endline "Managed services disabled and legacy automation reloaded.")
 ;;
 
 let migrate_command =

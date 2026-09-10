@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Ordinary restore, import, service and migration commands execute directly;
+  `--dry-run` remains an optional preview and legacy `--approve` is accepted.
+  Autonomous cleanup continues to default to dry-run.
+
 ### Fixed
 
 - Recover current interactive Codex conversations from their writer locks, keep
