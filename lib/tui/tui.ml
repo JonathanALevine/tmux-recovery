@@ -460,7 +460,7 @@ let crop_to view ~width ~height =
 ;;
 
 let panel ?(focused = false) ?(suffix = "") ~title ~width ~height body =
-  let title = (if focused then "▶ " else "") ^ title ^ suffix in
+  let title = (if focused then "▶ " else "  ") ^ title ^ suffix in
   let title =
     View.text
       ~attrs:[ Attr.bold; Attr.fg cyan; Attr.bg terminal_background ]
