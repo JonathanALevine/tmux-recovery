@@ -476,9 +476,7 @@ let panel ~focused ?(suffix = "") ~title ~width ~height body =
   let rule =
     View.text
       ~attrs:
-        [ Attr.fg (if focused then Attr.Color.Expert.lightblue else muted)
-        ; Attr.bg terminal_background
-        ]
+        [ Attr.fg (if focused then selected_bg else muted); Attr.bg terminal_background ]
       (String.concat
          (List.init (Int.max 0 width) ~f:(fun _ -> if focused then "━" else "─")))
   in
