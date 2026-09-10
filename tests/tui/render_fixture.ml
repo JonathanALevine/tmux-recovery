@@ -8,11 +8,13 @@ let show handle =
   show_view handle
 ;;
 
-let move_down handle count =
+let move handle direction count =
   List.init count ~f:Fn.id
   |> List.iter ~f:(fun _ ->
-    Bonsai_term_test.send_event handle (Key_press { key = Arrow `Down; mods = [] }))
+    Bonsai_term_test.send_event handle (Key_press { key = Arrow direction; mods = [] }))
 ;;
+
+let move_down handle count = move handle `Down count
 
 let () =
   let initial =
@@ -75,12 +77,12 @@ let () =
   Bonsai_term_test.send_event warning (Key_press { key = Tab; mods = [] });
   show_view warning;
   print_endline "--- STATUS SCROLLED TO END ---";
-  Bonsai_term_test.send_event warning (Key_press { key = End; mods = [] });
+  move_down warning 100;
   show_view warning;
   print_endline "--- NARROW AFFECTED PANES ---";
   Bonsai_term_test.set_dimensions warning { width = 40; height = 14 };
   Handle.recompute_view_until_stable warning;
-  Bonsai_term_test.send_event warning (Key_press { key = Home; mods = [] });
+  move warning `Up 100;
   move_down warning 10;
   show_view warning;
   print_endline "--- EMPTY STATUS ---";

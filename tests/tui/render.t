@@ -238,7 +238,7 @@
   │                                            ┃                                                       │
   │                                            ┃Snapshots                                              │
   │                                            ┃Readiness: PASS · valid native recovery point available│
-  │ Tab navigation · ↑/↓ scroll · Home/End · r refresh · q quit · c cancel · p pause                   │
+  │ Tab navigation · ↑/↓ scroll · r refresh · q quit · c cancel · p pause                              │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- STATUS SCROLLED TO END ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -263,7 +263,7 @@
   │                                            ┃targets are checked.                                   │
   │                                            ┃Use the CLI for snapshot restore and automation        │
   │                                            ┃changes.                                               │
-  │ Tab navigation · ↑/↓ scroll · Home/End · r refresh · q quit · c cancel · p pause                   │
+  │ Tab navigation · ↑/↓ scroll · r refresh · q quit · c cancel · p pause                              │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- NARROW AFFECTED PANES ---
   ┌────────────────────────────────────────┐
@@ -280,7 +280,7 @@
   │Application: codex                      │
   │Cause: Codex has no durable thread ID.  │
   │Recovery: shell only; the application   │
-  │ Tab navigation · ↑/↓ scroll · Home/End │
+  │ Tab navigation · ↑/↓ scroll · r refresh│
   └────────────────────────────────────────┘
   --- EMPTY STATUS ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
