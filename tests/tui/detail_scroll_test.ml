@@ -17,6 +17,16 @@ let resize handle width height =
   Handle.recompute_view_until_stable handle
 ;;
 
+let scroll_to_edge handle direction =
+  let rec loop previous remaining =
+    assert (remaining > 0);
+    send handle (Arrow direction);
+    let current = Handle.show_into_string handle in
+    if not (String.equal previous current) then loop current (remaining - 1)
+  in
+  loop (Handle.show_into_string handle) 1000
+;;
+
 let%test_unit "only Tab changes focus; detail keys never change tree selection" =
   let handle = Bonsai_term_test.create_handle Fixture.app in
   resize handle 100 22;
@@ -66,7 +76,7 @@ let%test_unit "all affected panes and later status sections are reachable" =
   assert (String.is_substring top ~substring:"Recovery: shell only;");
   send handle (Arrow `Up);
   [%test_eq: string] (rendered ()) top;
-  List.iter [ Event.Key.Page `Down; Page `Up ] ~f:(fun key ->
+  List.iter [ Event.Key.Page `Down; Page `Up; Home; End ] ~f:(fun key ->
     send handle key;
     [%test_eq: string] (rendered ()) top);
   let contents = Buffer.create 10000 in
@@ -88,11 +98,10 @@ let%test_unit "all affected panes and later status sections are reachable" =
   assert (String.is_substring contents ~substring:"Automation");
   send handle (Arrow `Down);
   [%test_eq: string] (rendered ()) bottom;
-  send handle (Page `Up);
-  [%test_eq: string] (rendered ()) bottom;
-  send handle (Page `Down);
-  [%test_eq: string] (rendered ()) bottom;
-  send handle Home;
+  List.iter [ Event.Key.Page `Down; Page `Up; Home; End ] ~f:(fun key ->
+    send handle key;
+    [%test_eq: string] (rendered ()) bottom);
+  scroll_to_edge handle `Up;
   [%test_eq: string] (rendered ()) top;
   (* Several key events can arrive before Bonsai draws the next frame. *)
   for _ = 1 to 5 do
@@ -100,12 +109,12 @@ let%test_unit "all affected panes and later status sections are reachable" =
   done;
   Handle.recompute_view_until_stable handle;
   let rapid = rendered () in
-  send handle Home;
+  scroll_to_edge handle `Up;
   for _ = 1 to 5 do
     send handle (Arrow `Down)
   done;
   [%test_eq: string] (rendered ()) rapid;
-  send handle End;
+  scroll_to_edge handle `Down;
   [%test_eq: string] (rendered ()) bottom;
   send handle Tab;
   send handle (Arrow `Up);
@@ -161,7 +170,7 @@ let%test_unit "refresh and resize retain focus and clamp the scroll offset" =
       let contents = rendered () in
       assert (String.is_substring contents ~substring:"NAVIGATION");
       assert (String.is_substring contents ~substring:"Tab navigation");
-      send handle End;
+      scroll_to_edge handle `Down;
       send handle (Arrow `Down);
       [%test_eq: Dimensions.t]
         (View.dimensions (Bonsai_term_test.last_view handle))
@@ -210,7 +219,7 @@ let%test_unit "a shorter refreshed status clamps scrolling without losing focus"
   resize handle 100 22;
   select_status handle;
   send handle Tab;
-  send handle End;
+  scroll_to_edge handle `Down;
   send handle (ASCII 'r');
   let rendered () = Handle.show_into_string handle in
   let refreshed = rendered () in
@@ -218,6 +227,6 @@ let%test_unit "a shorter refreshed status clamps scrolling without losing focus"
   assert (String.is_substring refreshed ~substring:"Recovery safety:");
   send handle (Arrow `Down);
   [%test_eq: string] (rendered ()) refreshed;
-  send handle Home;
+  scroll_to_edge handle `Up;
   assert (String.is_substring (rendered ()) ~substring:"Affected panes (0)")
 ;;

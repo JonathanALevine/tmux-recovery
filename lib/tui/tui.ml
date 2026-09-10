@@ -209,7 +209,6 @@ type model =
 type action =
   | Move of int * int
   | Toggle_focus
-  | Scroll_detail_to of int
   | Clamp_detail_offset of int
   | Toggle_expanded
   | Refresh_started
@@ -291,8 +290,6 @@ let apply_action _context model action =
          | Navigation -> Detail
          | Detail -> Navigation)
     }
-  | Scroll_detail_to _ when equal_focus model.focus Navigation -> model
-  | Scroll_detail_to detail_offset -> { model with detail_offset }
   | Clamp_detail_offset maximum ->
     { model with detail_offset = Int.min model.detail_offset maximum }
   | Move (delta, maximum) when equal_focus model.focus Detail -> scroll_by delta maximum
@@ -1084,8 +1081,7 @@ let render model ({ Dimensions.width; height } as dimensions) =
          " Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c \
           cancel · p pause "
        | Detail ->
-         " Tab navigation · ↑/↓ scroll · Home/End · r refresh · q quit · c cancel · p \
-          pause ")
+         " Tab navigation · ↑/↓ scroll · r refresh · q quit · c cancel · p pause ")
   in
   let body_height = Int.max 1 (height - 1) in
   let body =
@@ -1237,9 +1233,6 @@ let app
     let%arr model and inject and refresh and dimensions in
     fun (event : Event.t) ->
       let viewport = detail_viewport model dimensions in
-      let scroll_to offset =
-        inject (Scroll_detail_to (Int.clamp_exn offset ~min:0 ~max:viewport.maximum))
-      in
       let move delta = inject (Move (delta, viewport.maximum)) in
       let cancel_oldest () =
         match model.autonomy.active with
@@ -1282,8 +1275,6 @@ let app
       | Key_press { key = Arrow `Down; mods = [] } -> move 1
       | Key_press { key = Arrow `Up; mods = [] } -> move (-1)
       | Key_press { key = Enter; mods = [] } -> inject Toggle_expanded
-      | Key_press { key = Home; mods = [] } -> scroll_to 0
-      | Key_press { key = End; mods = [] } -> scroll_to viewport.maximum
       | Key_press { key = ASCII 'r' | ASCII 'R'; mods = [] } ->
         if !refreshing
         then Effect.Ignore

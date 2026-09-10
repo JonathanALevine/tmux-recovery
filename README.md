@@ -81,7 +81,6 @@ Use the CLI to save and restore workspaces or manage background services.
 | <kbd>Tab</kbd> | Switch focus between navigation and detail |
 | <kbd>↑</kbd> / <kbd>↓</kbd> | Move through the tree, or scroll the focused detail viewer |
 | <kbd>Enter</kbd> | Expand/collapse a navigation branch; no action on leaves or in detail |
-| <kbd>Home</kbd> / <kbd>End</kbd> | Jump to the top/bottom of detail |
 | <kbd>r</kbd> | Refresh workspace, snapshot, service, and pane-preview data |
 | <kbd>c</kbd> | Cancel a pending autonomous cleanup action |
 | <kbd>p</kbd> | Pause/resume autonomous cleanup |
