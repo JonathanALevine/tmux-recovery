@@ -72,18 +72,18 @@ shows `Tab detail · ↑/↓ navigate` when navigation has focus and
 `Tab navigation · ↑/↓ scroll` when detail has focus. Headings align with their
 pane's content, keeping the same position and color in both modes. On narrow terminals,
 details appear below the tree. Long details scroll as one view, with the visible
-line range in the heading. Under **Status**, **Affected panes** is a collapsible
-navigation list, initially closed. Press Enter to expand it, then use Up/Down to
-select a pane and view its location, application, cause, and recovery consequence
-in the detail viewer. Refresh retains the selected pane while it remains affected;
-if it recovers or disappears, selection returns to the Affected panes list.
+line range in the heading. In **Status** details, **Affected panes** is an inline
+collapsible list, initially open. Tab into Detail and press Enter to collapse or
+expand it; Up/Down scrolls through the pane locations, applications, causes, and
+recovery consequences along with the rest of Status. Refresh preserves the list's
+open/closed state and keeps scrolling within the available content.
 Use the CLI to save and restore workspaces or manage background services.
 
 | Key | Action |
 | --- | --- |
 | <kbd>Tab</kbd> | Switch focus between navigation and detail |
 | <kbd>↑</kbd> / <kbd>↓</kbd> | Move through the tree, or scroll the focused detail viewer |
-| <kbd>Enter</kbd> | Expand/collapse a navigation branch; no action on leaves or in detail |
+| <kbd>Enter</kbd> | Expand/collapse a navigation branch, or Affected panes when Status detail has focus |
 | <kbd>r</kbd> | Refresh workspace, snapshot, service, and pane-preview data |
 | <kbd>c</kbd> | Cancel a pending autonomous cleanup action |
 | <kbd>p</kbd> | Pause/resume autonomous cleanup |

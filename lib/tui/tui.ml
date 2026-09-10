@@ -27,8 +27,6 @@ module Page_ref = struct
       | Overview
       | Resource of resource
       | Status
-      | Affected_panes
-      | Affected_pane of Workspace.Source.t * string
     [@@deriving compare, equal, sexp_of]
   end
 
@@ -137,40 +135,6 @@ let blocked_decisions (recovery : Recovery.plan) =
     Recovery.Action.equal decision.action Recovery.Action.Blocked)
 ;;
 
-let pane_location (workspace : Workspace.t) pane_id =
-  match Map.find workspace.panes pane_id with
-  | None -> pane_id
-  | Some pane ->
-    let locations =
-      workspace.window_links
-      |> List.filter ~f:(fun link -> String.equal link.window_id pane.window_id)
-      |> List.filter_map ~f:(fun link ->
-        Map.find workspace.sessions link.session_id
-        |> Option.map ~f:(fun session ->
-          [%string "%{session.name}:%{link.index#Int}.%{pane.index#Int}"]))
-      |> List.dedup_and_sort ~compare:String.compare
-    in
-    (match locations with
-     | [] -> pane_id
-     | locations -> String.concat locations ~sep:" / ")
-;;
-
-let affected_panes_node workspace recovery =
-  let decisions = blocked_decisions recovery in
-  { page = Affected_panes
-  ; label = "Affected panes"
-  ; badge = Some (Int.to_string (List.length decisions))
-  ; children =
-      List.map decisions ~f:(fun (decision : Recovery.decision) ->
-        { page = Affected_pane (workspace.Workspace.source, decision.pane_id)
-        ; label =
-            [%string "%{pane_location workspace decision.pane_id} · %{decision.observed}"]
-        ; badge = Some decision.pane_id
-        ; children = []
-        })
-  }
-;;
-
 let status_badge workspace recovery snapshots services =
   let snapshots_ready =
     match snapshots with
@@ -206,7 +170,7 @@ let navigation (workspace : Workspace.t) recovery snapshots services =
   ; { page = Status
     ; label = "Status"
     ; badge = status_badge workspace recovery snapshots services
-    ; children = [ affected_panes_node workspace recovery ]
+    ; children = []
     }
   ]
 ;;
@@ -235,6 +199,7 @@ type model =
   ; selected : Page_ref.t
   ; focus : focus
   ; detail_offset : int
+  ; affected_panes_expanded : bool
   ; expanded : Page_ref.Set.t
   ; message : string option
   ; preview_generation : int
@@ -246,7 +211,7 @@ type action =
   | Move of int * int
   | Toggle_focus
   | Clamp_detail_offset of int
-  | Toggle_expanded
+  | Toggle_expanded of Dimensions.t
   | Refresh_started
   | Replace_data of
       Workspace.t Or_error.t
@@ -301,129 +266,6 @@ let selected_index visible selected =
 let page_exists workspace recovery snapshots services expanded page =
   visible_nodes workspace recovery snapshots services expanded
   |> List.exists ~f:(fun item -> Page_ref.equal item.node.page page)
-;;
-
-let apply_action _context model action =
-  let visible =
-    visible_nodes
-      model.workspace
-      model.recovery
-      model.snapshots
-      model.services
-      model.expanded
-  in
-  let current_index = selected_index visible model.selected in
-  let current = List.nth visible current_index in
-  let scroll_by delta maximum =
-    let offset = Int.min model.detail_offset maximum in
-    { model with detail_offset = Int.clamp_exn (offset + delta) ~min:0 ~max:maximum }
-  in
-  match action with
-  | Toggle_focus ->
-    { model with
-      focus =
-        (match model.focus with
-         | Navigation -> Detail
-         | Detail -> Navigation)
-    }
-  | Clamp_detail_offset maximum ->
-    { model with detail_offset = Int.min model.detail_offset maximum }
-  | Move (delta, maximum) when equal_focus model.focus Detail -> scroll_by delta maximum
-  | Move (delta, _) ->
-    let next_index =
-      Int.clamp_exn
-        (current_index + delta)
-        ~min:0
-        ~max:(Int.max 0 (List.length visible - 1))
-    in
-    let selected =
-      Option.value_map
-        (List.nth visible next_index)
-        ~default:model.selected
-        ~f:(fun item -> item.node.page)
-    in
-    with_selected model selected
-  | Toggle_expanded when equal_focus model.focus Detail -> model
-  | Toggle_expanded ->
-    (match current with
-     | Some { node = { page; children = _ :: _; _ }; _ } ->
-       let expanded =
-         if Set.mem model.expanded page
-         then Set.remove model.expanded page
-         else Set.add model.expanded page
-       in
-       { model with expanded }
-     | _ -> model)
-  | Refresh_started -> { model with message = Some "refreshing recovery state…" }
-  | Replace_data (workspace_result, recovery_result, snapshots, services) ->
-    let workspace =
-      match workspace_result with
-      | Ok workspace -> workspace
-      | Error _ -> model.workspace
-    in
-    let recovery = Result.ok recovery_result |> Option.value ~default:model.recovery in
-    let valid_branches =
-      branch_pages (navigation workspace recovery snapshots services)
-      |> Page_ref.Set.of_list
-    in
-    let expanded = Set.inter model.expanded valid_branches in
-    let selected =
-      if page_exists workspace recovery snapshots services expanded model.selected
-      then model.selected
-      else (
-        match model.selected with
-        | Affected_pane _
-          when page_exists workspace recovery snapshots services expanded Affected_panes
-          -> Affected_panes
-        | Affected_pane _ | Affected_panes -> Status
-        | Overview | Resource _ | Status -> Overview)
-    in
-    let unavailable =
-      List.count
-        [ Result.is_error workspace_result
-        ; Result.is_error recovery_result
-        ; Result.is_error snapshots
-        ; Result.is_error services
-        ]
-        ~f:Fn.id
-    in
-    { model with
-      workspace
-    ; recovery
-    ; snapshots
-    ; services
-    ; expanded
-    ; selected
-    ; detail_offset =
-        (if Page_ref.equal model.selected selected then model.detail_offset else 0)
-    ; message =
-        Some
-          (if unavailable = 0
-           then "sessions, snapshots, and automation refreshed"
-           else [%string "refresh completed · %{unavailable#Int} source(s) unavailable"])
-    ; preview_generation = model.preview_generation + 1
-    ; pane_preview = No_preview
-    }
-  | Preview_started request -> { model with pane_preview = Loading request }
-  | Preview_finished (request, result) ->
-    (match model.pane_preview with
-     | Loading current_request when [%equal: preview_request] current_request request ->
-       (match result with
-        | Ok lines -> { model with pane_preview = Ready (request, lines) }
-        | Error error ->
-          { model with
-            pane_preview = Failed (request, Error.to_string_hum error |> String.strip)
-          })
-     | No_preview | Loading _ | Ready _ | Failed _ -> model)
-  | Clear_preview -> { model with pane_preview = No_preview }
-  | Autonomy_updated (autonomy, note) ->
-    { model with
-      autonomy
-    ; message =
-        (match note with
-         | Some n -> Some n
-         | None -> model.message)
-    }
 ;;
 
 let terminal_foreground = Attr.Color.Expert.default
@@ -490,9 +332,6 @@ let node_color model (node : node) =
      | Some "ready" -> green
      | Some _ -> amber
      | None -> cyan)
-  | Affected_panes ->
-    if List.is_empty (blocked_decisions model.recovery) then green else amber
-  | Affected_pane _ -> amber
 ;;
 
 let crop_to view ~width ~height =
@@ -577,22 +416,26 @@ let render_navigation model ~width ~height =
 type detail_line =
   { text : string option
   ; view : View.t
+  ; affected_panes_header : bool
   }
 
 let plain ?(color = text_color) text =
   { text = Some text
+  ; affected_panes_header = false
   ; view = View.text ~attrs:[ Attr.fg color; Attr.bg terminal_background ] text
   }
 ;;
 
 let heading text =
   { text = Some text
+  ; affected_panes_header = false
   ; view = View.text ~attrs:[ Attr.bold; Attr.fg cyan; Attr.bg terminal_background ] text
   }
 ;;
 
 let field name value =
   { text = Some (name ^ ": " ^ value)
+  ; affected_panes_header = false
   ; view = View.hcat [ (plain ~color:muted (name ^ ": ")).view; (plain value).view ]
   }
 ;;
@@ -604,6 +447,24 @@ let lookup_link workspace id =
 let recovery_count (recovery : Recovery.plan) action =
   List.count recovery.decisions ~f:(fun decision ->
     Recovery.Action.equal decision.action action)
+;;
+
+let pane_location (workspace : Workspace.t) pane_id =
+  match Map.find workspace.panes pane_id with
+  | None -> pane_id
+  | Some pane ->
+    let locations =
+      workspace.window_links
+      |> List.filter ~f:(fun link -> String.equal link.window_id pane.window_id)
+      |> List.filter_map ~f:(fun link ->
+        Map.find workspace.sessions link.session_id
+        |> Option.map ~f:(fun session ->
+          [%string "%{session.name}:%{link.index#Int}.%{pane.index#Int}"]))
+      |> List.dedup_and_sort ~compare:String.compare
+    in
+    (match locations with
+     | [] -> pane_id
+     | locations -> String.concat locations ~sep:" / ")
 ;;
 
 let component_status (component : Service.component) =
@@ -669,7 +530,10 @@ let pane_preview_lines
          lines
          |> newest_lines_that_fit ~line_limit
          |> List.map ~f:(fun line ->
-           { text = None; view = Ansi_renderer.render (Ansi_text.parse line) }))
+           { text = None
+           ; view = Ansi_renderer.render (Ansi_text.parse line)
+           ; affected_panes_header = false
+           }))
     | Failed ((requested_pane, _), error) when String.equal requested_pane pane_id ->
       [ plain ~color:amber ("Preview unavailable: " ^ error) ]
     | No_preview | Loading _ | Ready _ | Failed _ ->
@@ -679,21 +543,6 @@ let pane_preview_lines
    then [ heading title ]
    else [ plain ""; heading title; plain ~color:muted subtitle; plain "" ])
   @ contents
-;;
-
-let affected_pane_lines workspace (decision : Recovery.decision) =
-  let cause =
-    match decision.rule_id with
-    | Some "adapter:codex:missing-thread" -> "Codex has no durable thread ID."
-    | Some _ | None -> decision.reason
-  in
-  [ heading (pane_location workspace decision.pane_id)
-  ; field "Pane" decision.pane_id
-  ; field "Application" decision.observed
-  ; plain ""
-  ; plain ~color:amber ("Cause: " ^ cause)
-  ; plain ~color:amber "Recovery: shell only; the application will not resume."
-  ]
 ;;
 
 let detail_lines model ~height =
@@ -802,24 +651,6 @@ let detail_lines model ~height =
            model
            pane.id
            ~line_limit:(if compact then Int.max 1 (capacity - 3) else preview_line_limit))
-  | Affected_panes ->
-    let count = List.length (blocked_decisions model.recovery) in
-    [ heading [%string "Affected panes (%{count#Int})"]
-    ; plain
-        ~color:muted
-        (if count = 0
-         then "No applications require shell-only recovery."
-         else if Set.mem model.expanded Affected_panes
-         then "Select a pane to inspect its recovery warning."
-         else "Press Enter to expand the list, then select a pane.")
-    ]
-  | Affected_pane (_source, pane_id) ->
-    (match
-       List.find (blocked_decisions model.recovery) ~f:(fun decision ->
-         String.equal decision.pane_id pane_id)
-     with
-     | Some decision -> affected_pane_lines workspace decision
-     | None -> [ heading "Pane is no longer affected" ])
   | Status ->
     let blocked = blocked_decisions model.recovery in
     let blocked_count = List.length blocked in
@@ -834,8 +665,23 @@ let detail_lines model ~height =
         [%string
           "PASS · %{resumes#Int} exact resume(s) · %{restarts#Int} safe restart(s) · 0 \
            blocked"]
-      else
-        [%string "WARN · %{blocked_count#Int} shell fallback(s) · inspect Affected panes"]
+      else [%string "WARN · %{blocked_count#Int} shell fallback(s) · details below"]
+    in
+    let affected_panes =
+      List.concat_map blocked ~f:(fun decision ->
+        let cause =
+          match decision.rule_id with
+          | Some "adapter:codex:missing-thread" -> "Codex has no durable thread ID."
+          | Some _ | None -> decision.reason
+        in
+        [ plain ""
+        ; plain
+            ~color:amber
+            [%string "%{pane_location workspace decision.pane_id} · %{decision.pane_id}"]
+        ; field "Application" decision.observed
+        ; plain ~color:amber ("Cause: " ^ cause)
+        ; plain ~color:amber "Recovery: shell only; the application will not resume."
+        ])
     in
     let snapshot_lines =
       match model.snapshots with
@@ -1007,11 +853,23 @@ let detail_lines model ~height =
            workspace.windows#Int} window(s) · %{Map.length workspace.panes#Int} pane(s)"]
     ; field "Applications" application_health
     ]
-    @ [ plain ""; heading [%string "Affected panes (%{blocked_count#Int})"] ]
+    @ [ plain ""
+      ; { (heading
+             ((if blocked_count = 0
+               then ""
+               else if model.affected_panes_expanded
+               then "▾ "
+               else "▸ ")
+              ^ [%string "Affected panes (%{blocked_count#Int})"]))
+          with
+          affected_panes_header = true
+        }
+      ]
     @ (if blocked_count = 0
        then [ plain ~color:muted "No applications require shell-only recovery." ]
-       else
-         [ plain ~color:muted "Select Affected panes under Status to inspect each pane." ])
+       else if model.affected_panes_expanded
+       then affected_panes
+       else [])
     @ [ plain "" ]
     @ snapshot_lines
     @ [ plain "" ]
@@ -1038,14 +896,12 @@ let detail_dimensions { Dimensions.width; height } =
 
 let is_preview = function
   | Page_ref.Resource (Window_link _ | Pane _ | Application _) -> true
-  | Overview
-  | Resource (Workspace _ | Session _)
-  | Status | Affected_panes | Affected_pane _ -> false
+  | Overview | Resource (Workspace _ | Session _) | Status -> false
 ;;
 
 (* Wrap at word boundaries in terminal columns, preserving field/warning colors. Long
    paths without spaces can still wrap; live pane output retains its original columns. *)
-let wrap_detail_line { text; view } ~width =
+let wrap_detail_line { text; view; affected_panes_header = _ } ~width =
   let width = Int.max 1 width in
   let columns = View.width view in
   let breaks =
@@ -1078,6 +934,7 @@ type detail_viewport =
   ; total : int
   ; offset : int
   ; maximum : int
+  ; affected_offset : int option
   }
 
 let detail_viewport model dimensions =
@@ -1087,21 +944,159 @@ let detail_viewport model dimensions =
       [ plain ""; plain ~color:amber message ])
   in
   let lines = detail_lines model ~height @ message in
-  let body =
-    (if is_preview model.selected
-     then List.map lines ~f:(fun line -> line.view)
-     else List.map lines ~f:(wrap_detail_line ~width))
-    |> View.vcat
+  let rendered =
+    List.map lines ~f:(fun line ->
+      let view =
+        if is_preview model.selected then line.view else wrap_detail_line line ~width
+      in
+      line.affected_panes_header, view)
   in
+  let _, affected_offset =
+    List.fold rendered ~init:(0, None) ~f:(fun (offset, header) (is_header, view) ->
+      offset + View.height view, if is_header then Some offset else header)
+  in
+  let body = View.vcat (List.map rendered ~f:snd) in
   let capacity = panel_body_height height in
   let total = View.height body in
   let maximum = Int.max 0 (total - capacity) in
   let offset = Int.clamp_exn model.detail_offset ~min:0 ~max:maximum in
-  { body; width; height; capacity; total; offset; maximum }
+  { body; width; height; capacity; total; offset; maximum; affected_offset }
+;;
+
+let apply_action _context model action =
+  let visible =
+    visible_nodes
+      model.workspace
+      model.recovery
+      model.snapshots
+      model.services
+      model.expanded
+  in
+  let current_index = selected_index visible model.selected in
+  let current = List.nth visible current_index in
+  let scroll_by delta maximum =
+    let offset = Int.min model.detail_offset maximum in
+    { model with detail_offset = Int.clamp_exn (offset + delta) ~min:0 ~max:maximum }
+  in
+  match action with
+  | Toggle_focus ->
+    { model with
+      focus =
+        (match model.focus with
+         | Navigation -> Detail
+         | Detail -> Navigation)
+    }
+  | Clamp_detail_offset maximum ->
+    { model with detail_offset = Int.min model.detail_offset maximum }
+  | Move (delta, maximum) when equal_focus model.focus Detail -> scroll_by delta maximum
+  | Move (delta, _) ->
+    let next_index =
+      Int.clamp_exn
+        (current_index + delta)
+        ~min:0
+        ~max:(Int.max 0 (List.length visible - 1))
+    in
+    let selected =
+      Option.value_map
+        (List.nth visible next_index)
+        ~default:model.selected
+        ~f:(fun item -> item.node.page)
+    in
+    with_selected model selected
+  | Toggle_expanded dimensions when equal_focus model.focus Detail ->
+    let viewport = detail_viewport model dimensions in
+    (match model.selected, viewport.affected_offset with
+     | Status, Some header_offset
+       when not (List.is_empty (blocked_decisions model.recovery)) ->
+       { model with
+         affected_panes_expanded = not model.affected_panes_expanded
+       ; detail_offset =
+           (if header_offset >= model.detail_offset
+               && header_offset < model.detail_offset + viewport.capacity
+            then model.detail_offset
+            else header_offset)
+       }
+     | _ -> model)
+  | Toggle_expanded _ ->
+    (match current with
+     | Some { node = { page; children = _ :: _; _ }; _ } ->
+       let expanded =
+         if Set.mem model.expanded page
+         then Set.remove model.expanded page
+         else Set.add model.expanded page
+       in
+       { model with expanded }
+     | _ -> model)
+  | Refresh_started -> { model with message = Some "refreshing recovery state…" }
+  | Replace_data (workspace_result, recovery_result, snapshots, services) ->
+    let workspace =
+      match workspace_result with
+      | Ok workspace -> workspace
+      | Error _ -> model.workspace
+    in
+    let recovery = Result.ok recovery_result |> Option.value ~default:model.recovery in
+    let valid_branches =
+      branch_pages (navigation workspace recovery snapshots services)
+      |> Page_ref.Set.of_list
+    in
+    let expanded = Set.inter model.expanded valid_branches in
+    let selected =
+      if page_exists workspace recovery snapshots services expanded model.selected
+      then model.selected
+      else Overview
+    in
+    let unavailable =
+      List.count
+        [ Result.is_error workspace_result
+        ; Result.is_error recovery_result
+        ; Result.is_error snapshots
+        ; Result.is_error services
+        ]
+        ~f:Fn.id
+    in
+    { model with
+      workspace
+    ; recovery
+    ; snapshots
+    ; services
+    ; expanded
+    ; selected
+    ; detail_offset =
+        (if Page_ref.equal model.selected selected then model.detail_offset else 0)
+    ; message =
+        Some
+          (if unavailable = 0
+           then "sessions, snapshots, and automation refreshed"
+           else [%string "refresh completed · %{unavailable#Int} source(s) unavailable"])
+    ; preview_generation = model.preview_generation + 1
+    ; pane_preview = No_preview
+    }
+  | Preview_started request -> { model with pane_preview = Loading request }
+  | Preview_finished (request, result) ->
+    (match model.pane_preview with
+     | Loading current_request when [%equal: preview_request] current_request request ->
+       (match result with
+        | Ok lines -> { model with pane_preview = Ready (request, lines) }
+        | Error error ->
+          { model with
+            pane_preview = Failed (request, Error.to_string_hum error |> String.strip)
+          })
+     | No_preview | Loading _ | Ready _ | Failed _ -> model)
+  | Clear_preview -> { model with pane_preview = No_preview }
+  | Autonomy_updated (autonomy, note) ->
+    { model with
+      autonomy
+    ; message =
+        (match note with
+         | Some n -> Some n
+         | None -> model.message)
+    }
 ;;
 
 let render_detail model viewport =
-  let { body; width; height; capacity; total; offset; maximum } = viewport in
+  let { body; width; height; capacity; total; offset; maximum; affected_offset = _ } =
+    viewport
+  in
   let title = if is_preview model.selected then "PREVIEW" else "DETAIL" in
   let suffix =
     if maximum = 0 || capacity = 0
@@ -1129,7 +1124,12 @@ let render model ({ Dimensions.width; height } as dimensions) =
          " Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c \
           cancel · p pause "
        | Detail ->
-         " Tab navigation · ↑/↓ scroll · r refresh · q quit · c cancel · p pause ")
+         " Tab navigation · ↑/↓ scroll"
+         ^ (if Page_ref.equal model.selected Status
+               && not (List.is_empty (blocked_decisions model.recovery))
+            then " · Enter affected panes"
+            else "")
+         ^ " · r refresh · q quit · c cancel · p pause ")
   in
   let body_height = Int.max 1 (height - 1) in
   let body =
@@ -1193,9 +1193,7 @@ let app
         workspace, recovery, snapshots, services))
   in
   let initial_recovery = Option.value initial_recovery ~default:(Recovery.plan initial) in
-  let expanded =
-    Page_ref.Set.of_list [ Resource (Workspace initial.Workspace.source); Status ]
-  in
+  let expanded = Page_ref.Set.of_list [ Resource (Workspace initial.Workspace.source) ] in
   let model, inject =
     Bonsai.state_machine
       ~default_model:
@@ -1206,6 +1204,7 @@ let app
         ; selected = Overview
         ; focus = Navigation
         ; detail_offset = 0
+        ; affected_panes_expanded = true
         ; expanded
         ; message = None
         ; preview_generation = 0
@@ -1322,7 +1321,7 @@ let app
       | Key_press { key = Tab; mods = [] } -> inject Toggle_focus
       | Key_press { key = Arrow `Down; mods = [] } -> move 1
       | Key_press { key = Arrow `Up; mods = [] } -> move (-1)
-      | Key_press { key = Enter; mods = [] } -> inject Toggle_expanded
+      | Key_press { key = Enter; mods = [] } -> inject (Toggle_expanded dimensions)
       | Key_press { key = ASCII 'r' | ASCII 'R'; mods = [] } ->
         if !refreshing
         then Effect.Ignore

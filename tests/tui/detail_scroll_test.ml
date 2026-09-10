@@ -62,7 +62,7 @@ let%test_unit "only Tab changes focus; detail keys never change tree selection" 
   assert (not (String.is_substring (rendered ()) ~substring:"development"))
 ;;
 
-let%test_unit "status summaries and later sections remain reachable" =
+let%test_unit "all affected panes and later status sections are reachable" =
   let handle = Bonsai_term_test.create_handle Fixture.many_warnings_app in
   resize handle 100 22;
   select_status handle;
@@ -70,7 +70,10 @@ let%test_unit "status summaries and later sections remain reachable" =
   let rendered () = Handle.show_into_string handle in
   let top = rendered () in
   assert (String.is_substring top ~substring:"Affected panes (30)");
-  assert (String.is_substring top ~substring:"Select Affected panes under Status");
+  assert (String.is_substring top ~substring:"Application: codex");
+  assert (
+    String.is_substring top ~substring:"Cause: Cannot resume application in pane %1.");
+  assert (String.is_substring top ~substring:"Recovery: shell only;");
   send handle (Arrow `Up);
   [%test_eq: string] (rendered ()) top;
   List.iter [ Event.Key.Page `Down; Page `Up; Home; End ] ~f:(fun key ->
@@ -82,6 +85,12 @@ let%test_unit "status summaries and later sections remain reachable" =
     send handle (Arrow `Down)
   done;
   let contents = Buffer.contents contents in
+  for index = 0 to 29 do
+    assert (
+      String.is_substring
+        contents
+        ~substring:[%string "development:0.%{index#Int} · %%{index + 1#Int}"])
+  done;
   let bottom = rendered () in
   assert (String.is_substring bottom ~substring:"Recovery safety:");
   assert (String.is_substring contents ~substring:"Pending actions:");
@@ -126,12 +135,8 @@ let%test_unit "status has an explicit unaffected state and the specific Codex ca
   let warning = Bonsai_term_test.create_handle Fixture.warning_app in
   resize warning 100 22;
   select_status warning;
-  assert (
-    String.is_substring (Handle.show_into_string warning) ~substring:"Affected panes (1)");
-  send warning (Arrow `Down);
-  send warning Enter;
-  send warning (Arrow `Down);
   let contents = Handle.show_into_string warning in
+  assert (String.is_substring contents ~substring:"Affected panes (1)");
   assert (String.is_substring contents ~substring:"Cause: Codex has no durable thread ID.")
 ;;
 
@@ -154,9 +159,9 @@ let%test_unit "refresh and resize retain focus and clamp the scroll offset" =
   done;
   let rendered () = Handle.show_into_string handle in
   let before = rendered () in
-  assert (String.is_substring before ~substring:"DETAIL · 20–");
+  assert (String.is_substring before ~substring:"development:0.4");
   send handle (ASCII 'r');
-  assert (String.is_substring (rendered ()) ~substring:"DETAIL · 20–");
+  assert (String.is_substring (rendered ()) ~substring:"development:0.4");
   assert (String.is_substring (rendered ()) ~substring:"Tab navigation");
   List.iter
     [ 40, 14; 60, 22; 83, 22; 84, 22; 100, 22 ]
@@ -204,17 +209,10 @@ let%test_unit "refresh and resize retain focus and clamp the scroll offset" =
 ;;
 
 let%test_unit "a shorter refreshed status clamps scrolling without losing focus" =
-  let workspace, recovery, snapshots, services = Fixture.many_warnings_data in
-  let services = Or_error.ok_exn services in
-  let services =
-    { services with
-      warnings = List.init 30 ~f:(fun index -> [%string "Fixture warning %{index#Int}"])
-    }
-  in
   let handle =
     Bonsai_term_test.create_handle
       (Fixture.make_app_with_reload
-         ~initial_data:(workspace, recovery, snapshots, Ok services)
+         ~initial_data:Fixture.many_warnings_data
          ~reload:(fun () -> Effect.return Fixture.initial_data)
          ())
   in
