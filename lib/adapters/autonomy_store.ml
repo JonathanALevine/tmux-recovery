@@ -2,24 +2,23 @@
 
     Layout (under the XDG directories):
 
-    - [config_home/tmux-recovery/autonomy.json]       -- the user's policy
-    - [state_home/tmux-recovery/autonomy-state.json]  -- the engine state
+    - [config_home/tmux-recovery/autonomy.json] -- the user's policy
+    - [state_home/tmux-recovery/autonomy-state.json] -- the engine state
     - [state_home/tmux-recovery/autonomy-audit.jsonl] -- durable audit log
-    - [state_home/tmux-recovery/autonomy.lock]        -- advisory lock (lockf)
+    - [state_home/tmux-recovery/autonomy.lock] -- advisory lock (lockf)
 
-    Writes are atomic (temp file + fsync + rename + directory fsync). The
-    engine state is fail-closed: a corrupt or unreadable state file is an
-    error and never leads to a window being closed. The lock serializes
-    reconcile/fire transactions between the runner, the CLI, and the TUI.
+    Writes are atomic (temp file + fsync + rename + directory fsync). The engine state is
+    fail-closed: a corrupt or unreadable state file is an error and never leads to a
+    window being closed. The lock serializes reconcile/fire transactions between the
+    runner, the CLI, and the TUI.
 
-    Or_error threading is uniform throughout: every function that chains
-    fallible steps uses [let open Or_error.Let_syntax in] with [let%bind] /
-    [let%map] and [return]; a single fallible syscall is wrapped directly in
-    [Or_error.try_with]. No ad-hoc bind operators. *)
+    Or_error threading is uniform throughout: every function that chains fallible steps
+    uses [let open Or_error.Let_syntax in] with [let%bind] / [let%map] and [return]; a
+    single fallible syscall is wrapped directly in [Or_error.try_with]. No ad-hoc bind
+    operators. *)
 
 open! Core
 open Async
-
 module Autonomy = Tmux_recovery_domain.Autonomy
 
 (* ---------------------------------------------------------------- store *)
@@ -31,7 +30,6 @@ type t =
 
 let policy_dir (t : t) = Filename.concat t.config_home "tmux-recovery"
 let state_dir (t : t) = Filename.concat t.state_home "tmux-recovery"
-
 let policy_path (t : t) = Filename.concat (policy_dir t) "autonomy.json"
 let state_path (t : t) = Filename.concat (state_dir t) "autonomy-state.json"
 let audit_path (t : t) = Filename.concat (state_dir t) "autonomy-audit.jsonl"
@@ -42,19 +40,25 @@ let create ?config_home ?state_home () =
   let home = Sys.getenv "HOME" |> Option.value ~default:"." in
   let config_home =
     config_home
-    |> Option.value ~default:(
-      Sys.getenv "XDG_CONFIG_HOME"
-      |> Option.value ~default:(Filename.concat home ".config"))
+    |> Option.value
+         ~default:
+           (Sys.getenv "XDG_CONFIG_HOME"
+            |> Option.value ~default:(Filename.concat home ".config"))
   in
   let state_home =
     state_home
-    |> Option.value ~default:(
-      Sys.getenv "XDG_STATE_HOME"
-      |> Option.value ~default:(Filename.concat home ".local/state"))
+    |> Option.value
+         ~default:
+           (Sys.getenv "XDG_STATE_HOME"
+            |> Option.value ~default:(Filename.concat home ".local/state"))
   in
   let t = { config_home; state_home } in
-  let%bind () = Or_error.try_with (fun () -> Core_unix.mkdir_p ~perm:0o700 (policy_dir t)) in
-  let%bind () = Or_error.try_with (fun () -> Core_unix.mkdir_p ~perm:0o700 (state_dir t)) in
+  let%bind () =
+    Or_error.try_with (fun () -> Core_unix.mkdir_p ~perm:0o700 (policy_dir t))
+  in
+  let%bind () =
+    Or_error.try_with (fun () -> Core_unix.mkdir_p ~perm:0o700 (state_dir t))
+  in
   return t
 ;;
 
@@ -62,14 +66,14 @@ let create ?config_home ?state_home () =
 
 let file_exists path =
   match Sys_unix.file_exists path with
-  | `Yes -> true
-  | `No | `Unknown -> false
+  | `Yes | `Unknown -> true
+  | `No -> false
 ;;
 
 let read_file path = Or_error.try_with (fun () -> In_channel.read_all path)
 
-(** Write all of [contents] to [fd], looping over partial writes. Shared by
-    the atomic writer and the audit appender so both use one write discipline. *)
+(** Write all of [contents] to [fd], looping over partial writes. Shared by the atomic
+    writer and the audit appender so both use one write discipline. *)
 let write_all fd contents =
   let buf = Bytes.of_string contents in
   let len = Bytes.length buf in
@@ -82,19 +86,20 @@ let write_all fd contents =
 
 (** Fsync a directory so that a completed rename is durable. *)
 let fsync_directory directory =
-  let fd = Core_unix.openfile directory ~mode:[O_RDONLY; O_CLOEXEC] in
+  let fd = Core_unix.openfile directory ~mode:[ O_RDONLY; O_CLOEXEC ] in
   Exn.protect ~f:(fun () -> Core_unix.fsync fd) ~finally:(fun () -> Caml_unix.close fd)
 ;;
 
-(** Atomically write [contents] to [path]: write a temp file in the same
-    directory, fsync the file, rename it into place, and fsync the directory
-    so the rename is durable. The temp file is removed if the write fails.
-    This is the same pattern the native snapshot adapter uses to commit
-    snapshot files and the latest/last-good pointers. *)
+(** Atomically write [contents] to [path]: write a temp file in the same directory, fsync
+    the file, rename it into place, and fsync the directory so the rename is durable. The
+    temp file is removed if the write fails. This is the same pattern the native snapshot
+    adapter uses to commit snapshot files and the latest/last-good pointers. *)
 let atomic_write path contents =
   let dir = Filename.dirname path in
   let tmp =
-    Filename.concat dir (Filename.basename path ^ ".tmp-" ^ Int.to_string (Pid.to_int (Core_unix.getpid ())))
+    Filename.concat
+      dir
+      (Filename.basename path ^ ".tmp-" ^ Int.to_string (Pid.to_int (Core_unix.getpid ())))
   in
   Or_error.try_with (fun () ->
     (match Sys_unix.file_exists tmp with
@@ -102,52 +107,71 @@ let atomic_write path contents =
      | `No | `Unknown -> ());
     Exn.protect
       ~f:(fun () ->
-        let ic = Core_unix.openfile tmp ~mode:[O_WRONLY; O_CREAT; O_TRUNC; O_CLOEXEC] ~perm:0o600 in
-        Exn.protect ~f:(fun () -> write_all ic contents) ~finally:(fun () -> Caml_unix.close ic);
+        let ic =
+          Core_unix.openfile
+            tmp
+            ~mode:[ O_WRONLY; O_CREAT; O_TRUNC; O_CLOEXEC ]
+            ~perm:0o600
+        in
+        Exn.protect
+          ~f:(fun () ->
+            write_all ic contents;
+            Core_unix.fsync ic)
+          ~finally:(fun () -> Caml_unix.close ic);
         (* Commit the rename, then make the rename durable. *)
         Core_unix.rename ~src:tmp ~dst:path;
         fsync_directory dir;
         ())
       ~finally:(fun () ->
-        (match Sys_unix.file_exists tmp with
-         | `Yes -> ignore (Or_error.try_with (fun () -> Core_unix.unlink tmp))
-         | `No | `Unknown -> ()))
-  )
+        match Sys_unix.file_exists tmp with
+        | `Yes -> ignore (Or_error.try_with (fun () -> Core_unix.unlink tmp))
+        | `No | `Unknown -> ()))
+;;
+
+let write_if_changed path contents =
+  let open Or_error.Let_syntax in
+  if not (file_exists path)
+  then atomic_write path contents
+  else (
+    let%bind existing = read_file path in
+    if String.equal existing contents then Ok () else atomic_write path contents)
 ;;
 
 (* --------------------------------------------------------- advisory lock *)
 
 let with_lock t ~f =
   let fd =
-    Core_unix.openfile (lock_path t) ~mode:[O_RDWR; O_CREAT; O_CLOEXEC] ~perm:0o600
+    Core_unix.openfile (lock_path t) ~mode:[ O_RDWR; O_CREAT; O_CLOEXEC ] ~perm:0o600
   in
   Exn.protect
     ~f:(fun () ->
       Core_unix.lockf fd ~mode:Core_unix.F_LOCK ~len:0L;
-      Exn.protect ~f ~finally:(fun () -> Core_unix.lockf fd ~mode:Core_unix.F_ULOCK ~len:0L))
+      Exn.protect ~f ~finally:(fun () ->
+        Core_unix.lockf fd ~mode:Core_unix.F_ULOCK ~len:0L))
     ~finally:(fun () -> Caml_unix.close fd)
 ;;
 
-(** [with_lock_async t ~f] runs [f] while holding the store's advisory lock and
-    releases the lock when [f]'s deferred settles (resolves or raises), so
-    asynchronous work (tmux observation, snapshots, window close) stays inside
-    the transaction.
+(** [with_lock_async t ~f] runs [f] while holding the store's advisory lock and releases
+    the lock when [f]'s deferred settles (resolves or raises), so asynchronous work (tmux
+    observation, snapshots, window close) stays inside the transaction.
 
-    This mirrors [with_lock] and the native snapshot adapter's operation lock:
-    an ordinary advisory lock file guarded by [lockf] -- no PID file, no
-    stale-lock takeover -- with [Monitor.protect] tying the release to the
-    deferred settling, so the lock cannot be dropped while [f] is still
-    running. The blocking acquire runs on the main thread, like [with_lock]. *)
+    This mirrors [with_lock] and the native snapshot adapter's operation lock: an ordinary
+    advisory lock file guarded by [lockf] -- no PID file, no stale-lock takeover -- with
+    [Monitor.protect] tying the release to the deferred settling, so the lock cannot be
+    dropped while [f] is still running. The blocking acquire runs on the main thread, like
+    [with_lock]. *)
 let with_lock_async t ~f =
   let fd =
-    Core_unix.openfile (lock_path t) ~mode:[O_RDWR; O_CREAT; O_CLOEXEC] ~perm:0o600
+    Core_unix.openfile (lock_path t) ~mode:[ O_RDWR; O_CREAT; O_CLOEXEC ] ~perm:0o600
   in
   Monitor.protect
     (fun () ->
       Core_unix.lockf fd ~mode:Core_unix.F_LOCK ~len:0L;
-      Monitor.protect (fun () -> f ()) ~finally:(fun () ->
-        Core_unix.lockf fd ~mode:Core_unix.F_ULOCK ~len:0L;
-        Deferred.unit))
+      Monitor.protect
+        (fun () -> f ())
+        ~finally:(fun () ->
+          Core_unix.lockf fd ~mode:Core_unix.F_ULOCK ~len:0L;
+          Deferred.unit))
     ~finally:(fun () ->
       Caml_unix.close fd;
       Deferred.unit)
@@ -155,56 +179,61 @@ let with_lock_async t ~f =
 
 (* --------------------------------------------------------------- policy *)
 
-let load_policy (t : t) =
+let read_policy (t : t) =
   let open Or_error.Let_syntax in
   let path = policy_path t in
   if not (file_exists path)
-  then return Autonomy.default_config
+  then return (Autonomy.default_config, false)
   else (
     let%bind contents = read_file path in
-    (match Yojson.Safe.from_string contents with
-     | exception Yojson.Json_error _ ->
-       Or_error.error_s [%message "corrupt policy file; refusing to run" path]
-     | json ->
-       (match Autonomy.config_of_yojson json with
-        | Error e -> Error (Error.tag e ~tag:([%string "invalid policy file %{path}"]))
-        | Ok config -> Ok config)))
+    match Yojson.Safe.from_string contents with
+    | exception Yojson.Json_error _ ->
+      Or_error.error_s [%message "corrupt policy file; refusing to run" path]
+    | json ->
+      (match Autonomy.config_of_yojson json with
+       | Error e -> Error (Error.tag e ~tag:[%string "invalid policy file %{path}"])
+       | Ok config -> Ok (config, Autonomy.is_legacy_simulation_config json)))
 ;;
 
+let load_policy t = Or_error.map (read_policy t) ~f:fst
+
 let save_policy (t : t) config =
-  atomic_write (policy_path t) (Yojson.Safe.to_string (Autonomy.config_to_yojson config))
+  write_if_changed
+    (policy_path t)
+    (Yojson.Safe.to_string (Autonomy.config_to_yojson config))
 ;;
 
 (* ---------------------------------------------------------------- state *)
 
-let load_state (t : t) =
+let load_state ?(now = Time_ns.now ()) (t : t) =
   let open Or_error.Let_syntax in
+  let%bind config, legacy_policy = read_policy t in
   let path = state_path t in
   if not (file_exists path)
-  then (
-    let%map config = load_policy t in Autonomy.empty ~config)
+  then return (Autonomy.empty ~config)
   else (
     let%bind contents = read_file path in
-    (match Yojson.Safe.from_string contents with
-     | exception Yojson.Json_error _ ->
-       Or_error.error_s
-         [%message
-           "corrupt autonomy state file; refusing to run (fail-closed). Delete the file to \
-            reset the engine."
-           path]
-     | json ->
-       (match Autonomy.state_of_yojson json with
-        | Error _ ->
-          Or_error.error_s
-            [%message
-              "invalid autonomy state file; refusing to run (fail-closed). Delete the file to \
-               reset the engine."
-              path]
-        | Ok state -> Ok state)))
+    match Yojson.Safe.from_string contents with
+    | exception Yojson.Json_error _ ->
+      Or_error.error_s
+        [%message
+          "corrupt autonomy state file; refusing to run (fail-closed). Delete the file \
+           to reset the engine."
+            path]
+    | json ->
+      (match Autonomy.state_of_yojson ~now json with
+       | Error _ ->
+         Or_error.error_s
+           [%message
+             "invalid autonomy state file; refusing to run (fail-closed). Delete the \
+              file to reset the engine."
+               path]
+       | Ok state ->
+         Ok (if legacy_policy then Autonomy.discard_legacy_schedule ~now state else state)))
 ;;
 
 let save_state (t : t) state =
-  atomic_write (state_path t) (Yojson.Safe.to_string (Autonomy.state_to_yojson state))
+  write_if_changed (state_path t) (Yojson.Safe.to_string (Autonomy.state_to_yojson state))
 ;;
 
 (* --------------------------------------------------------- audit log *)
@@ -218,6 +247,7 @@ module Audit = struct
   let event_label = function
     | Autonomy.Audit_event.Scheduled -> "scheduled"
     | Autonomy.Audit_event.Fired -> "fired"
+    | Autonomy.Audit_event.Legacy_simulated -> "legacy_simulated"
     | Autonomy.Audit_event.Cancelled -> "cancelled"
     | Autonomy.Audit_event.Aborted -> "aborted"
     | Autonomy.Audit_event.Failed -> "failed"
@@ -226,25 +256,17 @@ module Audit = struct
     | Autonomy.Audit_event.Policy_changed -> "policy_changed"
   ;;
 
-  let event_of_label = function
-    | "scheduled" -> Ok Autonomy.Audit_event.Scheduled
-    | "fired" -> Ok Autonomy.Audit_event.Fired
-    | "cancelled" -> Ok Autonomy.Audit_event.Cancelled
-    | "aborted" -> Ok Autonomy.Audit_event.Aborted
-    | "failed" -> Ok Autonomy.Audit_event.Failed
-    | "paused" -> Ok Autonomy.Audit_event.Paused
-    | "resumed" -> Ok Autonomy.Audit_event.Resumed
-    | "policy_changed" -> Ok Autonomy.Audit_event.Policy_changed
-    | other -> Or_error.error_s [%message "bad audit event" other]
-  ;;
-
   let key (entry : Autonomy.audit_entry) =
     String.concat
       ~sep:"|"
       [ Time_ns.to_string_utc entry.at
       ; event_label entry.event
-      ; (match entry.action_id with Some id -> id | None -> "")
-      ; (match entry.window_id with Some id -> id | None -> "")
+      ; (match entry.action_id with
+         | Some id -> id
+         | None -> "")
+      ; (match entry.window_id with
+         | Some id -> id
+         | None -> "")
       ; entry.detail
       ]
   ;;
@@ -254,8 +276,14 @@ module Audit = struct
       [ "seq", `Int line.seq
       ; "at", `String (Time_ns.to_string_utc line.entry.at)
       ; "event", `String (event_label line.entry.event)
-      ; "action_id", (match line.entry.action_id with Some id -> `String id | None -> `Null)
-      ; "window_id", (match line.entry.window_id with Some id -> `String id | None -> `Null)
+      ; ( "action_id"
+        , match line.entry.action_id with
+          | Some id -> `String id
+          | None -> `Null )
+      ; ( "window_id"
+        , match line.entry.window_id with
+          | Some id -> `String id
+          | None -> `Null )
       ; "detail", `String line.entry.detail
       ]
   ;;
@@ -264,22 +292,12 @@ module Audit = struct
     let open Or_error.Let_syntax in
     let open Yojson.Safe.Util in
     let%bind seq =
-      (match member "seq" json |> to_int with
-       | n when n >= 1 -> Ok n
-       | _ -> Or_error.error_string "bad audit seq")
+      match member "seq" json |> to_int with
+      | n when n >= 1 -> Ok n
+      | _ -> Or_error.error_string "bad audit seq"
     in
-    let%bind at =
-      Or_error.try_with (fun () -> Time_ns.of_string_with_utc_offset (to_string (member "at" json)))
-    in
-    let%bind event = event_of_label (to_string (member "event" json)) in
-    let action_id =
-      (match member "action_id" json with `Null -> None | v -> Some (to_string v))
-    in
-    let window_id =
-      (match member "window_id" json with `Null -> None | v -> Some (to_string v))
-    in
-    let detail = to_string (member "detail" json) in
-    return { seq; entry = { at; event; action_id; window_id; detail } }
+    let%map entry = Autonomy.audit_entry_of_yojson json in
+    { seq; entry }
   ;;
 
   let read_all (t : t) : line list Or_error.t =
@@ -293,8 +311,8 @@ module Audit = struct
         String.split contents ~on:'\n'
         |> List.filter ~f:(fun s -> not (String.is_empty s))
         |> List.filter_map ~f:(fun line ->
-          (try Some (Yojson.Safe.from_string line |> of_yojson |> Or_error.ok_exn) with
-           | Yojson.Json_error _ | Failure _ -> None))
+          Or_error.try_with_join (fun () -> Yojson.Safe.from_string line |> of_yojson)
+          |> Result.ok)
       in
       (* Keep the latest line per seq. *)
       let by_seq =
@@ -307,54 +325,56 @@ module Audit = struct
   let sync (t : t) (entries : Autonomy.audit_entry list) =
     let open Or_error.Let_syntax in
     let%bind existing = read_all t in
-    let existing_keys = existing |> List.map ~f:(fun l -> key l.entry) |> String.Set.of_list in
+    let existing_keys =
+      existing |> List.map ~f:(fun l -> key l.entry) |> String.Set.of_list
+    in
     let next_seq =
       List.fold existing ~init:0 ~f:(fun acc l -> if l.seq > acc then l.seq else acc)
     in
     let fresh =
       List.filter entries ~f:(fun entry -> not (Set.mem existing_keys (key entry)))
     in
-    (match fresh with
-     | [] -> return ()
-     | entries ->
-       let lines =
-         List.mapi entries ~f:(fun i entry -> { seq = next_seq + i + 1; entry })
-       in
-       let%bind () =
-         Or_error.try_with (fun () ->
-           let ic =
-             Core_unix.openfile
-               (audit_path t)
-               ~mode:[O_WRONLY; O_CREAT; O_APPEND; O_CLOEXEC]
-               ~perm:0o600
-           in
-           Exn.protect
-             ~f:(fun () ->
-               List.iter lines ~f:(fun line ->
-                 write_all ic (Yojson.Safe.to_string (to_yojson line) ^ "\n"));
-               Caml_unix.fsync ic;
-               ())
-             ~finally:(fun () -> Caml_unix.close ic))
-       in
-       return ())
+    match fresh with
+    | [] -> return ()
+    | entries ->
+      let lines =
+        List.mapi entries ~f:(fun i entry -> { seq = next_seq + i + 1; entry })
+      in
+      let%bind () =
+        Or_error.try_with (fun () ->
+          let ic =
+            Core_unix.openfile
+              (audit_path t)
+              ~mode:[ O_WRONLY; O_CREAT; O_APPEND; O_CLOEXEC ]
+              ~perm:0o600
+          in
+          Exn.protect
+            ~f:(fun () ->
+              List.iter lines ~f:(fun line ->
+                write_all ic (Yojson.Safe.to_string (to_yojson line) ^ "\n"));
+              Caml_unix.fsync ic;
+              ())
+            ~finally:(fun () -> Caml_unix.close ic))
+      in
+      return ()
   ;;
 end
 
 (* ------------------------------------------------- audit log access *)
 
-(** Idempotently append audit entries not already in the durable log, taking
-    the store's advisory lock. Safe to call repeatedly (e.g. after a crash
-    between state save and audit append).
+(** Idempotently append audit entries not already in the durable log, taking the store's
+    advisory lock. Safe to call repeatedly (e.g. after a crash between state save and
+    audit append).
 
-    Callers that already hold the lock (inside [with_lock] or
-    [with_lock_async]) must use [sync_audit_unlocked] instead: POSIX locks are
-    per-process, so re-acquiring the lock from within a locked section does not
-    serialize anything, and its release would drop the outer lock early. *)
+    Callers that already hold the lock (inside [with_lock] or [with_lock_async]) must use
+    [sync_audit_unlocked] instead: POSIX locks are per-process, so re-acquiring the lock
+    from within a locked section does not serialize anything, and its release would drop
+    the outer lock early. *)
 let sync_audit t entries = with_lock t ~f:(fun () -> Audit.sync t entries)
 
-(** Like [sync_audit], but without taking the lock: the caller must already
-    hold the store's advisory lock. Use this inside a locked transaction so the
-    state save and the audit append stay in one critical section. *)
+(** Like [sync_audit], but without taking the lock: the caller must already hold the
+    store's advisory lock. Use this inside a locked transaction so the state save and the
+    audit append stay in one critical section. *)
 let sync_audit_unlocked (t : t) (entries : Autonomy.audit_entry list) : unit Or_error.t =
   Audit.sync t entries
 ;;
@@ -363,5 +383,7 @@ let sync_audit_unlocked (t : t) (entries : Autonomy.audit_entry list) : unit Or_
 let read_audit (t : t) =
   let open Or_error.Let_syntax in
   let%bind lines = Audit.read_all t in
-  return (List.sort lines ~compare:(fun a b -> Int.compare b.seq a.seq) |> List.map ~f:(fun l -> l.entry))
+  return
+    (List.sort lines ~compare:(fun a b -> Int.compare b.seq a.seq)
+     |> List.map ~f:(fun l -> l.entry))
 ;;

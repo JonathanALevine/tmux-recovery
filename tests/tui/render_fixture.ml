@@ -1,9 +1,11 @@
 open! Core
 open Bonsai_test
 
+let show_view handle = Handle.show_into_string handle |> String.rstrip |> print_endline
+
 let show handle =
   Bonsai_term_test.set_dimensions handle { width = 100; height = 22 };
-  Handle.show handle
+  show_view handle
 ;;
 
 let move_down handle count =
@@ -22,16 +24,16 @@ let () =
   Bonsai_term_test.set_dimensions moved { width = 100; height = 22 };
   Handle.recompute_view moved;
   Bonsai_term_test.send_event moved (Key_press { key = Arrow `Down; mods = [] });
-  Handle.show moved;
+  show_view moved;
   print_endline "--- WINDOW SELECTED ---";
   let window = Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.app in
   Bonsai_term_test.set_dimensions window { width = 100; height = 22 };
   Handle.recompute_view_until_stable window;
   move_down window 2;
-  Bonsai_term_test.send_event window (Key_press { key = Arrow `Right; mods = [] });
+  Bonsai_term_test.send_event window (Key_press { key = Enter; mods = [] });
   Bonsai_term_test.send_event window (Key_press { key = Arrow `Down; mods = [] });
   Handle.recompute_view_until_stable window;
-  Handle.show window;
+  show_view window;
   print_endline "--- PANE SELECTED ---";
   let selected =
     Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.app
@@ -40,19 +42,27 @@ let () =
   Handle.recompute_view_until_stable selected;
   Bonsai_term_test.send_event selected (Key_press { key = Arrow `Down; mods = [] });
   Bonsai_term_test.send_event selected (Key_press { key = Arrow `Down; mods = [] });
-  Bonsai_term_test.send_event selected (Key_press { key = Arrow `Right; mods = [] });
+  Bonsai_term_test.send_event selected (Key_press { key = Enter; mods = [] });
   Bonsai_term_test.send_event selected (Key_press { key = Arrow `Down; mods = [] });
-  Bonsai_term_test.send_event selected (Key_press { key = Arrow `Right; mods = [] });
+  Bonsai_term_test.send_event selected (Key_press { key = Enter; mods = [] });
   Handle.recompute_view_until_stable selected;
   Bonsai_term_test.send_event selected (Key_press { key = Arrow `Down; mods = [] });
   Handle.recompute_view_until_stable selected;
-  Handle.show selected;
+  show_view selected;
+  print_endline "--- NARROW PANE ---";
+  Bonsai_term_test.set_dimensions selected { width = 60; height = 22 };
+  show_view selected;
+  print_endline "--- SHORT NARROW PANE ---";
+  Bonsai_term_test.set_dimensions selected { width = 40; height = 14 };
+  show_view selected;
+  print_endline "--- RESIZED WIDE AGAIN ---";
+  show selected;
   print_endline "--- STATUS ---";
   let status = Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.app in
   Bonsai_term_test.set_dimensions status { width = 100; height = 22 };
   Handle.recompute_view_until_stable status;
   move_down status 3;
-  Handle.show status;
+  show_view status;
   print_endline "--- STATUS WITH APPLICATION WARNING ---";
   let warning =
     Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.warning_app
@@ -60,7 +70,7 @@ let () =
   Bonsai_term_test.set_dimensions warning { width = 100; height = 22 };
   Handle.recompute_view_until_stable warning;
   move_down warning 3;
-  Handle.show warning;
+  show_view warning;
   print_endline "--- EMPTY STATUS ---";
   let empty =
     Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.empty_app
@@ -68,7 +78,7 @@ let () =
   Bonsai_term_test.set_dimensions empty { width = 100; height = 22 };
   Handle.recompute_view_until_stable empty;
   move_down empty 3;
-  Handle.show empty;
+  show_view empty;
   print_endline "--- UNAVAILABLE STATUS ---";
   let unavailable =
     Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.unavailable_app
@@ -76,5 +86,5 @@ let () =
   Bonsai_term_test.set_dimensions unavailable { width = 100; height = 22 };
   Handle.recompute_view_until_stable unavailable;
   move_down unavailable 3;
-  Handle.show unavailable
+  show_view unavailable
 ;;

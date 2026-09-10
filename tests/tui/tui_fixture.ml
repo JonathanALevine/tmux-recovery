@@ -97,7 +97,8 @@ let services : Service.t Or_error.t =
     ; autonomy =
         { activation = Loaded
         ; schedule = Some "45 seconds"
-        ; definition = Some "/Users/demo/Library/LaunchAgents/com.demo.tmux-autonomy.plist"
+        ; definition =
+            Some "/Users/demo/Library/LaunchAgents/com.demo.tmux-autonomy.plist"
         ; command = Some "tmux-recovery autonomy tick --quiet"
         }
     ; login_restore =
@@ -122,33 +123,32 @@ let services : Service.t Or_error.t =
 ;;
 
 (* One hermetic autonomy runner per test process: a persistent store under a temp
-   directory with the default (dry-run) policy, and injected dependencies that never
-   touch a real tmux server. The render tests never refresh, so the store stays
-   untouched and the golden output is deterministic. *)
+   directory with the default (off) policy, and injected dependencies that never touch a
+   real tmux server. The render tests never refresh, so the store stays untouched and the
+   golden output is deterministic. *)
 let autonomy_runner =
   let dir = "/tmp/tr-tui-fixture-" ^ Int.to_string (Caml_unix.getpid ()) in
-  (Or_error.try_with_join (fun () ->
-     Core_unix.mkdir_p dir ~perm:0o700;
-     Autonomy_store.create ~config_home:dir ~state_home:dir ()))
+  Or_error.try_with_join (fun () ->
+    Core_unix.mkdir_p dir ~perm:0o700;
+    Autonomy_store.create ~config_home:dir ~state_home:dir ())
   |> Or_error.ok_exn
-  |> (fun store ->
-    let deps =
-      { Autonomy_runner.now = Time_ns.now
-      ; observe = (fun () -> Deferred.return (Ok workspace))
-      ; plan = (fun ws -> Deferred.return (Ok (Recovery.plan ws)))
-      ; viewed = (fun () -> Deferred.return (Ok []))
-      ; exited_panes = (fun () -> Deferred.return (Ok String.Set.empty))
-      ; signature = (fun ~window_id:_ -> Deferred.return (Ok "fixture"))
-      ; server_identity = (fun () -> Deferred.return (Ok "fixture"))
-      ; snapshot_save =
-          (fun () -> Deferred.return (Or_error.error_string "no snapshots in the fixture"))
-      ; close_window =
-          (fun ~window_id:_ ->
-           Deferred.return (Or_error.error_string "the fixture never closes windows"))
-      }
-    in
-    Autonomy_runner.create ~store ~deps ()
-    |> Or_error.ok_exn)
+  |> fun store ->
+  let deps =
+    { Autonomy_runner.now = Time_ns.now
+    ; observe = (fun () -> Deferred.return (Ok workspace))
+    ; plan = (fun ws -> Deferred.return (Ok (Recovery.plan ws)))
+    ; viewed = (fun () -> Deferred.return (Ok []))
+    ; exited_panes = (fun () -> Deferred.return (Ok String.Set.empty))
+    ; signature = (fun ~window_id:_ -> Deferred.return (Ok "fixture"))
+    ; server_identity = (fun () -> Deferred.return (Ok "fixture"))
+    ; snapshot_save =
+        (fun () -> Deferred.return (Or_error.error_string "no snapshots in the fixture"))
+    ; close_window =
+        (fun ~window_id:_ ->
+          Deferred.return (Or_error.error_string "the fixture never closes windows"))
+    }
+  in
+  Autonomy_runner.create ~store ~deps () |> Or_error.ok_exn
 ;;
 
 let initial_autonomy : Autonomy_runner.status_info =
@@ -203,9 +203,15 @@ type reload_result =
   * Snapshot.catalog Or_error.t
   * Service.t Or_error.t
 
-let make_app_with_reload ~reload =
+let initial_data = Ok workspace, Ok (Recovery.plan workspace), snapshots, services
+
+let make_app_with_reload
+  ?(capture_pane = fun ~pane_id:_ -> Effect.return (Ok []))
+  ?(exit = fun () -> Effect.Ignore)
+  ~reload
+  ()
+  =
   let service = App_recovery.create ~socket_name:"tmux-recovery-golden-test" () in
-  let capture_pane ~pane_id:_ = Effect.return (Ok []) in
   fun ~dimensions graph ->
     Tui.app
       ~capture_pane
@@ -216,7 +222,7 @@ let make_app_with_reload ~reload =
       ~initial:workspace
       ~initial_snapshots:snapshots
       ~initial_services:services
-      ~exit:(fun () -> Effect.Ignore)
+      ~exit
       ~dimensions
       graph
 ;;

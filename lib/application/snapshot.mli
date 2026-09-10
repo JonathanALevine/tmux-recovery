@@ -39,7 +39,7 @@ val prepare_save : t -> trigger:Domain.Trigger.t -> save_preparation Or_error.t 
 val save : t -> trigger:Domain.Trigger.t -> save_result Or_error.t Deferred.t
 val load_native : t -> Snapshot.Id.t -> Domain.t Or_error.t Deferred.t
 val resolve_native : t -> string -> Snapshot.Id.t Or_error.t Deferred.t
-val prune : t -> apply:bool -> Snapshot.summary list Or_error.t Deferred.t
+val prune : t -> Snapshot.summary list Or_error.t Deferred.t
 
 val prepare_import_resurrect
   :  t

@@ -34,11 +34,6 @@ module Page_ref = struct
   include Comparable.Make_plain (T)
 end
 
-type focus =
-  | Navigation
-  | Page
-[@@deriving equal, sexp_of]
-
 type node =
   { page : Page_ref.t
   ; label : string
@@ -49,7 +44,6 @@ type node =
 type visible_node =
   { node : node
   ; depth : int
-  ; parent : Page_ref.t option
   }
 
 type preview_request = string * int [@@deriving equal]
@@ -182,11 +176,11 @@ let rec branch_pages nodes =
 ;;
 
 let visible_nodes workspace recovery snapshots services expanded =
-  let rec walk ?parent depth nodes =
+  let rec walk depth nodes =
     List.concat_map nodes ~f:(fun node ->
-      let visible = { node; depth; parent } in
+      let visible = { node; depth } in
       if (not (List.is_empty node.children)) && Set.mem expanded node.page
-      then visible :: walk ~parent:node.page (depth + 1) node.children
+      then visible :: walk (depth + 1) node.children
       else [ visible ])
   in
   walk 0 (navigation workspace recovery snapshots services)
@@ -199,7 +193,6 @@ type model =
   ; services : Service.t Or_error.t
   ; selected : Page_ref.t
   ; expanded : Page_ref.Set.t
-  ; focus : focus
   ; message : string option
   ; preview_generation : int
   ; pane_preview : pane_preview
@@ -208,9 +201,7 @@ type model =
 
 type action =
   | Move of int
-  | Expand
-  | Collapse_or_parent
-  | Activate
+  | Toggle_expanded
   | Refresh_started
   | Replace_data of
       Workspace.t Or_error.t
@@ -246,13 +237,12 @@ let pane_id_of_page workspace = function
 let with_selected model selected =
   let previous_pane = pane_id_of_page model.workspace model.selected in
   let selected_pane = pane_id_of_page model.workspace selected in
+  let same_pane = [%equal: string option] previous_pane selected_pane in
   { model with
     selected
   ; message = None
-  ; pane_preview =
-      (if [%equal: string option] previous_pane selected_pane
-       then model.pane_preview
-       else No_preview)
+  ; preview_generation = (model.preview_generation + if same_pane then 0 else 1)
+  ; pane_preview = (if same_pane then model.pane_preview else No_preview)
   }
 ;;
 
@@ -292,20 +282,7 @@ let apply_action _context model action =
         ~f:(fun item -> item.node.page)
     in
     with_selected model selected
-  | Expand ->
-    (match current with
-     | Some { node = { children = _ :: _; page; _ }; _ } ->
-       { model with expanded = Set.add model.expanded page }
-     | _ -> { model with focus = Page })
-  | Collapse_or_parent when equal_focus model.focus Page ->
-    { model with focus = Navigation }
-  | Collapse_or_parent ->
-    (match current with
-     | Some { node = { page; children = _ :: _; _ }; _ } when Set.mem model.expanded page
-       -> { model with expanded = Set.remove model.expanded page }
-     | Some { parent = Some selected; _ } -> with_selected model selected
-     | _ -> model)
-  | Activate ->
+  | Toggle_expanded ->
     (match current with
      | Some { node = { page; children = _ :: _; _ }; _ } ->
        let expanded =
@@ -314,7 +291,7 @@ let apply_action _context model action =
          else Set.add model.expanded page
        in
        { model with expanded }
-     | _ -> { model with focus = Page })
+     | _ -> model)
   | Refresh_started -> { model with message = Some "refreshing recovery state…" }
   | Replace_data (workspace_result, recovery_result, snapshots, services) ->
     let workspace =
@@ -370,8 +347,13 @@ let apply_action _context model action =
      | No_preview | Loading _ | Ready _ | Failed _ -> model)
   | Clear_preview -> { model with pane_preview = No_preview }
   | Autonomy_updated (autonomy, note) ->
-    { model with autonomy
-    ; message = (match note with Some n -> Some n | None -> model.message) }
+    { model with
+      autonomy
+    ; message =
+        (match note with
+         | Some n -> Some n
+         | None -> model.message)
+    }
 ;;
 
 let terminal_foreground = Attr.Color.Expert.default
@@ -497,11 +479,7 @@ let render_navigation model ~width ~height =
       first_visible
       (Int.min (List.length rows) (first_visible + row_capacity))
   in
-  panel
-    ~title:(if equal_focus model.focus Navigation then "NAVIGATION ◀" else "NAVIGATION")
-    ~width
-    ~height
-    rows
+  panel ~title:"NAVIGATION" ~width ~height rows
 ;;
 
 let plain ?(color = text_color) text =
@@ -588,6 +566,7 @@ let warning_lines warnings =
 let pane_preview_lines
   ?(title = "Latest pane output")
   ?(subtitle = "Bottom of pane · read-only · refresh with r")
+  ?(compact = false)
   model
   pane_id
   ~line_limit
@@ -608,10 +587,14 @@ let pane_preview_lines
     | No_preview | Loading _ | Ready _ | Failed _ ->
       [ plain ~color:muted "Preparing pane preview…" ]
   in
-  [ plain ""; heading title; plain ~color:muted subtitle; plain "" ] @ contents
+  (if compact
+   then [ heading title ]
+   else [ plain ""; heading title; plain ~color:muted subtitle; plain "" ])
+  @ contents
 ;;
 
 let detail_lines model ~height =
+  let compact = height < 14 in
   let preview_line_limit = Int.max 1 (height - 11) in
   let workspace = model.workspace in
   match model.selected with
@@ -630,7 +613,7 @@ let detail_lines model ~height =
     ; field "Panes" (Int.to_string (Map.length workspace.panes))
     ; field "Native snapshots" (snapshot_count ^ " saved · rolling limit 10")
     ; plain ""
-    ; plain ~color:muted "Guarded mutations require explicit approval in the CLI."
+    ; plain ~color:muted "Use snapshot to save and restore to recover your workspace."
     ]
   | Resource (Workspace _source) ->
     [ heading "Sessions"
@@ -672,28 +655,49 @@ let detail_lines model ~height =
           @ pane_preview_lines
               ~title:"Live window contents"
               ~subtitle:"Active pane · bottom of screen · read-only · refresh with r"
+              ~compact
               model
               pane.id
-              ~line_limit:(Int.max 1 (height - 7))))
+              ~line_limit:(Int.max 1 (height - if compact then 4 else 7))))
   | Resource (Pane (_source, id)) ->
     (match Map.find workspace.panes id with
      | None -> [ heading "Pane ended" ]
      | Some pane ->
        let decision = decision_for (decisions_by_pane model.recovery) pane in
-       [ heading [%string "Pane %{pane.index#Int}"]
-       ; field "Typed ID" pane.id
-       ; field "Working directory" pane.cwd
-       ; field "Title" pane.title
-       ; field "Observed command" pane.current_command
-       ; field "Recovery" (Recovery.Action.label decision.action)
-       ]
-       @ pane_preview_lines model pane.id ~line_limit:preview_line_limit)
+       (if compact
+        then
+          [ heading [%string "Pane %{pane.index#Int} · %{pane.current_command}"]
+          ; field "Recovery" (Recovery.Action.label decision.action)
+          ]
+        else
+          [ heading [%string "Pane %{pane.index#Int}"]
+          ; field "Typed ID" pane.id
+          ; field "Working directory" pane.cwd
+          ; field "Title" pane.title
+          ; field "Observed command" pane.current_command
+          ; field "Recovery" (Recovery.Action.label decision.action)
+          ])
+       @ pane_preview_lines
+           ~compact
+           model
+           pane.id
+           ~line_limit:(if compact then Int.max 1 (height - 4) else preview_line_limit))
   | Resource (Application (_source, pane_id)) ->
     (match Map.find workspace.panes pane_id with
      | None -> [ heading "Application ended" ]
      | Some pane ->
-       (decision_for (decisions_by_pane model.recovery) pane |> decision_lines)
-       @ pane_preview_lines model pane.id ~line_limit:preview_line_limit)
+       let decision = decision_for (decisions_by_pane model.recovery) pane in
+       (if compact
+        then
+          [ heading decision.observed
+          ; field "Recovery" (Recovery.Action.label decision.action)
+          ]
+        else decision_lines decision)
+       @ pane_preview_lines
+           ~compact
+           model
+           pane.id
+           ~line_limit:(if compact then Int.max 1 (height - 4) else preview_line_limit))
   | Status ->
     let blocked = blocked_decisions model.recovery in
     let blocked_count = List.length blocked in
@@ -820,7 +824,6 @@ let detail_lines model ~height =
       let mode_label =
         match policy.mode with
         | Autonomy.Mode.Off -> "off (no autonomous cleanup)"
-        | Autonomy.Mode.Dry_run -> "dry-run (would close; no action taken)"
         | Autonomy.Mode.Live -> "live (closes idle, unrecoverable windows)"
       in
       let paused_label = if info.paused then " · PAUSED (p to resume)" else "" in
@@ -838,7 +841,8 @@ let detail_lines model ~height =
             plain
               ~color:amber
               [%string
-                "· %{pending_action.id} %{window_id} closes in %{format_span                  remaining} · press c to cancel"])
+                "· %{pending_action.id} %{window_id} closes in \
+                 %{format_span                  remaining} · press c to cancel"])
       in
       let funnel_lines =
         if List.is_empty info.candidates
@@ -846,13 +850,16 @@ let detail_lines model ~height =
         else
           List.map info.candidates ~f:(fun (window_id, since, suppressed) ->
             let since_label =
-              (match since with
-               | Some t -> "eligible since " ^ Time_ns.to_string_utc t
-               | None -> "observing")
+              match since with
+              | Some t -> "eligible since " ^ Time_ns.to_string_utc t
+              | None -> "observing"
             in
-            let suppressed_label = if suppressed then " · suppressed this cycle" else "" in
-            plain ~color:muted
-              ([%string "· %{window_id} %{since_label}%{suppressed_label}"]))
+            let suppressed_label =
+              if suppressed then " · suppressed this cycle" else ""
+            in
+            plain
+              ~color:muted
+              [%string "· %{window_id} %{since_label}%{suppressed_label}"])
       in
       let audit_lines =
         match info.audit with
@@ -865,7 +872,10 @@ let detail_lines model ~height =
       ; field
           "Policy"
           [%string
-            "%{mode_label} · grace %{format_span (Time_ns.Span.of_int_sec              policy.grace_seconds)} · candidate for ≥ %{format_span              (Time_ns.Span.of_int_sec policy.persistence_seconds)} · snapshot before              fire: %{snapshot_label}%{paused_label}"]
+            "%{mode_label} · grace %{format_span (Time_ns.Span.of_int_sec              \
+             policy.grace_seconds)} · candidate for ≥ %{format_span              \
+             (Time_ns.Span.of_int_sec policy.persistence_seconds)} · snapshot \
+             before              fire: %{snapshot_label}%{paused_label}"]
       ; field "Pending actions" (string_of_int (List.length info.active))
       ]
       @ pending_lines
@@ -898,7 +908,7 @@ let detail_lines model ~height =
     @ [ plain "" ]
     @ autonomy_lines
     @ [ plain ""
-      ; field "Mutation safety" "PASS · destructive operations require explicit approval"
+      ; field "Recovery safety" "Snapshot integrity and occupied targets are checked."
       ; plain ~color:muted "Use the CLI for snapshot restore and automation changes."
       ]
 ;;
@@ -910,12 +920,9 @@ let render_detail model ~width ~height =
   in
   panel
     ~title:
-      (let title =
-         match model.selected with
-         | Resource (Window_link _ | Pane _ | Application _) -> "PREVIEW"
-         | Overview | Resource (Workspace _ | Session _) | Status -> "DETAIL"
-       in
-       if equal_focus model.focus Page then title ^ " ◀" else title)
+      (match model.selected with
+       | Resource (Window_link _ | Pane _ | Application _) -> "PREVIEW"
+       | Overview | Resource (Workspace _ | Session _) | Status -> "DETAIL")
     ~width
     ~height
     (detail_lines model ~height @ message)
@@ -925,7 +932,7 @@ let render model { Dimensions.width; height } =
   let help =
     View.text
       ~attrs:[ Attr.fg muted; Attr.bg terminal_background ]
-      " ↑/↓ move  ← back/fold  → expand  enter open  r refresh  c cancel  p pause  q quit "
+      " ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause "
   in
   let body_height = Int.max 1 (height - 1) in
   let body =
@@ -946,11 +953,23 @@ let render model { Dimensions.width; height } =
         ; render_detail model ~width:detail_width ~height:body_height
         ])
     else (
-      match model.focus with
-      | Navigation -> render_navigation model ~width ~height:body_height
-      | Page -> render_detail model ~width ~height:body_height)
+      (* Keep selection and its details visible together. The tree scrolls to the selected
+         row, while the remaining space belongs to the passive viewer. *)
+      let navigation_height = Int.min 6 (Int.max 2 (body_height / 4)) in
+      let detail_height = Int.max 1 (body_height - navigation_height - 1) in
+      let divider =
+        View.text
+          ~attrs:[ Attr.fg terminal_foreground; Attr.bg terminal_background ]
+          (String.concat (List.init width ~f:(fun _ -> "─")))
+      in
+      View.vcat
+        [ render_navigation model ~width ~height:navigation_height
+        ; divider
+        ; render_detail model ~width ~height:detail_height
+        ])
   in
-  View.vcat [ body; crop_to help ~width ~height:1 ]
+  View.vcat [ crop_to body ~width ~height:body_height; crop_to help ~width ~height:1 ]
+  |> crop_to ~width ~height
 ;;
 
 let app
@@ -992,7 +1011,6 @@ let app
         ; services = initial_services
         ; selected = Overview
         ; expanded
-        ; focus = Navigation
         ; message = None
         ; preview_generation = 0
         ; pane_preview = No_preview
@@ -1029,19 +1047,21 @@ let app
     let%bind.Effect autonomy_status =
       match workspace, recovery with
       | Ok _, Ok _ ->
-        (* One reconcile cycle under the store lock: advance the funnel, fire any
-           due action (dry-run or live per the persisted policy), persist state,
-           and sync the durable audit log. *)
+        (* One reconcile cycle under the store lock: advance the funnel, fire any due
+           action permitted by the persisted policy, persist state, and sync the durable
+           audit log. *)
         Effect.of_deferred_thunk (fun () ->
           Deferred.Or_error.bind (Autonomy_runner.tick autonomy_runner) ~f:(fun _tick ->
             Autonomy_runner.status autonomy_runner))
       | _ -> Effect.of_deferred_thunk (fun () -> Autonomy_runner.status autonomy_runner)
     in
     let%bind.Effect () =
-      (match autonomy_status with
-       | Ok status -> inject (Autonomy_updated (status, None))
-       | Error error ->
-         inject (Autonomy_updated (model.autonomy, Some (Error.to_string_hum error |> String.strip))))
+      match autonomy_status with
+      | Ok status -> inject (Autonomy_updated (status, None))
+      | Error error ->
+        inject
+          (Autonomy_updated
+             (model.autonomy, Some (Error.to_string_hum error |> String.strip)))
     in
     refreshing := false;
     Effect.Ignore
@@ -1054,40 +1074,45 @@ let app
     let%arr model and inject and refresh in
     fun (event : Event.t) ->
       let cancel_oldest () =
-        (match model.autonomy.active with
-         | [] -> Effect.Ignore
-         | oldest :: _ ->
-           Effect.of_deferred_thunk (fun () ->
-             Deferred.Or_error.bind (Autonomy_runner.cancel autonomy_runner ~id:oldest.id) ~f:(fun () ->
-               Autonomy_runner.status autonomy_runner))
-           |> Effect.bind
-                ~f:(function
-                  | Ok status ->
-                    inject (Autonomy_updated (status, Some ("cancelled " ^ oldest.id)))
-                  | Error error ->
-                    inject
-                      (Autonomy_updated (model.autonomy, Some (Error.to_string_hum error |> String.strip)))))
+        match model.autonomy.active with
+        | [] -> Effect.Ignore
+        | oldest :: _ ->
+          Effect.of_deferred_thunk (fun () ->
+            Deferred.Or_error.bind
+              (Autonomy_runner.cancel autonomy_runner ~id:oldest.id)
+              ~f:(fun () -> Autonomy_runner.status autonomy_runner))
+          |> Effect.bind ~f:(function
+            | Ok status ->
+              inject (Autonomy_updated (status, Some ("cancelled " ^ oldest.id)))
+            | Error error ->
+              inject
+                (Autonomy_updated
+                   (model.autonomy, Some (Error.to_string_hum error |> String.strip))))
       in
       let toggle_pause () =
         let paused = model.autonomy.paused in
-        let action = if paused then Autonomy_runner.resume autonomy_runner else Autonomy_runner.pause autonomy_runner in
-        let note = if paused then "resumed; a fresh persistence period is required" else "paused" in
+        let action =
+          if paused
+          then Autonomy_runner.resume autonomy_runner
+          else Autonomy_runner.pause autonomy_runner
+        in
+        let note =
+          if paused then "resumed; a fresh persistence period is required" else "paused"
+        in
         Effect.of_deferred_thunk (fun () ->
-          Deferred.Or_error.bind action ~f:(fun () -> Autonomy_runner.status autonomy_runner))
-        |> Effect.bind
-             ~f:(function
-               | Ok status -> inject (Autonomy_updated (status, Some note))
-               | Error error ->
-                 inject
-                   (Autonomy_updated
-                      (model.autonomy, Some (Error.to_string_hum error |> String.strip))))
+          Deferred.Or_error.bind action ~f:(fun () ->
+            Autonomy_runner.status autonomy_runner))
+        |> Effect.bind ~f:(function
+          | Ok status -> inject (Autonomy_updated (status, Some note))
+          | Error error ->
+            inject
+              (Autonomy_updated
+                 (model.autonomy, Some (Error.to_string_hum error |> String.strip))))
       in
       match event with
       | Key_press { key = Arrow `Down; mods = [] } -> inject (Move 1)
       | Key_press { key = Arrow `Up; mods = [] } -> inject (Move (-1))
-      | Key_press { key = Arrow `Right; mods = [] } -> inject Expand
-      | Key_press { key = Arrow `Left; mods = [] } -> inject Collapse_or_parent
-      | Key_press { key = Enter; mods = [] } -> inject Activate
+      | Key_press { key = Enter; mods = [] } -> inject Toggle_expanded
       | Key_press { key = ASCII 'r' | ASCII 'R'; mods = [] } ->
         if !refreshing
         then Effect.Ignore
@@ -1103,16 +1128,15 @@ let app
   ~view, ~handler
 ;;
 
-
-(** Reconcile the autonomous pipeline periodically while the TUI is open, so the
-    view stays current without any key press. The pipeline is service-owned; this
-    is merely an additional, coalescing observer. *)
+(** Reconcile the autonomous pipeline periodically while the TUI is open, so the view
+    stays current without any key press. The pipeline is service-owned; this is merely an
+    additional, coalescing observer. *)
 let periodic_refresh driver =
   let rec loop () =
     Clock_ns.after (Time_ns.Span.of_int_sec 15)
-    >>= (fun () ->
-      Driver.send_event driver (Key_press { key = ASCII 'r'; mods = [] });
-      loop ())
+    >>= fun () ->
+    Driver.send_event driver (Key_press { key = ASCII 'r'; mods = [] });
+    loop ()
   in
   loop ()
 ;;
@@ -1132,50 +1156,56 @@ let command =
        let snapshots = App_snapshot.create () in
        let services = App_service.create () in
        let%bind initial = App_recovery.workspace service in
-       (match initial with
-        | Error _ as error -> return error
-        | Ok initial ->
-          let%bind initial_recovery = App_recovery.plan service in
-          (match initial_recovery with
-           | Error _ as error -> return error
-           | Ok initial_recovery ->
-             let%bind initial_snapshots = App_snapshot.list snapshots in
-             (match initial_snapshots with
-              | Error _ as error -> return error
-              | Ok initial_snapshots ->
-                let%bind initial_services = App_service.status services in
-                (match initial_services with
-                 | Error _ as error -> return error
-                 | Ok initial_services ->
-                   (* The autonomy policy lives in the persistent store, never in
-                      CLI flags: the TUI is a viewer and controller for it. *)
-                   Deferred.Or_error.bind (Deferred.return (Autonomy_runner.create ?socket_name ())) ~f:(fun runner ->
-                     Deferred.Or_error.bind (Autonomy_runner.status runner) ~f:(fun initial_autonomy ->
-                       Deferred.Or_error.bind
-                         (Bonsai_term.start_with_driver
-                            ~mouse:No_mouse_events
-                            ~get_view_and_handler:Fn.id
-                            ~handle_incoming:(fun _ _ -> Effect.Ignore)
-                            (fun ~exit ~dimensions graph ->
-                               let (~view: view, ~handler: handler) =
-                                 app
-                                   ~autonomy_runner:runner
-                                   ~initial_autonomy
-                                   ~service
-                                   ~initial
-                                   ~initial_recovery
-                                   ~initial_snapshots:(Ok initial_snapshots)
-                                   ~initial_services:(Ok initial_services)
-                                   ~exit
-                                   ~dimensions
-                                   graph
-                               in
-                               Bonsai.Let_syntax.Let_syntax.map2 view handler
-                                 ~f:(fun view handler -> (~view: view, ~handler: handler))))
-                         ~f:(fun driver ->
-                           don't_wait_for (periodic_refresh driver);
-                           Deferred.map (Driver.finished driver) ~f:(fun result ->
-                             (match result with
-                              | Ok () -> Ok ()
-                              | Error `Incoming_events_pipe_closed -> Ok ()))))))))))
+       match initial with
+       | Error _ as error -> return error
+       | Ok initial ->
+         let%bind initial_recovery = App_recovery.plan service in
+         (match initial_recovery with
+          | Error _ as error -> return error
+          | Ok initial_recovery ->
+            let%bind initial_snapshots = App_snapshot.list snapshots in
+            (match initial_snapshots with
+             | Error _ as error -> return error
+             | Ok initial_snapshots ->
+               let%bind initial_services = App_service.status services in
+               (match initial_services with
+                | Error _ as error -> return error
+                | Ok initial_services ->
+                  (* The autonomy policy lives in the persistent store, never in CLI
+                     flags: the TUI is a viewer and controller for it. *)
+                  Deferred.Or_error.bind
+                    (Deferred.return (Autonomy_runner.create ?socket_name ()))
+                    ~f:(fun runner ->
+                      Deferred.Or_error.bind
+                        (Autonomy_runner.status runner)
+                        ~f:(fun initial_autonomy ->
+                          Deferred.Or_error.bind
+                            (Bonsai_term.start_with_driver
+                               ~mouse:No_mouse_events
+                               ~get_view_and_handler:Fn.id
+                               ~handle_incoming:(fun _ _ -> Effect.Ignore)
+                               (fun ~exit ~dimensions graph ->
+                                 let ~view, ~handler =
+                                   app
+                                     ~autonomy_runner:runner
+                                     ~initial_autonomy
+                                     ~service
+                                     ~initial
+                                     ~initial_recovery
+                                     ~initial_snapshots:(Ok initial_snapshots)
+                                     ~initial_services:(Ok initial_services)
+                                     ~exit
+                                     ~dimensions
+                                     graph
+                                 in
+                                 Bonsai.Let_syntax.Let_syntax.map2
+                                   view
+                                   handler
+                                   ~f:(fun view handler -> ~view, ~handler)))
+                            ~f:(fun driver ->
+                              don't_wait_for (periodic_refresh driver);
+                              Deferred.map (Driver.finished driver) ~f:(fun result ->
+                                match result with
+                                | Ok () -> Ok ()
+                                | Error `Incoming_events_pipe_closed -> Ok ()))))))))
 ;;

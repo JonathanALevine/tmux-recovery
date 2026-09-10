@@ -1,5 +1,12 @@
 (library
  (name autonomy_runner_tests)
- (libraries core core_unix async tmux_recovery_application tmux_recovery_adapters tmux_recovery_domain)
+ (libraries
+  core
+  core_unix
+  async
+  tmux_recovery_application
+  tmux_recovery_adapters
+  tmux_recovery_domain)
  (inline_tests)
- (preprocess (pps ppx_jane)))
+ (preprocess
+  (pps ppx_jane)))

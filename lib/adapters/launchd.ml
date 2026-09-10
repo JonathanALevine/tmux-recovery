@@ -42,8 +42,10 @@ let save_definition definition =
 
 let restore_definition definition =
   contains_any definition.label [ "restore"; "bootstrap" ]
+;;
 
-let autonomy_definition definition = contains_any definition.label [ "autonomy" ]
+let autonomy_definition definition =
+  contains_any definition.label [ "autonomy" ]
   || String.equal definition.label "com.jonathan.tmux"
 ;;
 
