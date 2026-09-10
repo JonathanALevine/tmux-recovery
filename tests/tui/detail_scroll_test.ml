@@ -23,10 +23,10 @@ let%test_unit "only Tab changes focus; detail keys never change tree selection" 
   send handle (Arrow `Down);
   let rendered () = Handle.show_into_string handle in
   let navigation = rendered () in
-  assert (String.is_substring navigation ~substring:"● NAVIGATION");
+  assert (String.is_substring navigation ~substring:"NAVIGATION ◀");
   send handle Tab;
   let detail = rendered () in
-  assert (String.is_substring detail ~substring:"● DETAIL");
+  assert (String.is_substring detail ~substring:"DETAIL ◀");
   List.iter
     [ Event.Key.Enter; Arrow `Down; Arrow `Up; Arrow `Left; Arrow `Right ]
     ~f:(fun key ->
@@ -66,6 +66,9 @@ let%test_unit "all affected panes and later status sections are reachable" =
   assert (String.is_substring top ~substring:"Recovery: shell only;");
   send handle (Arrow `Up);
   [%test_eq: string] (rendered ()) top;
+  List.iter [ Event.Key.Page `Down; Page `Up ] ~f:(fun key ->
+    send handle key;
+    [%test_eq: string] (rendered ()) top);
   let contents = Buffer.create 10000 in
   for _ = 1 to 250 do
     Buffer.add_string contents (rendered ());
@@ -86,7 +89,7 @@ let%test_unit "all affected panes and later status sections are reachable" =
   send handle (Arrow `Down);
   [%test_eq: string] (rendered ()) bottom;
   send handle (Page `Up);
-  assert (not (String.equal (rendered ()) bottom));
+  [%test_eq: string] (rendered ()) bottom;
   send handle (Page `Down);
   [%test_eq: string] (rendered ()) bottom;
   send handle Home;
@@ -142,20 +145,22 @@ let%test_unit "refresh and resize retain focus and clamp the scroll offset" =
   resize handle 100 22;
   select_status handle;
   send handle Tab;
-  send handle (Page `Down);
+  for _ = 1 to 19 do
+    send handle (Arrow `Down)
+  done;
   let rendered () = Handle.show_into_string handle in
   let before = rendered () in
   assert (String.is_substring before ~substring:"development:0.4");
   send handle (ASCII 'r');
   assert (String.is_substring (rendered ()) ~substring:"development:0.4");
-  assert (String.is_substring (rendered ()) ~substring:"● DETAIL");
+  assert (String.is_substring (rendered ()) ~substring:"DETAIL ◀");
   List.iter
     [ 40, 14; 60, 22; 83, 22; 84, 22; 100, 22 ]
     ~f:(fun (width, height) ->
       resize handle width height;
       let contents = rendered () in
       assert (String.is_substring contents ~substring:"NAVIGATION");
-      assert (String.is_substring contents ~substring:"● DETAIL");
+      assert (String.is_substring contents ~substring:"DETAIL ◀");
       send handle End;
       send handle (Arrow `Down);
       [%test_eq: Dimensions.t]
@@ -164,7 +169,7 @@ let%test_unit "refresh and resize retain focus and clamp the scroll offset" =
   resize handle 100 500;
   assert (String.is_substring (rendered ()) ~substring:"Affected panes (30)");
   resize handle 100 22;
-  assert (String.is_substring (rendered ()) ~substring:"● DETAIL · 1–");
+  assert (String.is_substring (rendered ()) ~substring:"DETAIL ◀ · 1–");
   (* A fresh handle starts a separate refresh after its selected session disappears. *)
   let missing =
     Bonsai_term_test.create_handle
@@ -190,7 +195,7 @@ let%test_unit "refresh and resize retain focus and clamp the scroll offset" =
   data := Ok empty, recovery, snapshots, services;
   send missing (ASCII 'r');
   let contents = Handle.show_into_string missing in
-  assert (String.is_substring contents ~substring:"● DETAIL");
+  assert (String.is_substring contents ~substring:"DETAIL ◀");
   assert (String.is_substring contents ~substring:"tmux-recovery")
 ;;
 
@@ -209,7 +214,7 @@ let%test_unit "a shorter refreshed status clamps scrolling without losing focus"
   send handle (ASCII 'r');
   let rendered () = Handle.show_into_string handle in
   let refreshed = rendered () in
-  assert (String.is_substring refreshed ~substring:"● DETAIL");
+  assert (String.is_substring refreshed ~substring:"DETAIL ◀");
   assert (String.is_substring refreshed ~substring:"Recovery safety:");
   send handle (Arrow `Down);
   [%test_eq: string] (rendered ()) refreshed;
