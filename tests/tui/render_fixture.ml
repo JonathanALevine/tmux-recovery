@@ -88,6 +88,19 @@ let () =
       move_down warning 1;
       print_endline ("--- " ^ label ^ " SECTION ---");
       show_view warning);
+  let dropdown = status_handle Tmux_recovery_tui_fixture.Tui_fixture.warning_app in
+  move_down dropdown 2;
+  print_endline "--- AFFECTED PANES DROPDOWN CLOSED ---";
+  show_view dropdown;
+  Bonsai_term_test.send_event dropdown (Key_press { key = Enter; mods = [] });
+  print_endline "--- AFFECTED PANES DROPDOWN OPEN ---";
+  show_view dropdown;
+  move_down dropdown 1;
+  print_endline "--- AFFECTED PANE SELECTED ---";
+  show_view dropdown;
+  Bonsai_term_test.set_dimensions dropdown { width = 40; height = 14 };
+  print_endline "--- NARROW AFFECTED PANE ---";
+  show_view dropdown;
   let affected = status_handle Tmux_recovery_tui_fixture.Tui_fixture.many_warnings_app in
   move_down affected 2;
   Bonsai_term_test.send_event affected (Key_press { key = Tab; mods = [] });
