@@ -45,7 +45,7 @@ val explicit_resume_thread_id : string -> string option
 val thread_locks_by_pid : codex_home:string -> string list -> string Int.Map.t
 
 (** Capture the smallest durable resume record for each detected Codex pane. Provider
-    failures degrade individual panes instead of failing the workspace save. *)
+    failures are retained in [observation_errors] so callers can reject unsafe saves. *)
 val capture : config -> Workspace.t -> capture Deferred.t
 
 (** Resolve a captured process/open-file inventory. Shared by live capture and
