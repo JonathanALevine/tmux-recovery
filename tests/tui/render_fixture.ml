@@ -59,67 +59,60 @@ let () =
   show_view selected;
   print_endline "--- RESIZED WIDE AGAIN ---";
   show selected;
+  let status_handle app =
+    let handle = Bonsai_term_test.create_handle app in
+    Bonsai_term_test.set_dimensions handle { width = 100; height = 22 };
+    Handle.recompute_view_until_stable handle;
+    move_down handle 3;
+    Handle.recompute_view_until_stable handle;
+    handle
+  in
   print_endline "--- STATUS ---";
-  let status = Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.app in
-  Bonsai_term_test.set_dimensions status { width = 100; height = 22 };
-  Handle.recompute_view_until_stable status;
-  move_down status 3;
+  let status = status_handle Tmux_recovery_tui_fixture.Tui_fixture.app in
   show_view status;
+  Bonsai_term_test.send_event status (Key_press { key = Enter; mods = [] });
+  print_endline "--- STATUS COLLAPSED ---";
+  show_view status;
+  let warning = status_handle Tmux_recovery_tui_fixture.Tui_fixture.warning_app in
   print_endline "--- STATUS WITH APPLICATION WARNING ---";
-  let warning =
-    Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.warning_app
-  in
-  Bonsai_term_test.set_dimensions warning { width = 100; height = 22 };
-  Handle.recompute_view_until_stable warning;
-  move_down warning 3;
   show_view warning;
-  let affected =
-    Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.warning_app
-  in
-  Bonsai_term_test.set_dimensions affected { width = 100; height = 22 };
-  Handle.recompute_view_until_stable affected;
-  move_down affected 3;
+  List.iter
+    [ "RECOVERY"
+    ; "AFFECTED PANES"
+    ; "SNAPSHOTS"
+    ; "AUTOMATION"
+    ; "AUTONOMOUS CLEANUP"
+    ; "RECOVERY SAFETY"
+    ]
+    ~f:(fun label ->
+      move_down warning 1;
+      print_endline ("--- " ^ label ^ " SECTION ---");
+      show_view warning);
+  let affected = status_handle Tmux_recovery_tui_fixture.Tui_fixture.many_warnings_app in
+  move_down affected 2;
   Bonsai_term_test.send_event affected (Key_press { key = Tab; mods = [] });
-  Bonsai_term_test.send_event affected (Key_press { key = Enter; mods = [] });
-  print_endline "--- AFFECTED PANES COLLAPSED IN STATUS ---";
+  print_endline "--- FOCUSED AFFECTED PANES DETAILS ---";
   show_view affected;
-  Bonsai_term_test.send_event affected (Key_press { key = Enter; mods = [] });
-  print_endline "--- AFFECTED PANES EXPANDED IN STATUS ---";
+  move_down affected 400;
+  print_endline "--- AFFECTED PANES SCROLLED TO END ---";
   show_view affected;
   Bonsai_term_test.set_dimensions affected { width = 40; height = 14 };
   Handle.recompute_view_until_stable affected;
-  Bonsai_term_test.send_event affected (Key_press { key = Enter; mods = [] });
-  print_endline "--- NARROW AFFECTED PANES COLLAPSED ---";
+  move affected `Up 400;
+  print_endline "--- NARROW AFFECTED PANES ---";
   show_view affected;
-  Bonsai_term_test.send_event affected (Key_press { key = Enter; mods = [] });
-  print_endline "--- NARROW AFFECTED PANES EXPANDED ---";
-  show_view affected;
-  print_endline "--- FOCUSED STATUS DETAILS ---";
-  Bonsai_term_test.send_event warning (Key_press { key = Tab; mods = [] });
-  show_view warning;
-  print_endline "--- STATUS SCROLLED TO END ---";
-  move_down warning 100;
-  show_view warning;
-  print_endline "--- NARROW STATUS ---";
-  Bonsai_term_test.set_dimensions warning { width = 40; height = 14 };
-  Handle.recompute_view_until_stable warning;
-  move warning `Up 100;
-  move_down warning 10;
-  show_view warning;
-  print_endline "--- EMPTY STATUS ---";
-  let empty =
-    Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.empty_app
-  in
-  Bonsai_term_test.set_dimensions empty { width = 100; height = 22 };
-  Handle.recompute_view_until_stable empty;
-  move_down empty 3;
-  show_view empty;
-  print_endline "--- UNAVAILABLE STATUS ---";
-  let unavailable =
-    Bonsai_term_test.create_handle Tmux_recovery_tui_fixture.Tui_fixture.unavailable_app
-  in
-  Bonsai_term_test.set_dimensions unavailable { width = 100; height = 22 };
-  Handle.recompute_view_until_stable unavailable;
-  move_down unavailable 3;
-  show_view unavailable
+  List.iter
+    [ "EMPTY", Tmux_recovery_tui_fixture.Tui_fixture.empty_app
+    ; "UNAVAILABLE", Tmux_recovery_tui_fixture.Tui_fixture.unavailable_app
+    ]
+    ~f:(fun (label, app) ->
+      let handle = status_handle app in
+      print_endline ("--- " ^ label ^ " STATUS ---");
+      show_view handle;
+      move_down handle 3;
+      print_endline ("--- " ^ label ^ " SNAPSHOTS ---");
+      show_view handle;
+      move_down handle 1;
+      print_endline ("--- " ^ label ^ " AUTOMATION ---");
+      show_view handle)
 ;;

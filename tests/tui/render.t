@@ -5,13 +5,13 @@
   │  Overview                                  ┃tmux-recovery                                          │
   │▾ Sessions  [online]                        ┃A conservative recovery control plane for tmux.        │
   │  ▸ development  [attached]                 ┃                                                       │
-  │  Status  [ready]                           ┃tmux: online                                           │
-  │                                            ┃Sessions: 1                                            │
-  │                                            ┃Canonical windows: 1                                   │
-  │                                            ┃Panes: 1                                               │
-  │                                            ┃Native snapshots: 1 saved · rolling limit 10           │
-  │                                            ┃                                                       │
-  │                                            ┃Use snapshot to save and restore to recover your       │
+  │▾ Status  [ready]                           ┃tmux: online                                           │
+  │    Recovery                                ┃Sessions: 1                                            │
+  │    Affected panes  [0]                     ┃Canonical windows: 1                                   │
+  │    Snapshots                               ┃Panes: 1                                               │
+  │    Automation                              ┃Native snapshots: 1 saved · rolling limit 10           │
+  │    Autonomous cleanup                      ┃                                                       │
+  │    Recovery safety                         ┃Use snapshot to save and restore to recover your       │
   │                                            ┃workspace.                                             │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
@@ -30,13 +30,13 @@
   │  Overview                                  ┃Sessions                                               │
   │▾ Sessions  [online]                        ┃Source: live                                           │
   │  ▸ development  [attached]                 ┃Server: running                                        │
-  │  Status  [ready]                           ┃Version: tmux test                                     │
-  │                                            ┃Socket: default                                        │
-  │                                            ┃                                                       │
-  │                                            ┃                                                       │
-  │                                            ┃                                                       │
-  │                                            ┃                                                       │
-  │                                            ┃                                                       │
+  │▾ Status  [ready]                           ┃Version: tmux test                                     │
+  │    Recovery                                ┃Socket: default                                        │
+  │    Affected panes  [0]                     ┃                                                       │
+  │    Snapshots                               ┃                                                       │
+  │    Automation                              ┃                                                       │
+  │    Autonomous cleanup                      ┃                                                       │
+  │    Recovery safety                         ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
@@ -56,13 +56,13 @@
   │▾ Sessions  [online]                        ┃Window 0 · active pane 0 · btop                        │
   │  ▾ development  [attached]                 ┃                                                       │
   │    ▸ 0:monitoring  [active]                ┃Live window contents                                   │
-  │  Status  [ready]                           ┃Active pane · bottom of screen · read-only · refresh wi│
-  │                                            ┃                                                       │
-  │                                            ┃older output 02                                        │
-  │                                            ┃older output 03                                        │
-  │                                            ┃older output 04                                        │
-  │                                            ┃older output 05                                        │
-  │                                            ┃older output 06                                        │
+  │▾ Status  [ready]                           ┃Active pane · bottom of screen · read-only · refresh wi│
+  │    Recovery                                ┃                                                       │
+  │    Affected panes  [0]                     ┃older output 02                                        │
+  │    Snapshots                               ┃older output 03                                        │
+  │    Automation                              ┃older output 04                                        │
+  │    Autonomous cleanup                      ┃older output 05                                        │
+  │    Recovery safety                         ┃older output 06                                        │
   │                                            ┃older output 07                                        │
   │                                            ┃older output 08                                        │
   │                                            ┃older output 09                                        │
@@ -82,13 +82,13 @@
   │  ▾ development  [attached]                 ┃Working directory: /Users/demo                         │
   │    ▾ 0:monitoring  [active]                ┃Title: btop                                            │
   │      ▸ pane 0  [active]                    ┃Observed command: btop                                 │
-  │  Status  [ready]                           ┃Recovery: restart                                      │
-  │                                            ┃                                                       │
-  │                                            ┃Latest pane output                                     │
-  │                                            ┃Bottom of pane · read-only · refresh with r            │
-  │                                            ┃                                                       │
-  │                                            ┃older output 06                                        │
-  │                                            ┃older output 07                                        │
+  │▾ Status  [ready]                           ┃Recovery: restart                                      │
+  │    Recovery                                ┃                                                       │
+  │    Affected panes  [0]                     ┃Latest pane output                                     │
+  │    Snapshots                               ┃Bottom of pane · read-only · refresh with r            │
+  │    Automation                              ┃                                                       │
+  │    Autonomous cleanup                      ┃older output 06                                        │
+  │    Recovery safety                         ┃older output 07                                        │
   │                                            ┃older output 08                                        │
   │                                            ┃older output 09                                        │
   │                                            ┃older output 10                                        │
@@ -149,13 +149,13 @@
   │  ▾ development  [attached]                 ┃Working directory: /Users/demo                         │
   │    ▾ 0:monitoring  [active]                ┃Title: btop                                            │
   │      ▸ pane 0  [active]                    ┃Observed command: btop                                 │
-  │  Status  [ready]                           ┃Recovery: restart                                      │
-  │                                            ┃                                                       │
-  │                                            ┃Latest pane output                                     │
-  │                                            ┃Bottom of pane · read-only · refresh with r            │
-  │                                            ┃                                                       │
-  │                                            ┃older output 06                                        │
-  │                                            ┃older output 07                                        │
+  │▾ Status  [ready]                           ┃Recovery: restart                                      │
+  │    Recovery                                ┃                                                       │
+  │    Affected panes  [0]                     ┃Latest pane output                                     │
+  │    Snapshots                               ┃Bottom of pane · read-only · refresh with r            │
+  │    Automation                              ┃                                                       │
+  │    Autonomous cleanup                      ┃older output 06                                        │
+  │    Recovery safety                         ┃older output 07                                        │
   │                                            ┃older output 08                                        │
   │                                            ┃older output 09                                        │
   │                                            ┃older output 10                                        │
@@ -167,252 +167,443 @@
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- STATUS ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │NAVIGATION                                  ┃DETAIL · 1–19/54                                       │
+  │NAVIGATION                                  ┃DETAIL                                                 │
   │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
   │  Overview                                  ┃Status                                                 │
   │▾ Sessions  [online]                        ┃Recovery readiness, snapshot history, and automation.  │
   │  ▸ development  [attached]                 ┃                                                       │
-  │  Status  [ready]                           ┃Recovery                                               │
-  │                                            ┃tmux: PASS · server running                            │
-  │                                            ┃Workspace: PASS · 1 session(s) · 1 window(s) · 1       │
-  │                                            ┃pane(s)                                                │
-  │                                            ┃Applications: PASS · 0 exact resume(s) · 1 safe        │
-  │                                            ┃restart(s) · 0 blocked                                 │
+  │▾ Status  [ready]                           ┃Readiness: ready                                       │
+  │    Recovery                                ┃Affected panes: 0                                      │
+  │    Affected panes  [0]                     ┃                                                       │
+  │    Snapshots                               ┃Select a section under Status to inspect its details.  │
+  │    Automation                              ┃                                                       │
+  │    Autonomous cleanup                      ┃                                                       │
+  │    Recovery safety                         ┃                                                       │
   │                                            ┃                                                       │
-  │                                            ┃Affected panes (0)                                     │
-  │                                            ┃No applications require shell-only recovery.           │
   │                                            ┃                                                       │
-  │                                            ┃Snapshots                                              │
-  │                                            ┃Readiness: PASS · valid native recovery point available│
-  │                                            ┃Native history: 1 saved · rolling limit 10             │
-  │                                            ┃Last good: 2026-07-21 01:32:39.000000000Z              │
-  │                                            ┃Native storage: 8.0 KiB                                │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  └────────────────────────────────────────────────────────────────────────────────────────────────────┘
+  --- STATUS COLLAPSED ---
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │NAVIGATION                                  ┃DETAIL                                                 │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+  │  Overview                                  ┃Status                                                 │
+  │▾ Sessions  [online]                        ┃Recovery readiness, snapshot history, and automation.  │
+  │  ▸ development  [attached]                 ┃                                                       │
+  │▸ Status  [ready]                           ┃Readiness: ready                                       │
+  │                                            ┃Affected panes: 0                                      │
+  │                                            ┃                                                       │
+  │                                            ┃Select a section under Status to inspect its details.  │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
   │                                            ┃                                                       │
   │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- STATUS WITH APPLICATION WARNING ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │NAVIGATION                                  ┃DETAIL · 1–19/58                                       │
+  │NAVIGATION                                  ┃DETAIL                                                 │
   │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
   │  Overview                                  ┃Status                                                 │
   │▾ Sessions  [online]                        ┃Recovery readiness, snapshot history, and automation.  │
   │  ▸ development  [attached]                 ┃                                                       │
-  │  Status  [attention]                       ┃Recovery                                               │
-  │                                            ┃tmux: PASS · server running                            │
-  │                                            ┃Workspace: PASS · 1 session(s) · 1 window(s) · 1       │
-  │                                            ┃pane(s)                                                │
-  │                                            ┃Applications: WARN · 1 shell fallback(s) · details     │
-  │                                            ┃below                                                  │
+  │▾ Status  [attention]                       ┃Readiness: attention                                   │
+  │    Recovery                                ┃Affected panes: 1                                      │
+  │    Affected panes  [1]                     ┃                                                       │
+  │    Snapshots                               ┃Select a section under Status to inspect its details.  │
+  │    Automation                              ┃                                                       │
+  │    Autonomous cleanup                      ┃                                                       │
+  │    Recovery safety                         ┃                                                       │
   │                                            ┃                                                       │
-  │                                            ┃▾ Affected panes (1)                                   │
   │                                            ┃                                                       │
-  │                                            ┃development:0.0 · %1                                   │
-  │                                            ┃Application: codex                                     │
-  │                                            ┃Cause: Codex has no durable thread ID.                 │
-  │                                            ┃Recovery: shell only; the application will not resume. │
   │                                            ┃                                                       │
-  │                                            ┃Snapshots                                              │
-  │                                            ┃Readiness: PASS · valid native recovery point available│
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
   │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
-  --- AFFECTED PANES COLLAPSED IN STATUS ---
+  --- RECOVERY SECTION ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │NAVIGATION                                  ┃DETAIL · 1–19/53                                       │
+  │NAVIGATION                                  ┃DETAIL                                                 │
   │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
-  │  Overview                                  ┃Status                                                 │
-  │▾ Sessions  [online]                        ┃Recovery readiness, snapshot history, and automation.  │
-  │  ▸ development  [attached]                 ┃                                                       │
-  │  Status  [attention]                       ┃Recovery                                               │
-  │                                            ┃tmux: PASS · server running                            │
-  │                                            ┃Workspace: PASS · 1 session(s) · 1 window(s) · 1       │
-  │                                            ┃pane(s)                                                │
-  │                                            ┃Applications: WARN · 1 shell fallback(s) · details     │
-  │                                            ┃below                                                  │
+  │  Overview                                  ┃Recovery                                               │
+  │▾ Sessions  [online]                        ┃tmux: PASS · server running                            │
+  │  ▸ development  [attached]                 ┃Workspace: PASS · 1 session(s) · 1 window(s) · 1       │
+  │▾ Status  [attention]                       ┃pane(s)                                                │
+  │    Recovery                                ┃Applications: WARN · 1 shell fallback(s) · see Affected│
+  │    Affected panes  [1]                     ┃panes                                                  │
+  │    Snapshots                               ┃                                                       │
+  │    Automation                              ┃                                                       │
+  │    Autonomous cleanup                      ┃                                                       │
+  │    Recovery safety                         ┃                                                       │
   │                                            ┃                                                       │
-  │                                            ┃▸ Affected panes (1)                                   │
   │                                            ┃                                                       │
-  │                                            ┃Snapshots                                              │
-  │                                            ┃Readiness: PASS · valid native recovery point available│
-  │                                            ┃Native history: 1 saved · rolling limit 10             │
-  │                                            ┃Last good: 2026-07-21 01:32:39.000000000Z              │
-  │                                            ┃Native storage: 8.0 KiB                                │
   │                                            ┃                                                       │
-  │                                            ┃Automation                                             │
-  │ Tab navigation · ↑/↓ scroll · Enter affected panes · r refresh · q quit · c cancel · p pause       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
-  --- AFFECTED PANES EXPANDED IN STATUS ---
+  --- AFFECTED PANES SECTION ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │NAVIGATION                                  ┃DETAIL · 1–19/58                                       │
+  │NAVIGATION                                  ┃DETAIL                                                 │
   │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
-  │  Overview                                  ┃Status                                                 │
-  │▾ Sessions  [online]                        ┃Recovery readiness, snapshot history, and automation.  │
-  │  ▸ development  [attached]                 ┃                                                       │
-  │  Status  [attention]                       ┃Recovery                                               │
-  │                                            ┃tmux: PASS · server running                            │
-  │                                            ┃Workspace: PASS · 1 session(s) · 1 window(s) · 1       │
-  │                                            ┃pane(s)                                                │
-  │                                            ┃Applications: WARN · 1 shell fallback(s) · details     │
-  │                                            ┃below                                                  │
+  │  Overview                                  ┃Affected panes (1)                                     │
+  │▾ Sessions  [online]                        ┃                                                       │
+  │  ▸ development  [attached]                 ┃development:0.0 · %1                                   │
+  │▾ Status  [attention]                       ┃Application: codex                                     │
+  │    Recovery                                ┃Cause: Codex has no durable thread ID.                 │
+  │    Affected panes  [1]                     ┃Recovery: shell only; the application will not resume. │
+  │    Snapshots                               ┃                                                       │
+  │    Automation                              ┃                                                       │
+  │    Autonomous cleanup                      ┃                                                       │
+  │    Recovery safety                         ┃                                                       │
   │                                            ┃                                                       │
-  │                                            ┃▾ Affected panes (1)                                   │
   │                                            ┃                                                       │
-  │                                            ┃development:0.0 · %1                                   │
-  │                                            ┃Application: codex                                     │
-  │                                            ┃Cause: Codex has no durable thread ID.                 │
-  │                                            ┃Recovery: shell only; the application will not resume. │
   │                                            ┃                                                       │
-  │                                            ┃Snapshots                                              │
-  │                                            ┃Readiness: PASS · valid native recovery point available│
-  │ Tab navigation · ↑/↓ scroll · Enter affected panes · r refresh · q quit · c cancel · p pause       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
-  --- NARROW AFFECTED PANES COLLAPSED ---
-  ┌────────────────────────────────────────┐
-  │NAVIGATION                              │
-  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
-  │  Status  [attention]                   │
-  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
-  │DETAIL · 12–18/62                       │
-  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
-  │▸ Affected panes (1)                    │
-  │                                        │
-  │Snapshots                               │
-  │Readiness: PASS · valid native recovery │
-  │point available                         │
-  │Native history: 1 saved · rolling limit │
-  │10                                      │
-  │ Tab navigation · ↑/↓ scroll · Enter aff│
-  └────────────────────────────────────────┘
-  --- NARROW AFFECTED PANES EXPANDED ---
-  ┌────────────────────────────────────────┐
-  │NAVIGATION                              │
-  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
-  │  Status  [attention]                   │
-  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
-  │DETAIL · 12–18/68                       │
-  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
-  │▾ Affected panes (1)                    │
-  │                                        │
-  │development:0.0 · %1                    │
-  │Application: codex                      │
-  │Cause: Codex has no durable thread ID.  │
-  │Recovery: shell only; the application   │
-  │will not resume.                        │
-  │ Tab navigation · ↑/↓ scroll · Enter aff│
-  └────────────────────────────────────────┘
-  --- FOCUSED STATUS DETAILS ---
+  --- SNAPSHOTS SECTION ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │NAVIGATION                                  ┃DETAIL · 1–19/58                                       │
+  │NAVIGATION                                  ┃DETAIL                                                 │
   │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
-  │  Overview                                  ┃Status                                                 │
-  │▾ Sessions  [online]                        ┃Recovery readiness, snapshot history, and automation.  │
-  │  ▸ development  [attached]                 ┃                                                       │
-  │  Status  [attention]                       ┃Recovery                                               │
-  │                                            ┃tmux: PASS · server running                            │
-  │                                            ┃Workspace: PASS · 1 session(s) · 1 window(s) · 1       │
-  │                                            ┃pane(s)                                                │
-  │                                            ┃Applications: WARN · 1 shell fallback(s) · details     │
-  │                                            ┃below                                                  │
+  │  Overview                                  ┃Snapshots                                              │
+  │▾ Sessions  [online]                        ┃Readiness: PASS · valid native recovery point available│
+  │  ▸ development  [attached]                 ┃Native history: 1 saved · rolling limit 10             │
+  │▾ Status  [attention]                       ┃Last good: 2026-07-21 01:32:39.000000000Z              │
+  │    Recovery                                ┃Native storage: 8.0 KiB                                │
+  │    Affected panes  [1]                     ┃                                                       │
+  │    Snapshots                               ┃                                                       │
+  │    Automation                              ┃                                                       │
+  │    Autonomous cleanup                      ┃                                                       │
+  │    Recovery safety                         ┃                                                       │
   │                                            ┃                                                       │
-  │                                            ┃▾ Affected panes (1)                                   │
   │                                            ┃                                                       │
-  │                                            ┃development:0.0 · %1                                   │
-  │                                            ┃Application: codex                                     │
-  │                                            ┃Cause: Codex has no durable thread ID.                 │
-  │                                            ┃Recovery: shell only; the application will not resume. │
   │                                            ┃                                                       │
-  │                                            ┃Snapshots                                              │
-  │                                            ┃Readiness: PASS · valid native recovery point available│
-  │ Tab navigation · ↑/↓ scroll · Enter affected panes · r refresh · q quit · c cancel · p pause       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
-  --- STATUS SCROLLED TO END ---
+  --- AUTOMATION SECTION ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │NAVIGATION                                  ┃DETAIL · 40–58/58                                      │
+  │NAVIGATION                                  ┃DETAIL                                                 │
   │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
-  │  Overview                                  ┃Runtime version: 0.3.0-dev.14                          │
-  │▾ Sessions  [online]                        ┃Last result: launchctl exit status 0                   │
-  │  ▸ development  [attached]                 ┃                                                       │
-  │  Status  [attention]                       ┃Autonomous cleanup                                     │
-  │                                            ┃Policy: off (no autonomous cleanup) · grace 1h 0m ·    │
-  │                                            ┃candidate for ≥ 15m 0s · snapshot before               │
-  │                                            ┃fire: yes                                              │
-  │                                            ┃Pending actions: 0                                     │
-  │                                            ┃No windows are currently scheduled for autonomous      │
-  │                                            ┃close.                                                 │
+  │  Overview                                  ┃Automation                                             │
+  │▾ Sessions  [online]                        ┃Readiness: PASS · tmux-recovery manages save and login │
+  │  ▸ development  [attached]                 ┃restore                                                │
+  │▾ Status  [attention]                       ┃Periodic save: PASS · loaded · 600 seconds             │
+  │    Recovery                                ┃Save command: tmux-recovery snapshot --trigger timer   │
+  │    Affected panes  [1]                     ┃--quiet                                                │
+  │    Snapshots                               ┃Next snapshot: 2026-07-21 01:42:39.000000000Z ·        │
+  │    Automation                              ┃estimated from the last timer save                     │
+  │    Autonomous cleanup                      ┃Autonomy tick: PASS · loaded · 45 seconds              │
+  │    Recovery safety                         ┃Tick command: tmux-recovery autonomy tick --quiet      │
+  │                                            ┃Login restore: PASS · loaded · at login                │
+  │                                            ┃Restore command: tmux-recovery restore --if-empty      │
+  │                                            ┃--quiet                                                │
+  │                                            ┃Last restore run: 2026-07-21 01:30:00.000000000Z ·     │
+  │                                            ┃restored                                               │
+  │                                            ┃tmux_recovery_1784597559000000000_0123abcd.snapshot    │
+  │                                            ┃Runtime version: 0.3.0-dev.14                          │
+  │                                            ┃Last result: launchctl exit status 0                   │
   │                                            ┃                                                       │
-  │                                            ┃Eligibility funnel: empty.                             │
-  │                                            ┃No autonomous actions recorded yet.                    │
+  │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  └────────────────────────────────────────────────────────────────────────────────────────────────────┘
+  --- AUTONOMOUS CLEANUP SECTION ---
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │NAVIGATION                                  ┃DETAIL                                                 │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+  │  Overview                                  ┃Autonomous cleanup                                     │
+  │▾ Sessions  [online]                        ┃Policy: off (no autonomous cleanup) · grace 1h 0m ·    │
+  │  ▸ development  [attached]                 ┃candidate for ≥ 15m 0s · snapshot before               │
+  │▾ Status  [attention]                       ┃fire: yes                                              │
+  │    Recovery                                ┃Pending actions: 0                                     │
+  │    Affected panes  [1]                     ┃No windows are currently scheduled for autonomous      │
+  │    Snapshots                               ┃close.                                                 │
+  │    Automation                              ┃                                                       │
+  │    Autonomous cleanup                      ┃Eligibility funnel: empty.                             │
+  │    Recovery safety                         ┃No autonomous actions recorded yet.                    │
   │                                            ┃p pauses or resumes the pipeline.                      │
   │                                            ┃                                                       │
-  │                                            ┃Recovery safety: Snapshot integrity and occupied       │
-  │                                            ┃targets are checked.                                   │
-  │                                            ┃Use the CLI for snapshot restore and automation        │
-  │                                            ┃changes.                                               │
-  │ Tab navigation · ↑/↓ scroll · Enter affected panes · r refresh · q quit · c cancel · p pause       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
-  --- NARROW STATUS ---
+  --- RECOVERY SAFETY SECTION ---
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │NAVIGATION                                  ┃DETAIL                                                 │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+  │  Overview                                  ┃Recovery safety                                        │
+  │▾ Sessions  [online]                        ┃Snapshot integrity and occupied targets are checked.   │
+  │  ▸ development  [attached]                 ┃Use the CLI for snapshot restore and automation        │
+  │▾ Status  [attention]                       ┃changes.                                               │
+  │    Recovery                                ┃                                                       │
+  │    Affected panes  [1]                     ┃                                                       │
+  │    Snapshots                               ┃                                                       │
+  │    Automation                              ┃                                                       │
+  │    Autonomous cleanup                      ┃                                                       │
+  │    Recovery safety                         ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  └────────────────────────────────────────────────────────────────────────────────────────────────────┘
+  --- FOCUSED AFFECTED PANES DETAILS ---
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │NAVIGATION                                  ┃DETAIL · 1–19/151                                      │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+  │  Overview                                  ┃Affected panes (30)                                    │
+  │▾ Sessions  [online]                        ┃                                                       │
+  │  ▸ development  [attached]                 ┃development:0.0 · %1                                   │
+  │▾ Status  [attention]                       ┃Application: codex                                     │
+  │    Recovery                                ┃Cause: Cannot resume application in pane %1.           │
+  │    Affected panes  [30]                    ┃Recovery: shell only; the application will not resume. │
+  │    Snapshots                               ┃                                                       │
+  │    Automation                              ┃development:0.1 · %2                                   │
+  │    Autonomous cleanup                      ┃Application: codex                                     │
+  │    Recovery safety                         ┃Cause: Cannot resume application in pane %2.           │
+  │                                            ┃Recovery: shell only; the application will not resume. │
+  │                                            ┃                                                       │
+  │                                            ┃development:0.2 · %3                                   │
+  │                                            ┃Application: codex                                     │
+  │                                            ┃Cause: Cannot resume application in pane %3.           │
+  │                                            ┃Recovery: shell only; the application will not resume. │
+  │                                            ┃                                                       │
+  │                                            ┃development:0.3 · %4                                   │
+  │                                            ┃Application: codex                                     │
+  │ Tab navigation · ↑/↓ scroll · r refresh · q quit · c cancel · p pause                              │
+  └────────────────────────────────────────────────────────────────────────────────────────────────────┘
+  --- AFFECTED PANES SCROLLED TO END ---
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │NAVIGATION                                  ┃DETAIL · 133–151/151                                   │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+  │  Overview                                  ┃development:0.26 · %27                                 │
+  │▾ Sessions  [online]                        ┃Application: codex                                     │
+  │  ▸ development  [attached]                 ┃Cause: Cannot resume application in pane %27.          │
+  │▾ Status  [attention]                       ┃Recovery: shell only; the application will not resume. │
+  │    Recovery                                ┃                                                       │
+  │    Affected panes  [30]                    ┃development:0.27 · %28                                 │
+  │    Snapshots                               ┃Application: codex                                     │
+  │    Automation                              ┃Cause: Cannot resume application in pane %28.          │
+  │    Autonomous cleanup                      ┃Recovery: shell only; the application will not resume. │
+  │    Recovery safety                         ┃                                                       │
+  │                                            ┃development:0.28 · %29                                 │
+  │                                            ┃Application: codex                                     │
+  │                                            ┃Cause: Cannot resume application in pane %29.          │
+  │                                            ┃Recovery: shell only; the application will not resume. │
+  │                                            ┃                                                       │
+  │                                            ┃development:0.29 · %30                                 │
+  │                                            ┃Application: codex                                     │
+  │                                            ┃Cause: Cannot resume application in pane %30.          │
+  │                                            ┃Recovery: shell only; the application will not resume. │
+  │ Tab navigation · ↑/↓ scroll · r refresh · q quit · c cancel · p pause                              │
+  └────────────────────────────────────────────────────────────────────────────────────────────────────┘
+  --- NARROW AFFECTED PANES ---
   ┌────────────────────────────────────────┐
   │NAVIGATION                              │
   │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
-  │  Status  [attention]                   │
+  │    Affected panes  [30]                │
   │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
-  │DETAIL · 11–17/68                       │
+  │DETAIL · 1–7/211                        │
   │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
-  │                                        │
-  │▾ Affected panes (1)                    │
+  │Affected panes (30)                     │
   │                                        │
   │development:0.0 · %1                    │
   │Application: codex                      │
-  │Cause: Codex has no durable thread ID.  │
+  │Cause: Cannot resume application in pane│
+  │%1.                                     │
   │Recovery: shell only; the application   │
-  │ Tab navigation · ↑/↓ scroll · Enter aff│
+  │ Tab navigation · ↑/↓ scroll · r refresh│
   └────────────────────────────────────────┘
   --- EMPTY STATUS ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │NAVIGATION                                  ┃DETAIL · 1–19/46                                       │
+  │NAVIGATION                                  ┃DETAIL                                                 │
   │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
   │  Overview                                  ┃Status                                                 │
   │▾ Sessions  [online]                        ┃Recovery readiness, snapshot history, and automation.  │
   │  ▸ development  [attached]                 ┃                                                       │
-  │  Status  [attention]                       ┃Recovery                                               │
-  │                                            ┃tmux: PASS · server running                            │
-  │                                            ┃Workspace: PASS · 1 session(s) · 1 window(s) · 1       │
-  │                                            ┃pane(s)                                                │
-  │                                            ┃Applications: PASS · 0 exact resume(s) · 1 safe        │
-  │                                            ┃restart(s) · 0 blocked                                 │
+  │▾ Status  [attention]                       ┃Readiness: attention                                   │
+  │    Recovery                                ┃Affected panes: 0                                      │
+  │    Affected panes  [0]                     ┃                                                       │
+  │    Snapshots                               ┃Select a section under Status to inspect its details.  │
+  │    Automation                              ┃                                                       │
+  │    Autonomous cleanup                      ┃                                                       │
+  │    Recovery safety                         ┃                                                       │
   │                                            ┃                                                       │
-  │                                            ┃Affected panes (0)                                     │
-  │                                            ┃No applications require shell-only recovery.           │
   │                                            ┃                                                       │
-  │                                            ┃Snapshots                                              │
-  │                                            ┃Readiness: WARN · no valid native recovery point;      │
-  │                                            ┃reboot recovery is unsafe                              │
-  │                                            ┃Native history: 0 saved · rolling limit 10             │
-  │                                            ┃Last good: none                                        │
-  │                                            ┃Native storage: 0 B                                    │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  └────────────────────────────────────────────────────────────────────────────────────────────────────┘
+  --- EMPTY SNAPSHOTS ---
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │NAVIGATION                                  ┃DETAIL                                                 │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+  │  Overview                                  ┃Snapshots                                              │
+  │▾ Sessions  [online]                        ┃Readiness: WARN · no valid native recovery point;      │
+  │  ▸ development  [attached]                 ┃reboot recovery is unsafe                              │
+  │▾ Status  [attention]                       ┃Native history: 0 saved · rolling limit 10             │
+  │    Recovery                                ┃Last good: none                                        │
+  │    Affected panes  [0]                     ┃Native storage: 0 B                                    │
+  │    Snapshots                               ┃                                                       │
+  │    Automation                              ┃                                                       │
+  │    Autonomous cleanup                      ┃                                                       │
+  │    Recovery safety                         ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  └────────────────────────────────────────────────────────────────────────────────────────────────────┘
+  --- EMPTY AUTOMATION ---
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │NAVIGATION                                  ┃DETAIL                                                 │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+  │  Overview                                  ┃Automation                                             │
+  │▾ Sessions  [online]                        ┃Readiness: WARN · absent; inspect conflicts below      │
+  │  ▸ development  [attached]                 ┃Periodic save: WARN · not installed                    │
+  │▾ Status  [attention]                       ┃Next snapshot: waiting for the first timer save        │
+  │    Recovery                                ┃Autonomy tick: WARN · not installed                    │
+  │    Affected panes  [0]                     ┃Login restore: WARN · not installed                    │
+  │    Snapshots                               ┃Last restore run: not recorded yet                     │
+  │    Automation                              ┃Runtime version: unknown                               │
+  │    Autonomous cleanup                      ┃Last result: unavailable                               │
+  │    Recovery safety                         ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
   │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- UNAVAILABLE STATUS ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │NAVIGATION                                  ┃DETAIL · 1–19/40                                       │
+  │NAVIGATION                                  ┃DETAIL                                                 │
   │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
   │  Overview                                  ┃Status                                                 │
   │▾ Sessions  [online]                        ┃Recovery readiness, snapshot history, and automation.  │
   │  ▸ development  [attached]                 ┃                                                       │
-  │  Status  [attention]                       ┃Recovery                                               │
-  │                                            ┃tmux: PASS · server running                            │
-  │                                            ┃Workspace: PASS · 1 session(s) · 1 window(s) · 1       │
-  │                                            ┃pane(s)                                                │
-  │                                            ┃Applications: PASS · 0 exact resume(s) · 1 safe        │
-  │                                            ┃restart(s) · 0 blocked                                 │
+  │▾ Status  [attention]                       ┃Readiness: attention                                   │
+  │    Recovery                                ┃Affected panes: 0                                      │
+  │    Affected panes  [0]                     ┃                                                       │
+  │    Snapshots                               ┃Select a section under Status to inspect its details.  │
+  │    Automation                              ┃                                                       │
+  │    Autonomous cleanup                      ┃                                                       │
+  │    Recovery safety                         ┃                                                       │
   │                                            ┃                                                       │
-  │                                            ┃Affected panes (0)                                     │
-  │                                            ┃No applications require shell-only recovery.           │
   │                                            ┃                                                       │
-  │                                            ┃Snapshots                                              │
-  │                                            ┃Readiness: WARN · snapshot inventory unavailable       │
-  │                                            ┃fixture snapshot directory is unreadable               │
-  │                                            ┃Press r to retry. Existing snapshot files are          │
-  │                                            ┃unchanged.                                             │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  └────────────────────────────────────────────────────────────────────────────────────────────────────┘
+  --- UNAVAILABLE SNAPSHOTS ---
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │NAVIGATION                                  ┃DETAIL                                                 │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+  │  Overview                                  ┃Snapshots                                              │
+  │▾ Sessions  [online]                        ┃Readiness: WARN · snapshot inventory unavailable       │
+  │  ▸ development  [attached]                 ┃fixture snapshot directory is unreadable               │
+  │▾ Status  [attention]                       ┃Press r to retry. Existing snapshot files are          │
+  │    Recovery                                ┃unchanged.                                             │
+  │    Affected panes  [0]                     ┃                                                       │
+  │    Snapshots                               ┃                                                       │
+  │    Automation                              ┃                                                       │
+  │    Autonomous cleanup                      ┃                                                       │
+  │    Recovery safety                         ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  └────────────────────────────────────────────────────────────────────────────────────────────────────┘
+  --- UNAVAILABLE AUTOMATION ---
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │NAVIGATION                                  ┃DETAIL                                                 │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+  │  Overview                                  ┃Automation                                             │
+  │▾ Sessions  [online]                        ┃Readiness: WARN · service manager status unavailable   │
+  │  ▸ development  [attached]                 ┃fixture service manager is unavailable                 │
+  │▾ Status  [attention]                       ┃Press r to retry. No automation settings were changed. │
+  │    Recovery                                ┃                                                       │
+  │    Affected panes  [0]                     ┃                                                       │
+  │    Snapshots                               ┃                                                       │
+  │    Automation                              ┃                                                       │
+  │    Autonomous cleanup                      ┃                                                       │
+  │    Recovery safety                         ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
   │                                            ┃                                                       │
   │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘

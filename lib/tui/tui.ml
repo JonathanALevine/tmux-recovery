@@ -13,6 +13,36 @@ module Service = Tmux_recovery_domain.Service
 module Snapshot = Tmux_recovery_domain.Snapshot
 module Workspace = Tmux_recovery_domain.Workspace
 
+module Status_section = struct
+  type t =
+    | Recovery
+    | Affected_panes
+    | Snapshots
+    | Automation
+    | Autonomous_cleanup
+    | Recovery_safety
+  [@@deriving compare, equal, sexp_of]
+
+  let all =
+    [ Recovery
+    ; Affected_panes
+    ; Snapshots
+    ; Automation
+    ; Autonomous_cleanup
+    ; Recovery_safety
+    ]
+  ;;
+
+  let label = function
+    | Recovery -> "Recovery"
+    | Affected_panes -> "Affected panes"
+    | Snapshots -> "Snapshots"
+    | Automation -> "Automation"
+    | Autonomous_cleanup -> "Autonomous cleanup"
+    | Recovery_safety -> "Recovery safety"
+  ;;
+end
+
 module Page_ref = struct
   module T = struct
     type resource =
@@ -27,6 +57,7 @@ module Page_ref = struct
       | Overview
       | Resource of resource
       | Status
+      | Status_section of Status_section.t
     [@@deriving compare, equal, sexp_of]
   end
 
@@ -170,7 +201,17 @@ let navigation (workspace : Workspace.t) recovery snapshots services =
   ; { page = Status
     ; label = "Status"
     ; badge = status_badge workspace recovery snapshots services
-    ; children = []
+    ; children =
+        List.map Status_section.all ~f:(fun section ->
+          { page = Status_section section
+          ; label = Status_section.label section
+          ; badge =
+              (match section with
+               | Affected_panes ->
+                 Some (Int.to_string (List.length (blocked_decisions recovery)))
+               | _ -> None)
+          ; children = []
+          })
     }
   ]
 ;;
@@ -199,7 +240,6 @@ type model =
   ; selected : Page_ref.t
   ; focus : focus
   ; detail_offset : int
-  ; affected_panes_expanded : bool
   ; expanded : Page_ref.Set.t
   ; message : string option
   ; preview_generation : int
@@ -211,7 +251,7 @@ type action =
   | Move of int * int
   | Toggle_focus
   | Clamp_detail_offset of int
-  | Toggle_expanded of Dimensions.t
+  | Toggle_expanded
   | Refresh_started
   | Replace_data of
       Workspace.t Or_error.t
@@ -333,6 +373,9 @@ let node_color model (node : node) =
      | Some "ready" -> green
      | Some _ -> amber
      | None -> cyan)
+  | Status_section Affected_panes ->
+    if List.is_empty (blocked_decisions model.recovery) then green else amber
+  | Status_section _ -> cyan
 ;;
 
 let crop_to view ~width ~height =
@@ -417,32 +460,22 @@ let render_navigation model ~width ~height =
 type detail_line =
   { text : string option
   ; view : View.t
-  ; affected_panes_header : bool
   }
 
 let plain ?(color = text_color) text =
   { text = Some text
-  ; affected_panes_header = false
   ; view = View.text ~attrs:[ Attr.fg color; Attr.bg terminal_background ] text
   }
 ;;
 
-let heading ?(selected = false) text =
+let heading text =
   { text = Some text
-  ; affected_panes_header = false
-  ; view =
-      View.text
-        ~attrs:
-          (if selected
-           then selected_attrs
-           else [ Attr.bold; Attr.fg cyan; Attr.bg terminal_background ])
-        text
+  ; view = View.text ~attrs:[ Attr.bold; Attr.fg cyan; Attr.bg terminal_background ] text
   }
 ;;
 
 let field name value =
   { text = Some (name ^ ": " ^ value)
-  ; affected_panes_header = false
   ; view = View.hcat [ (plain ~color:muted (name ^ ": ")).view; (plain value).view ]
   }
 ;;
@@ -537,10 +570,7 @@ let pane_preview_lines
          lines
          |> newest_lines_that_fit ~line_limit
          |> List.map ~f:(fun line ->
-           { text = None
-           ; view = Ansi_renderer.render (Ansi_text.parse line)
-           ; affected_panes_header = false
-           }))
+           { text = None; view = Ansi_renderer.render (Ansi_text.parse line) }))
     | Failed ((requested_pane, _), error) when String.equal requested_pane pane_id ->
       [ plain ~color:amber ("Preview unavailable: " ^ error) ]
     | No_preview | Loading _ | Ready _ | Failed _ ->
@@ -550,6 +580,218 @@ let pane_preview_lines
    then [ heading title ]
    else [ plain ""; heading title; plain ~color:muted subtitle; plain "" ])
   @ contents
+;;
+
+let status_section_lines model = function
+  | Status_section.Recovery ->
+    let workspace = model.workspace in
+    let blocked = blocked_decisions model.recovery in
+    let blocked_count = List.length blocked in
+    let resumes = recovery_count model.recovery Recovery.Action.Resume in
+    let restarts =
+      recovery_count model.recovery Recovery.Action.Restart
+      + recovery_count model.recovery Recovery.Action.Restart_clean
+    in
+    let application_health =
+      if blocked_count = 0
+      then
+        [%string
+          "PASS · %{resumes#Int} exact resume(s) · %{restarts#Int} safe restart(s) · 0 \
+           blocked"]
+      else [%string "WARN · %{blocked_count#Int} shell fallback(s) · see Affected panes"]
+    in
+    [ heading "Recovery"
+    ; field
+        "tmux"
+        (if workspace.server.available
+         then "PASS · server running"
+         else "WARN · no tmux server; there is no live workspace to save")
+    ; field
+        "Workspace"
+        [%string
+          "PASS · %{Map.length workspace.sessions#Int} session(s) · %{Map.length \
+           workspace.windows#Int} window(s) · %{Map.length workspace.panes#Int} pane(s)"]
+    ; field "Applications" application_health
+    ]
+  | Affected_panes ->
+    let workspace = model.workspace in
+    let blocked = blocked_decisions model.recovery in
+    [ heading [%string "Affected panes (%{List.length blocked#Int})"] ]
+    @
+    if List.is_empty blocked
+    then [ plain ~color:muted "No applications require shell-only recovery." ]
+    else
+      List.concat_map blocked ~f:(fun decision ->
+        let cause =
+          match decision.rule_id with
+          | Some "adapter:codex:missing-thread" -> "Codex has no durable thread ID."
+          | Some _ | None -> decision.reason
+        in
+        [ plain ""
+        ; plain
+            ~color:amber
+            [%string "%{pane_location workspace decision.pane_id} · %{decision.pane_id}"]
+        ; field "Application" decision.observed
+        ; plain ~color:amber ("Cause: " ^ cause)
+        ; plain ~color:amber "Recovery: shell only; the application will not resume."
+        ])
+  | Snapshots ->
+    (match model.snapshots with
+     | Error error ->
+       [ heading "Snapshots"
+       ; field "Readiness" "WARN · snapshot inventory unavailable"
+       ; plain ~color:amber (Error.to_string_hum error |> String.strip)
+       ; plain ~color:muted "Press r to retry. Existing snapshot files are unchanged."
+       ]
+     | Ok catalog ->
+       let native = native_snapshots catalog in
+       let last_good = native_last_good catalog in
+       let native_storage =
+         List.fold native ~init:0L ~f:(fun total summary ->
+           Int64.(total + summary.size_bytes))
+       in
+       [ heading "Snapshots"
+       ; field
+           "Readiness"
+           (if Option.is_some last_good
+            then "PASS · valid native recovery point available"
+            else "WARN · no valid native recovery point; reboot recovery is unsafe")
+       ; field
+           "Native history"
+           [%string "%{List.length native#Int} saved · rolling limit 10"]
+       ; field
+           "Last good"
+           (Option.value_map last_good ~default:"none" ~f:(fun summary ->
+              Snapshot.Id.display_time summary.id))
+       ; field "Native storage" (bytes native_storage)
+       ]
+       @ warning_lines catalog.warnings)
+  | Automation ->
+    (match model.services with
+     | Error error ->
+       [ heading "Automation"
+       ; field "Readiness" "WARN · service manager status unavailable"
+       ; plain ~color:amber (Error.to_string_hum error |> String.strip)
+       ; plain ~color:muted "Press r to retry. No automation settings were changed."
+       ]
+     | Ok status ->
+       [ heading "Automation"
+       ; field
+           "Readiness"
+           (if Service.equal_ownership status.ownership Managed
+               && List.is_empty status.conflicts
+            then "PASS · tmux-recovery manages save and login restore"
+            else
+              "WARN · "
+              ^ Service.ownership_label status.ownership
+              ^ "; inspect conflicts below")
+       ; field "Periodic save" (component_health status.periodic_save)
+       ]
+       @ Option.value_map status.periodic_save.command ~default:[] ~f:(fun command ->
+         [ field "Save command" command ])
+       @ [ field
+             "Next snapshot"
+             (Option.value status.next_run ~default:"waiting for the first timer save")
+         ; field "Autonomy tick" (component_health status.autonomy)
+         ]
+       @ Option.value_map status.autonomy.command ~default:[] ~f:(fun command ->
+         [ field "Tick command" command ])
+       @ [ field "Login restore" (component_health status.login_restore) ]
+       @ Option.value_map status.login_restore.command ~default:[] ~f:(fun command ->
+         [ field "Restore command" command ])
+       @ [ field
+             "Last restore run"
+             (Option.value status.last_restore ~default:"not recorded yet")
+         ; field "Runtime version" (Option.value status.binary_version ~default:"unknown")
+         ; field "Last result" (Option.value status.last_result ~default:"unavailable")
+         ]
+       @ List.map status.conflicts ~f:(fun conflict ->
+         plain ~color:amber ("Active conflict: " ^ conflict))
+       @ warning_lines status.warnings)
+  | Autonomous_cleanup ->
+    let format_span (span : Time_ns.Span.t) =
+      let total_sec = Time_ns.Span.to_int_sec span in
+      let sec = total_sec mod 60 in
+      let min = total_sec / 60 mod 60 in
+      let hr = total_sec / 3600 in
+      if hr > 0
+      then sprintf "%dh %dm" hr min
+      else if min > 0
+      then sprintf "%dm %ds" min sec
+      else sprintf "%ds" sec
+    in
+    let autonomy_lines =
+      let info = model.autonomy in
+      let policy = info.policy in
+      let mode_label =
+        match policy.mode with
+        | Autonomy.Mode.Off -> "off (no autonomous cleanup)"
+        | Autonomy.Mode.Live -> "live (closes idle, unrecoverable windows)"
+      in
+      let paused_label = if info.paused then " · PAUSED (p to resume)" else "" in
+      let snapshot_label = if policy.snapshot_before_fire then "yes" else "no" in
+      let now = Time_ns.now () in
+      let pending_lines =
+        if List.is_empty info.active
+        then
+          [ plain ~color:muted "No windows are currently scheduled for autonomous close."
+          ]
+        else
+          List.map info.active ~f:(fun pending_action ->
+            let window_id = pending_action.Autonomy.window_id in
+            let remaining = Autonomy.remaining ~now pending_action in
+            plain
+              ~color:amber
+              [%string
+                "· %{pending_action.id} %{window_id} closes in \
+                 %{format_span                  remaining} · press c to cancel"])
+      in
+      let funnel_lines =
+        if List.is_empty info.candidates
+        then [ plain ~color:muted "Eligibility funnel: empty." ]
+        else
+          List.map info.candidates ~f:(fun (window_id, since, suppressed) ->
+            let since_label =
+              match since with
+              | Some t -> "eligible since " ^ Time_ns.to_string_utc t
+              | None -> "observing"
+            in
+            let suppressed_label =
+              if suppressed then " · suppressed this cycle" else ""
+            in
+            plain
+              ~color:muted
+              [%string "· %{window_id} %{since_label}%{suppressed_label}"])
+      in
+      let audit_lines =
+        match info.audit with
+        | [] -> [ plain ~color:muted "No autonomous actions recorded yet." ]
+        | entries ->
+          List.take entries 3
+          |> List.map ~f:(fun line -> plain ~color:muted ("· " ^ line))
+      in
+      [ heading "Autonomous cleanup"
+      ; field
+          "Policy"
+          [%string
+            "%{mode_label} · grace %{format_span (Time_ns.Span.of_int_sec              \
+             policy.grace_seconds)} · candidate for ≥ %{format_span              \
+             (Time_ns.Span.of_int_sec policy.persistence_seconds)} · snapshot \
+             before              fire: %{snapshot_label}%{paused_label}"]
+      ; field "Pending actions" (string_of_int (List.length info.active))
+      ]
+      @ pending_lines
+      @ [ plain "" ]
+      @ funnel_lines
+      @ audit_lines
+      @ [ plain ~color:muted "p pauses or resumes the pipeline." ]
+    in
+    autonomy_lines
+  | Recovery_safety ->
+    [ heading "Recovery safety"
+    ; plain "Snapshot integrity and occupied targets are checked."
+    ; plain ~color:muted "Use the CLI for snapshot restore and automation changes."
+    ]
 ;;
 
 let detail_lines model ~height =
@@ -659,235 +901,21 @@ let detail_lines model ~height =
            pane.id
            ~line_limit:(if compact then Int.max 1 (capacity - 3) else preview_line_limit))
   | Status ->
-    let blocked = blocked_decisions model.recovery in
-    let blocked_count = List.length blocked in
-    let resumes = recovery_count model.recovery Recovery.Action.Resume in
-    let restarts =
-      recovery_count model.recovery Recovery.Action.Restart
-      + recovery_count model.recovery Recovery.Action.Restart_clean
-    in
-    let application_health =
-      if blocked_count = 0
-      then
-        [%string
-          "PASS · %{resumes#Int} exact resume(s) · %{restarts#Int} safe restart(s) · 0 \
-           blocked"]
-      else [%string "WARN · %{blocked_count#Int} shell fallback(s) · details below"]
-    in
-    let affected_panes =
-      List.concat_map blocked ~f:(fun decision ->
-        let cause =
-          match decision.rule_id with
-          | Some "adapter:codex:missing-thread" -> "Codex has no durable thread ID."
-          | Some _ | None -> decision.reason
-        in
-        [ plain ""
-        ; plain
-            ~color:amber
-            [%string "%{pane_location workspace decision.pane_id} · %{decision.pane_id}"]
-        ; field "Application" decision.observed
-        ; plain ~color:amber ("Cause: " ^ cause)
-        ; plain ~color:amber "Recovery: shell only; the application will not resume."
-        ])
-    in
-    let snapshot_lines =
-      match model.snapshots with
-      | Error error ->
-        [ heading "Snapshots"
-        ; field "Readiness" "WARN · snapshot inventory unavailable"
-        ; plain ~color:amber (Error.to_string_hum error |> String.strip)
-        ; plain ~color:muted "Press r to retry. Existing snapshot files are unchanged."
-        ]
-      | Ok catalog ->
-        let native = native_snapshots catalog in
-        let last_good = native_last_good catalog in
-        let native_storage =
-          List.fold native ~init:0L ~f:(fun total summary ->
-            Int64.(total + summary.size_bytes))
-        in
-        [ heading "Snapshots"
-        ; field
-            "Readiness"
-            (if Option.is_some last_good
-             then "PASS · valid native recovery point available"
-             else "WARN · no valid native recovery point; reboot recovery is unsafe")
-        ; field
-            "Native history"
-            [%string "%{List.length native#Int} saved · rolling limit 10"]
-        ; field
-            "Last good"
-            (Option.value_map last_good ~default:"none" ~f:(fun summary ->
-               Snapshot.Id.display_time summary.id))
-        ; field "Native storage" (bytes native_storage)
-        ]
-        @ warning_lines catalog.warnings
-    in
-    let automation_lines =
-      match model.services with
-      | Error error ->
-        [ heading "Automation"
-        ; field "Readiness" "WARN · service manager status unavailable"
-        ; plain ~color:amber (Error.to_string_hum error |> String.strip)
-        ; plain ~color:muted "Press r to retry. No automation settings were changed."
-        ]
-      | Ok status ->
-        [ heading "Automation"
-        ; field
-            "Readiness"
-            (if Service.equal_ownership status.ownership Managed
-                && List.is_empty status.conflicts
-             then "PASS · tmux-recovery manages save and login restore"
-             else
-               "WARN · "
-               ^ Service.ownership_label status.ownership
-               ^ "; inspect conflicts below")
-        ; field "Periodic save" (component_health status.periodic_save)
-        ]
-        @ Option.value_map status.periodic_save.command ~default:[] ~f:(fun command ->
-          [ field "Save command" command ])
-        @ [ field
-              "Next snapshot"
-              (Option.value status.next_run ~default:"waiting for the first timer save")
-          ; field "Autonomy tick" (component_health status.autonomy)
-          ]
-        @ Option.value_map status.autonomy.command ~default:[] ~f:(fun command ->
-          [ field "Tick command" command ])
-        @ [ field "Login restore" (component_health status.login_restore) ]
-        @ Option.value_map status.login_restore.command ~default:[] ~f:(fun command ->
-          [ field "Restore command" command ])
-        @ [ field
-              "Last restore run"
-              (Option.value status.last_restore ~default:"not recorded yet")
-          ; field
-              "Runtime version"
-              (Option.value status.binary_version ~default:"unknown")
-          ; field "Last result" (Option.value status.last_result ~default:"unavailable")
-          ]
-        @ List.map status.conflicts ~f:(fun conflict ->
-          plain ~color:amber ("Active conflict: " ^ conflict))
-        @ warning_lines status.warnings
-    in
-    let format_span (span : Time_ns.Span.t) =
-      let total_sec = Time_ns.Span.to_int_sec span in
-      let sec = total_sec mod 60 in
-      let min = total_sec / 60 mod 60 in
-      let hr = total_sec / 3600 in
-      if hr > 0
-      then sprintf "%dh %dm" hr min
-      else if min > 0
-      then sprintf "%dm %ds" min sec
-      else sprintf "%ds" sec
-    in
-    let autonomy_lines =
-      let info = model.autonomy in
-      let policy = info.policy in
-      let mode_label =
-        match policy.mode with
-        | Autonomy.Mode.Off -> "off (no autonomous cleanup)"
-        | Autonomy.Mode.Live -> "live (closes idle, unrecoverable windows)"
-      in
-      let paused_label = if info.paused then " · PAUSED (p to resume)" else "" in
-      let snapshot_label = if policy.snapshot_before_fire then "yes" else "no" in
-      let now = Time_ns.now () in
-      let pending_lines =
-        if List.is_empty info.active
-        then
-          [ plain ~color:muted "No windows are currently scheduled for autonomous close."
-          ]
-        else
-          List.map info.active ~f:(fun pending_action ->
-            let window_id = pending_action.Autonomy.window_id in
-            let remaining = Autonomy.remaining ~now pending_action in
-            plain
-              ~color:amber
-              [%string
-                "· %{pending_action.id} %{window_id} closes in \
-                 %{format_span                  remaining} · press c to cancel"])
-      in
-      let funnel_lines =
-        if List.is_empty info.candidates
-        then [ plain ~color:muted "Eligibility funnel: empty." ]
-        else
-          List.map info.candidates ~f:(fun (window_id, since, suppressed) ->
-            let since_label =
-              match since with
-              | Some t -> "eligible since " ^ Time_ns.to_string_utc t
-              | None -> "observing"
-            in
-            let suppressed_label =
-              if suppressed then " · suppressed this cycle" else ""
-            in
-            plain
-              ~color:muted
-              [%string "· %{window_id} %{since_label}%{suppressed_label}"])
-      in
-      let audit_lines =
-        match info.audit with
-        | [] -> [ plain ~color:muted "No autonomous actions recorded yet." ]
-        | entries ->
-          List.take entries 3
-          |> List.map ~f:(fun line -> plain ~color:muted ("· " ^ line))
-      in
-      [ heading "Autonomous cleanup"
-      ; field
-          "Policy"
-          [%string
-            "%{mode_label} · grace %{format_span (Time_ns.Span.of_int_sec              \
-             policy.grace_seconds)} · candidate for ≥ %{format_span              \
-             (Time_ns.Span.of_int_sec policy.persistence_seconds)} · snapshot \
-             before              fire: %{snapshot_label}%{paused_label}"]
-      ; field "Pending actions" (string_of_int (List.length info.active))
-      ]
-      @ pending_lines
-      @ [ plain "" ]
-      @ funnel_lines
-      @ audit_lines
-      @ [ plain ~color:muted "p pauses or resumes the pipeline." ]
-    in
     [ heading "Status"
     ; plain ~color:muted "Recovery readiness, snapshot history, and automation."
     ; plain ""
-    ; heading "Recovery"
     ; field
-        "tmux"
-        (if workspace.server.available
-         then "PASS · server running"
-         else "WARN · no tmux server; there is no live workspace to save")
+        "Readiness"
+        (Option.value
+           (status_badge workspace model.recovery model.snapshots model.services)
+           ~default:"unknown")
     ; field
-        "Workspace"
-        [%string
-          "PASS · %{Map.length workspace.sessions#Int} session(s) · %{Map.length \
-           workspace.windows#Int} window(s) · %{Map.length workspace.panes#Int} pane(s)"]
-    ; field "Applications" application_health
+        "Affected panes"
+        (Int.to_string (List.length (blocked_decisions model.recovery)))
+    ; plain ""
+    ; plain ~color:muted "Select a section under Status to inspect its details."
     ]
-    @ [ plain ""
-      ; { (heading
-             ~selected:(equal_focus model.focus Detail && blocked_count > 0)
-             ((if blocked_count = 0
-               then ""
-               else if model.affected_panes_expanded
-               then "▾ "
-               else "▸ ")
-              ^ [%string "Affected panes (%{blocked_count#Int})"]))
-          with
-          affected_panes_header = true
-        }
-      ]
-    @ (if blocked_count = 0
-       then [ plain ~color:muted "No applications require shell-only recovery." ]
-       else if model.affected_panes_expanded
-       then affected_panes
-       else [])
-    @ [ plain "" ]
-    @ snapshot_lines
-    @ [ plain "" ]
-    @ automation_lines
-    @ [ plain "" ]
-    @ autonomy_lines
-    @ [ plain ""
-      ; field "Recovery safety" "Snapshot integrity and occupied targets are checked."
-      ; plain ~color:muted "Use the CLI for snapshot restore and automation changes."
-      ]
+  | Status_section section -> status_section_lines model section
 ;;
 
 let detail_dimensions { Dimensions.width; height } =
@@ -904,12 +932,12 @@ let detail_dimensions { Dimensions.width; height } =
 
 let is_preview = function
   | Page_ref.Resource (Window_link _ | Pane _ | Application _) -> true
-  | Overview | Resource (Workspace _ | Session _) | Status -> false
+  | Overview | Resource (Workspace _ | Session _) | Status | Status_section _ -> false
 ;;
 
 (* Wrap at word boundaries in terminal columns, preserving field/warning colors. Long
    paths without spaces can still wrap; live pane output retains its original columns. *)
-let wrap_detail_line { text; view; affected_panes_header = _ } ~width =
+let wrap_detail_line { text; view } ~width =
   let width = Int.max 1 width in
   let columns = View.width view in
   let breaks =
@@ -942,7 +970,6 @@ type detail_viewport =
   ; total : int
   ; offset : int
   ; maximum : int
-  ; affected_offset : int option
   }
 
 let detail_viewport model dimensions =
@@ -952,23 +979,17 @@ let detail_viewport model dimensions =
       [ plain ""; plain ~color:amber message ])
   in
   let lines = detail_lines model ~height @ message in
-  let rendered =
-    List.map lines ~f:(fun line ->
-      let view =
-        if is_preview model.selected then line.view else wrap_detail_line line ~width
-      in
-      line.affected_panes_header, view)
+  let body =
+    (if is_preview model.selected
+     then List.map lines ~f:(fun line -> line.view)
+     else List.map lines ~f:(wrap_detail_line ~width))
+    |> View.vcat
   in
-  let _, affected_offset =
-    List.fold rendered ~init:(0, None) ~f:(fun (offset, header) (is_header, view) ->
-      offset + View.height view, if is_header then Some offset else header)
-  in
-  let body = View.vcat (List.map rendered ~f:snd) in
   let capacity = panel_body_height height in
   let total = View.height body in
   let maximum = Int.max 0 (total - capacity) in
   let offset = Int.clamp_exn model.detail_offset ~min:0 ~max:maximum in
-  { body; width; height; capacity; total; offset; maximum; affected_offset }
+  { body; width; height; capacity; total; offset; maximum }
 ;;
 
 let apply_action _context model action =
@@ -1011,21 +1032,8 @@ let apply_action _context model action =
         ~f:(fun item -> item.node.page)
     in
     with_selected model selected
-  | Toggle_expanded dimensions when equal_focus model.focus Detail ->
-    let viewport = detail_viewport model dimensions in
-    (match model.selected, viewport.affected_offset with
-     | Status, Some header_offset
-       when not (List.is_empty (blocked_decisions model.recovery)) ->
-       { model with
-         affected_panes_expanded = not model.affected_panes_expanded
-       ; detail_offset =
-           (if header_offset >= model.detail_offset
-               && header_offset < model.detail_offset + viewport.capacity
-            then model.detail_offset
-            else header_offset)
-       }
-     | _ -> model)
-  | Toggle_expanded _ ->
+  | Toggle_expanded when equal_focus model.focus Detail -> model
+  | Toggle_expanded ->
     (match current with
      | Some { node = { page; children = _ :: _; _ }; _ } ->
        let expanded =
@@ -1102,9 +1110,7 @@ let apply_action _context model action =
 ;;
 
 let render_detail model viewport =
-  let { body; width; height; capacity; total; offset; maximum; affected_offset = _ } =
-    viewport
-  in
+  let { body; width; height; capacity; total; offset; maximum } = viewport in
   let title = if is_preview model.selected then "PREVIEW" else "DETAIL" in
   let suffix =
     if maximum = 0 || capacity = 0
@@ -1132,12 +1138,7 @@ let render model ({ Dimensions.width; height } as dimensions) =
          " Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c \
           cancel · p pause "
        | Detail ->
-         " Tab navigation · ↑/↓ scroll"
-         ^ (if Page_ref.equal model.selected Status
-               && not (List.is_empty (blocked_decisions model.recovery))
-            then " · Enter affected panes"
-            else "")
-         ^ " · r refresh · q quit · c cancel · p pause ")
+         " Tab navigation · ↑/↓ scroll · r refresh · q quit · c cancel · p pause ")
   in
   let body_height = Int.max 1 (height - 1) in
   let body =
@@ -1201,7 +1202,9 @@ let app
         workspace, recovery, snapshots, services))
   in
   let initial_recovery = Option.value initial_recovery ~default:(Recovery.plan initial) in
-  let expanded = Page_ref.Set.of_list [ Resource (Workspace initial.Workspace.source) ] in
+  let expanded =
+    Page_ref.Set.of_list [ Resource (Workspace initial.Workspace.source); Status ]
+  in
   let model, inject =
     Bonsai.state_machine
       ~default_model:
@@ -1212,7 +1215,6 @@ let app
         ; selected = Overview
         ; focus = Navigation
         ; detail_offset = 0
-        ; affected_panes_expanded = true
         ; expanded
         ; message = None
         ; preview_generation = 0
@@ -1329,7 +1331,7 @@ let app
       | Key_press { key = Tab; mods = [] } -> inject Toggle_focus
       | Key_press { key = Arrow `Down; mods = [] } -> move 1
       | Key_press { key = Arrow `Up; mods = [] } -> move (-1)
-      | Key_press { key = Enter; mods = [] } -> inject (Toggle_expanded dimensions)
+      | Key_press { key = Enter; mods = [] } -> inject Toggle_expanded
       | Key_press { key = ASCII 'r' | ASCII 'R'; mods = [] } ->
         if !refreshing
         then Effect.Ignore
