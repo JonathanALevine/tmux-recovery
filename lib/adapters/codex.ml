@@ -196,6 +196,40 @@ let lookup_for_processes
      | Ok None -> Ok None)
 ;;
 
+let subagent_source source =
+  match Or_error.try_with (fun () -> Yojson.Safe.from_string source) with
+  | Ok (`Assoc [ ("subagent", `Assoc _) ]) -> true
+  | _ -> false
+;;
+
+let lookup_for_writer_locks config thread_ids =
+  with_readonly_database config.state_database (fun database ->
+    let open Or_error.Let_syntax in
+    let%bind candidates =
+      if Set.length thread_ids = 1
+      then Ok (Set.to_list thread_ids)
+      else
+        Set.to_list thread_ids
+        |> List.map ~f:(fun thread_id ->
+          let%map source =
+            query_one
+              database
+              [%string
+                "SELECT source FROM threads WHERE id = %{sql_text thread_id} LIMIT 1"]
+              (fun columns -> columns.(0))
+          in
+          (* Only confirmed subagent records can be excluded. Missing or unknown records
+             must still count against an unambiguous identity. *)
+          if Option.exists source ~f:subagent_source then None else Some thread_id)
+        |> Or_error.combine_errors
+        |> Or_error.map ~f:List.filter_opt
+    in
+    match candidates with
+    | [] -> Ok None
+    | [ thread_id ] -> state_by_thread database thread_id
+    | _ -> Or_error.error_string "Codex process holds ambiguous conversation writer locks")
+;;
+
 type process =
   { pid : int
   ; parent : int
@@ -255,8 +289,9 @@ let descendant_pids processes root =
   walk 0 root Int.Set.empty |> fst
 ;;
 
-(* Writer locks identify the conversation actually open now, including after /resume. Log
-   retention, child-agent activity, and stale argv cannot change this identity. *)
+(* Writer locks identify the conversations actually open now, including after /resume.
+   Codex may hold both interactive and subagent locks in the same process; durable source
+   metadata distinguishes them without relying on logs or stale argv. *)
 let thread_lock_sets_by_pid ~codex_home lines =
   let directory = Filename.concat codex_home "thread-writer-locks" in
   let _, locks =
@@ -350,15 +385,11 @@ let capture_from_observations config workspace ~processes ~open_files =
       let held_locks = List.find_map pids ~f:(Map.find locks) in
       let resume =
         match held_locks with
-        | Some ids when Set.length ids <> 1 ->
-          Or_error.error_string "Codex process holds ambiguous conversation writer locks"
-        | _ ->
+        | Some ids -> lookup_for_writer_locks config ids
+        | None ->
           let explicit_thread_id =
-            match held_locks with
-            | Some ids -> Set.min_elt ids
-            | None ->
-              List.find_map related_processes ~f:(fun (_, process) ->
-                explicit_resume_thread_id process.command)
+            List.find_map related_processes ~f:(fun (_, process) ->
+              explicit_resume_thread_id process.command)
           in
           lookup_for_processes
             ?explicit_thread_id

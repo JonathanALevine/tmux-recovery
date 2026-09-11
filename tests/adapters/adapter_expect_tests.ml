@@ -1045,6 +1045,123 @@ let%test_unit "ambiguous writer locks never fall back to stale argv" =
     assert (not (List.is_empty result.observation_errors)))
 ;;
 
+let%test_unit "same-process subagent locks preserve the current interactive conversation" =
+  with_codex_fixture (fun config root ->
+    let result =
+      capture
+        config
+        (workspace ())
+        [ "10 1 zsh"; "20 10 codex resume " ^ first ]
+        [ "p20"; lock root child; lock root second ]
+    in
+    let resume = Map.find_exn result.resumes "%1" in
+    [%test_eq: string] resume.thread_id second;
+    [%test_eq: string] resume.cwd "/tmp/moved project";
+    assert resume.bypass_approvals;
+    assert (List.is_empty result.observation_errors))
+;;
+
+let%test_unit "subagent locks do not disambiguate two interactive conversations" =
+  with_codex_fixture (fun config root ->
+    let result =
+      capture
+        config
+        (workspace ())
+        [ "10 1 zsh"; "20 10 codex resume " ^ first ]
+        [ "p20"; lock root first; lock root second; lock root child ]
+    in
+    assert (Map.is_empty result.resumes);
+    assert (not (List.is_empty result.observation_errors)))
+;;
+
+let with_updated_thread_source root thread_id source f =
+  let database = Sqlite3.db_open (Filename.concat root "state_5.sqlite") in
+  Exn.protect
+    ~finally:(fun () -> assert (Sqlite3.db_close database))
+    ~f:(fun () ->
+      let statement =
+        Sqlite3.prepare database "UPDATE threads SET source = ? WHERE id = ?"
+      in
+      Exn.protect
+        ~finally:(fun () -> Sqlite3.finalize statement |> Sqlite3.Rc.check)
+        ~f:(fun () ->
+          Sqlite3.bind_text statement 1 source |> Sqlite3.Rc.check;
+          Sqlite3.bind_text statement 2 thread_id |> Sqlite3.Rc.check;
+          Sqlite3.step statement |> Sqlite3.Rc.check));
+  f ()
+;;
+
+let%test_unit "writer locks identify a vscode conversation alongside nested subagents" =
+  with_codex_fixture (fun config root ->
+    with_updated_thread_source root second "vscode" (fun () ->
+      with_updated_thread_source
+        root
+        first
+        ("{\"subagent\":{\"thread_spawn\":{\"parent_thread_id\":\""
+         ^ child
+         ^ "\",\"depth\":2,\"agent_path\":\"/root/child/grandchild\"}}}")
+        (fun () ->
+          let result =
+            capture
+              config
+              (workspace ())
+              [ "10 1 zsh"; "20 10 codex" ]
+              [ "p20"; lock root first; lock root second; lock root child ]
+          in
+          [%test_eq: string] (Map.find_exn result.resumes "%1").thread_id second;
+          assert (List.is_empty result.observation_errors))))
+;;
+
+let%test_unit "unknown or malformed sources cannot be discarded as subagent locks" =
+  List.iter
+    [ "unknown"; "{not json"; "{\"subagent\":null}"; "{\"subagent\":{},\"cli\":{}}" ]
+    ~f:(fun source ->
+      with_codex_fixture (fun config root ->
+        with_updated_thread_source root child source (fun () ->
+          let result =
+            capture
+              config
+              (workspace ())
+              [ "10 1 zsh"; "20 10 codex resume " ^ first ]
+              [ "p20"; lock root first; lock root child ]
+          in
+          assert (Map.is_empty result.resumes);
+          assert (not (List.is_empty result.observation_errors)))))
+;;
+
+let%test_unit "a missing locked thread cannot be ignored to select another conversation" =
+  with_codex_fixture (fun config root ->
+    let result =
+      capture
+        config
+        (workspace ())
+        [ "10 1 zsh"; "20 10 codex resume " ^ first ]
+        [ "p20"
+        ; lock root first
+        ; lock root child
+        ; lock root "019f8c7e-0000-7000-8000-999999999999"
+        ]
+    in
+    assert (Map.is_empty result.resumes);
+    assert (not (List.is_empty result.observation_errors)))
+;;
+
+let%test_unit "subagent-only locks never fall back to a main conversation in argv or logs"
+  =
+  with_codex_fixture (fun config root ->
+    with_updated_thread_source root second "{\"subagent\":{}}" (fun () ->
+      let result =
+        capture
+          config
+          (workspace ())
+          [ "10 1 zsh"; "4242 10 codex resume " ^ first ]
+          [ "p4242"; lock root second; lock root child ]
+      in
+      assert (Map.is_empty result.resumes);
+      assert (Set.mem result.detected_panes "%1");
+      assert (List.is_empty result.observation_errors)))
+;;
+
 let%test_unit "provider outages are distinct from a successful missing-thread lookup" =
   with_codex_fixture (fun config _ ->
     let workspace = workspace () in
