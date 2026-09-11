@@ -18,7 +18,7 @@
   refresh_spam_test
   navigation_test
   detail_scroll_test
-  affected_panes_test)
+  status_sections_test)
  (libraries
   async
   bonsai_test

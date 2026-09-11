@@ -8,8 +8,10 @@ let send handle key =
   Handle.recompute_view_until_stable handle
 ;;
 
-let select_status handle =
-  List.iter [ Event.Key.Arrow `Down; Arrow `Down; Arrow `Down ] ~f:(send handle)
+let select_affected handle =
+  List.iter
+    [ Event.Key.Arrow `Down; Arrow `Down; Arrow `Down; Arrow `Down; Arrow `Down ]
+    ~f:(send handle)
 ;;
 
 let resize handle width height =
@@ -62,10 +64,10 @@ let%test_unit "only Tab changes focus; detail keys never change tree selection" 
   assert (not (String.is_substring (rendered ()) ~substring:"development"))
 ;;
 
-let%test_unit "all affected panes and later status sections are reachable" =
+let%test_unit "all affected panes remain reachable in their own detail view" =
   let handle = Bonsai_term_test.create_handle Fixture.many_warnings_app in
   resize handle 100 22;
-  select_status handle;
+  select_affected handle;
   send handle Tab;
   let rendered () = Handle.show_into_string handle in
   let top = rendered () in
@@ -92,10 +94,7 @@ let%test_unit "all affected panes and later status sections are reachable" =
         ~substring:[%string "development:0.%{index#Int} · %%{index + 1#Int}"])
   done;
   let bottom = rendered () in
-  assert (String.is_substring bottom ~substring:"Recovery safety:");
-  assert (String.is_substring contents ~substring:"Pending actions:");
-  assert (String.is_substring contents ~substring:"Snapshots");
-  assert (String.is_substring contents ~substring:"Automation");
+  assert (String.is_substring bottom ~substring:"development:0.29 · %30");
   send handle (Arrow `Down);
   [%test_eq: string] (rendered ()) bottom;
   List.iter [ Event.Key.Page `Down; Page `Up; Home; End ] ~f:(fun key ->
@@ -118,7 +117,7 @@ let%test_unit "all affected panes and later status sections are reachable" =
   [%test_eq: string] (rendered ()) bottom;
   send handle Tab;
   send handle (Arrow `Up);
-  assert (String.is_substring (rendered ()) ~substring:"Typed ID: $1");
+  assert (String.is_substring (rendered ()) ~substring:"tmux: PASS");
   send handle (Arrow `Down);
   send handle Tab;
   [%test_eq: string] (rendered ()) top
@@ -127,14 +126,14 @@ let%test_unit "all affected panes and later status sections are reachable" =
 let%test_unit "status has an explicit unaffected state and the specific Codex cause" =
   let handle = Bonsai_term_test.create_handle Fixture.app in
   resize handle 100 22;
-  select_status handle;
+  select_affected handle;
   let contents = Handle.show_into_string handle in
   assert (String.is_substring contents ~substring:"Affected panes (0)");
   assert (
     String.is_substring contents ~substring:"No applications require shell-only recovery.");
   let warning = Bonsai_term_test.create_handle Fixture.warning_app in
   resize warning 100 22;
-  select_status warning;
+  select_affected warning;
   let contents = Handle.show_into_string warning in
   assert (String.is_substring contents ~substring:"Affected panes (1)");
   assert (String.is_substring contents ~substring:"Cause: Codex has no durable thread ID.")
@@ -152,16 +151,16 @@ let%test_unit "refresh and resize retain focus and clamp the scroll offset" =
       (Fixture.make_app_with_reload ~initial_data:!data ~reload ())
   in
   resize handle 100 22;
-  select_status handle;
+  select_affected handle;
   send handle Tab;
   for _ = 1 to 19 do
     send handle (Arrow `Down)
   done;
   let rendered () = Handle.show_into_string handle in
   let before = rendered () in
-  assert (String.is_substring before ~substring:"development:0.4");
+  assert (String.is_substring before ~substring:"DETAIL · 20–");
   send handle (ASCII 'r');
-  assert (String.is_substring (rendered ()) ~substring:"development:0.4");
+  assert (String.is_substring (rendered ()) ~substring:"DETAIL · 20–");
   assert (String.is_substring (rendered ()) ~substring:"Tab navigation");
   List.iter
     [ 40, 14; 60, 22; 83, 22; 84, 22; 100, 22 ]
@@ -217,14 +216,14 @@ let%test_unit "a shorter refreshed status clamps scrolling without losing focus"
          ())
   in
   resize handle 100 22;
-  select_status handle;
+  select_affected handle;
   send handle Tab;
   scroll_to_edge handle `Down;
   send handle (ASCII 'r');
   let rendered () = Handle.show_into_string handle in
   let refreshed = rendered () in
   assert (String.is_substring refreshed ~substring:"Tab navigation");
-  assert (String.is_substring refreshed ~substring:"Recovery safety:");
+  assert (String.is_substring refreshed ~substring:"Affected panes (0)");
   send handle (Arrow `Down);
   [%test_eq: string] (rendered ()) refreshed;
   scroll_to_edge handle `Up;
