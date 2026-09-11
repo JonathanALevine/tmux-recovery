@@ -702,25 +702,17 @@ let status_section_lines model = function
               ^ Service.ownership_label status.ownership
               ^ "; inspect conflicts below")
        ; field "Periodic save" (component_health status.periodic_save)
+       ; field
+           "Next snapshot"
+           (Option.value status.next_run ~default:"waiting for the first timer save")
+       ; field "Cleanup checks" (component_health status.autonomy)
+       ; field "Login restore" (component_health status.login_restore)
+       ; field
+           "Last restore run"
+           (Option.value status.last_restore ~default:"not recorded yet")
+       ; field "Runtime version" (Option.value status.binary_version ~default:"unknown")
+       ; field "Last result" (Option.value status.last_result ~default:"unavailable")
        ]
-       @ Option.value_map status.periodic_save.command ~default:[] ~f:(fun command ->
-         [ field "Save command" command ])
-       @ [ field
-             "Next snapshot"
-             (Option.value status.next_run ~default:"waiting for the first timer save")
-         ; field "Autonomy tick" (component_health status.autonomy)
-         ]
-       @ Option.value_map status.autonomy.command ~default:[] ~f:(fun command ->
-         [ field "Tick command" command ])
-       @ [ field "Login restore" (component_health status.login_restore) ]
-       @ Option.value_map status.login_restore.command ~default:[] ~f:(fun command ->
-         [ field "Restore command" command ])
-       @ [ field
-             "Last restore run"
-             (Option.value status.last_restore ~default:"not recorded yet")
-         ; field "Runtime version" (Option.value status.binary_version ~default:"unknown")
-         ; field "Last result" (Option.value status.last_result ~default:"unavailable")
-         ]
        @ List.map status.conflicts ~f:(fun conflict ->
          plain ~color:amber ("Active conflict: " ^ conflict))
        @ warning_lines status.warnings)
