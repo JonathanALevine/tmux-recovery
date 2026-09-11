@@ -373,9 +373,7 @@ let node_color model (node : node) =
      | Some "ready" -> green
      | Some _ -> amber
      | None -> cyan)
-  | Status_section Affected_panes ->
-    if List.is_empty (blocked_decisions model.recovery) then green else amber
-  | Status_section _ -> cyan
+  | Status_section _ -> text_color
 ;;
 
 let crop_to view ~width ~height =
