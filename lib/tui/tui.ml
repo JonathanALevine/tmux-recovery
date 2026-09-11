@@ -279,6 +279,7 @@ let text_color = terminal_foreground
 let muted = Attr.Color.Expert.lightblack
 let selected_text = Attr.Color.Expert.lightwhite
 let selected_bg = Attr.Color.Expert.blue
+let selected_attrs = [ Attr.bold; Attr.fg selected_text; Attr.bg selected_bg ]
 
 let action_color action =
   match action with
@@ -395,7 +396,7 @@ let render_navigation model ~width ~height =
       in
       let attrs =
         if selected
-        then [ Attr.bold; Attr.fg selected_text; Attr.bg selected_bg ]
+        then selected_attrs
         else [ Attr.fg (node_color model node); Attr.bg terminal_background ]
       in
       View.text ~attrs (prefix ^ node.label ^ badge))
@@ -426,10 +427,16 @@ let plain ?(color = text_color) text =
   }
 ;;
 
-let heading text =
+let heading ?(selected = false) text =
   { text = Some text
   ; affected_panes_header = false
-  ; view = View.text ~attrs:[ Attr.bold; Attr.fg cyan; Attr.bg terminal_background ] text
+  ; view =
+      View.text
+        ~attrs:
+          (if selected
+           then selected_attrs
+           else [ Attr.bold; Attr.fg cyan; Attr.bg terminal_background ])
+        text
   }
 ;;
 
@@ -855,6 +862,7 @@ let detail_lines model ~height =
     ]
     @ [ plain ""
       ; { (heading
+             ~selected:(equal_focus model.focus Detail && blocked_count > 0)
              ((if blocked_count = 0
                then ""
                else if model.affected_panes_expanded
