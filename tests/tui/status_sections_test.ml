@@ -61,6 +61,10 @@ let%test_unit "Status expands like Sessions and each section owns its detail vie
     assert (not (String.is_substring right ~substring:excluded));
     let navigation = rendered () in
     send handle Enter;
+    if index = 1
+    then (
+      assert (String.is_substring (rendered ()) ~substring:"▾ Affected panes");
+      send handle Enter);
     [%test_eq: string] (rendered ()) navigation;
     send handle Tab;
     let focused = rendered () in

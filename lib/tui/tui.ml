@@ -58,6 +58,7 @@ module Page_ref = struct
       | Resource of resource
       | Status
       | Status_section of Status_section.t
+      | Affected_pane of Workspace.Source.t * string
     [@@deriving compare, equal, sexp_of]
   end
 
@@ -166,6 +167,24 @@ let blocked_decisions (recovery : Recovery.plan) =
     Recovery.Action.equal decision.action Recovery.Action.Blocked)
 ;;
 
+let pane_location (workspace : Workspace.t) pane_id =
+  match Map.find workspace.panes pane_id with
+  | None -> pane_id
+  | Some pane ->
+    let locations =
+      workspace.window_links
+      |> List.filter ~f:(fun link -> String.equal link.window_id pane.window_id)
+      |> List.filter_map ~f:(fun link ->
+        Map.find workspace.sessions link.session_id
+        |> Option.map ~f:(fun session ->
+          [%string "%{session.name}:%{link.index#Int}.%{pane.index#Int}"]))
+      |> List.dedup_and_sort ~compare:String.compare
+    in
+    (match locations with
+     | [] -> pane_id
+     | locations -> String.concat locations ~sep:" / ")
+;;
+
 let status_badge workspace recovery snapshots services =
   let snapshots_ready =
     match snapshots with
@@ -210,7 +229,19 @@ let navigation (workspace : Workspace.t) recovery snapshots services =
                | Affected_panes ->
                  Some (Int.to_string (List.length (blocked_decisions recovery)))
                | _ -> None)
-          ; children = []
+          ; children =
+              (match section with
+               | Affected_panes ->
+                 List.map (blocked_decisions recovery) ~f:(fun decision ->
+                   { page = Affected_pane (workspace.source, decision.pane_id)
+                   ; label =
+                       [%string
+                         "%{pane_location workspace decision.pane_id} · \
+                          %{decision.observed}"]
+                   ; badge = Some decision.pane_id
+                   ; children = []
+                   })
+               | _ -> [])
           })
     }
   ]
@@ -373,7 +404,7 @@ let node_color model (node : node) =
      | Some "ready" -> green
      | Some _ -> amber
      | None -> cyan)
-  | Status_section _ -> text_color
+  | Status_section _ | Affected_pane _ -> text_color
 ;;
 
 let crop_to view ~width ~height =
@@ -487,24 +518,6 @@ let recovery_count (recovery : Recovery.plan) action =
     Recovery.Action.equal decision.action action)
 ;;
 
-let pane_location (workspace : Workspace.t) pane_id =
-  match Map.find workspace.panes pane_id with
-  | None -> pane_id
-  | Some pane ->
-    let locations =
-      workspace.window_links
-      |> List.filter ~f:(fun link -> String.equal link.window_id pane.window_id)
-      |> List.filter_map ~f:(fun link ->
-        Map.find workspace.sessions link.session_id
-        |> Option.map ~f:(fun session ->
-          [%string "%{session.name}:%{link.index#Int}.%{pane.index#Int}"]))
-      |> List.dedup_and_sort ~compare:String.compare
-    in
-    (match locations with
-     | [] -> pane_id
-     | locations -> String.concat locations ~sep:" / ")
-;;
-
 let component_status (component : Service.component) =
   let state = Service.activation_label component.activation in
   match component.schedule with
@@ -580,6 +593,17 @@ let pane_preview_lines
   @ contents
 ;;
 
+let affected_pane_warning (decision : Recovery.decision) =
+  let cause =
+    match decision.rule_id with
+    | Some "adapter:codex:missing-thread" -> "Codex has no durable thread ID."
+    | Some _ | None -> decision.reason
+  in
+  [ plain ~color:amber ("Cause: " ^ cause)
+  ; plain ~color:amber "Recovery: shell only; the application will not resume."
+  ]
+;;
+
 let status_section_lines model = function
   | Status_section.Recovery ->
     let workspace = model.workspace in
@@ -620,19 +644,13 @@ let status_section_lines model = function
     then [ plain ~color:muted "No applications require shell-only recovery." ]
     else
       List.concat_map blocked ~f:(fun decision ->
-        let cause =
-          match decision.rule_id with
-          | Some "adapter:codex:missing-thread" -> "Codex has no durable thread ID."
-          | Some _ | None -> decision.reason
-        in
         [ plain ""
         ; plain
             ~color:amber
             [%string "%{pane_location workspace decision.pane_id} · %{decision.pane_id}"]
         ; field "Application" decision.observed
-        ; plain ~color:amber ("Cause: " ^ cause)
-        ; plain ~color:amber "Recovery: shell only; the application will not resume."
-        ])
+        ]
+        @ affected_pane_warning decision)
   | Snapshots ->
     (match model.snapshots with
      | Error error ->
@@ -914,6 +932,19 @@ let detail_lines model ~height =
     ; plain ~color:muted "Select a section under Status to inspect its details."
     ]
   | Status_section section -> status_section_lines model section
+  | Affected_pane (_source, pane_id) ->
+    (match
+       List.find (blocked_decisions model.recovery) ~f:(fun decision ->
+         String.equal decision.pane_id pane_id)
+     with
+     | None -> [ heading "Pane is no longer affected" ]
+     | Some decision ->
+       [ heading (pane_location workspace pane_id)
+       ; field "Pane" pane_id
+       ; field "Application" decision.observed
+       ; plain ""
+       ]
+       @ affected_pane_warning decision)
 ;;
 
 let detail_dimensions { Dimensions.width; height } =
@@ -930,7 +961,9 @@ let detail_dimensions { Dimensions.width; height } =
 
 let is_preview = function
   | Page_ref.Resource (Window_link _ | Pane _ | Application _) -> true
-  | Overview | Resource (Workspace _ | Session _) | Status | Status_section _ -> false
+  | Overview
+  | Resource (Workspace _ | Session _)
+  | Status | Status_section _ | Affected_pane _ -> false
 ;;
 
 (* Wrap at word boundaries in terminal columns, preserving field/warning colors. Long
@@ -1057,7 +1090,14 @@ let apply_action _context model action =
     let selected =
       if page_exists workspace recovery snapshots services expanded model.selected
       then model.selected
-      else Overview
+      else (
+        match model.selected with
+        | Affected_pane _ ->
+          let parent = Page_ref.Status_section Affected_panes in
+          if page_exists workspace recovery snapshots services expanded parent
+          then parent
+          else Status
+        | _ -> Overview)
     in
     let unavailable =
       List.count

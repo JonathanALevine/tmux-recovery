@@ -224,7 +224,7 @@
   │  ▸ development  [attached]                 ┃                                                       │
   │▾ Status  [attention]                       ┃Readiness: attention                                   │
   │    Recovery                                ┃Affected panes: 1                                      │
-  │    Affected panes  [1]                     ┃                                                       │
+  │  ▸ Affected panes  [1]                     ┃                                                       │
   │    Snapshots                               ┃Select a section under Status to inspect its details.  │
   │    Automation                              ┃                                                       │
   │    Autonomous cleanup                      ┃                                                       │
@@ -249,7 +249,7 @@
   │  ▸ development  [attached]                 ┃Workspace: PASS · 1 session(s) · 1 window(s) · 1       │
   │▾ Status  [attention]                       ┃pane(s)                                                │
   │    Recovery                                ┃Applications: WARN · 1 shell fallback(s) · see Affected│
-  │    Affected panes  [1]                     ┃panes                                                  │
+  │  ▸ Affected panes  [1]                     ┃panes                                                  │
   │    Snapshots                               ┃                                                       │
   │    Automation                              ┃                                                       │
   │    Autonomous cleanup                      ┃                                                       │
@@ -274,7 +274,7 @@
   │  ▸ development  [attached]                 ┃development:0.0 · %1                                   │
   │▾ Status  [attention]                       ┃Application: codex                                     │
   │    Recovery                                ┃Cause: Codex has no durable thread ID.                 │
-  │    Affected panes  [1]                     ┃Recovery: shell only; the application will not resume. │
+  │  ▸ Affected panes  [1]                     ┃Recovery: shell only; the application will not resume. │
   │    Snapshots                               ┃                                                       │
   │    Automation                              ┃                                                       │
   │    Autonomous cleanup                      ┃                                                       │
@@ -299,7 +299,7 @@
   │  ▸ development  [attached]                 ┃Native history: 1 saved · rolling limit 10             │
   │▾ Status  [attention]                       ┃Last good: 2026-07-21 01:32:39.000000000Z              │
   │    Recovery                                ┃Native storage: 8.0 KiB                                │
-  │    Affected panes  [1]                     ┃                                                       │
+  │  ▸ Affected panes  [1]                     ┃                                                       │
   │    Snapshots                               ┃                                                       │
   │    Automation                              ┃                                                       │
   │    Autonomous cleanup                      ┃                                                       │
@@ -324,7 +324,7 @@
   │  ▸ development  [attached]                 ┃restore                                                │
   │▾ Status  [attention]                       ┃Periodic save: PASS · loaded · 600 seconds             │
   │    Recovery                                ┃Save command: tmux-recovery snapshot --trigger timer   │
-  │    Affected panes  [1]                     ┃--quiet                                                │
+  │  ▸ Affected panes  [1]                     ┃--quiet                                                │
   │    Snapshots                               ┃Next snapshot: 2026-07-21 01:42:39.000000000Z ·        │
   │    Automation                              ┃estimated from the last timer save                     │
   │    Autonomous cleanup                      ┃Autonomy tick: PASS · loaded · 45 seconds              │
@@ -349,7 +349,7 @@
   │  ▸ development  [attached]                 ┃candidate for ≥ 15m 0s · snapshot before               │
   │▾ Status  [attention]                       ┃fire: yes                                              │
   │    Recovery                                ┃Pending actions: 0                                     │
-  │    Affected panes  [1]                     ┃No windows are currently scheduled for autonomous      │
+  │  ▸ Affected panes  [1]                     ┃No windows are currently scheduled for autonomous      │
   │    Snapshots                               ┃close.                                                 │
   │    Automation                              ┃                                                       │
   │    Autonomous cleanup                      ┃Eligibility funnel: empty.                             │
@@ -374,7 +374,7 @@
   │  ▸ development  [attached]                 ┃Use the CLI for snapshot restore and automation        │
   │▾ Status  [attention]                       ┃changes.                                               │
   │    Recovery                                ┃                                                       │
-  │    Affected panes  [1]                     ┃                                                       │
+  │  ▸ Affected panes  [1]                     ┃                                                       │
   │    Snapshots                               ┃                                                       │
   │    Automation                              ┃                                                       │
   │    Autonomous cleanup                      ┃                                                       │
@@ -390,6 +390,98 @@
   │                                            ┃                                                       │
   │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
+  --- AFFECTED PANES DROPDOWN CLOSED ---
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │NAVIGATION                                  ┃DETAIL                                                 │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+  │  Overview                                  ┃Affected panes (1)                                     │
+  │▾ Sessions  [online]                        ┃                                                       │
+  │  ▸ development  [attached]                 ┃development:0.0 · %1                                   │
+  │▾ Status  [attention]                       ┃Application: codex                                     │
+  │    Recovery                                ┃Cause: Codex has no durable thread ID.                 │
+  │  ▸ Affected panes  [1]                     ┃Recovery: shell only; the application will not resume. │
+  │    Snapshots                               ┃                                                       │
+  │    Automation                              ┃                                                       │
+  │    Autonomous cleanup                      ┃                                                       │
+  │    Recovery safety                         ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  └────────────────────────────────────────────────────────────────────────────────────────────────────┘
+  --- AFFECTED PANES DROPDOWN OPEN ---
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │NAVIGATION                                  ┃DETAIL                                                 │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+  │  Overview                                  ┃Affected panes (1)                                     │
+  │▾ Sessions  [online]                        ┃                                                       │
+  │  ▸ development  [attached]                 ┃development:0.0 · %1                                   │
+  │▾ Status  [attention]                       ┃Application: codex                                     │
+  │    Recovery                                ┃Cause: Codex has no durable thread ID.                 │
+  │  ▾ Affected panes  [1]                     ┃Recovery: shell only; the application will not resume. │
+  │      development:0.0 · codex  [%1]         ┃                                                       │
+  │    Snapshots                               ┃                                                       │
+  │    Automation                              ┃                                                       │
+  │    Autonomous cleanup                      ┃                                                       │
+  │    Recovery safety                         ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  └────────────────────────────────────────────────────────────────────────────────────────────────────┘
+  --- AFFECTED PANE SELECTED ---
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │NAVIGATION                                  ┃DETAIL                                                 │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+  │  Overview                                  ┃development:0.0                                        │
+  │▾ Sessions  [online]                        ┃Pane: %1                                               │
+  │  ▸ development  [attached]                 ┃Application: codex                                     │
+  │▾ Status  [attention]                       ┃                                                       │
+  │    Recovery                                ┃Cause: Codex has no durable thread ID.                 │
+  │  ▾ Affected panes  [1]                     ┃Recovery: shell only; the application will not resume. │
+  │      development:0.0 · codex  [%1]         ┃                                                       │
+  │    Snapshots                               ┃                                                       │
+  │    Automation                              ┃                                                       │
+  │    Autonomous cleanup                      ┃                                                       │
+  │    Recovery safety                         ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  └────────────────────────────────────────────────────────────────────────────────────────────────────┘
+  --- NARROW AFFECTED PANE ---
+  ┌────────────────────────────────────────┐
+  │NAVIGATION                              │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+  │      development:0.0 · codex  [%1]     │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+  │DETAIL                                  │
+  │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+  │development:0.0                         │
+  │Pane: %1                                │
+  │Application: codex                      │
+  │                                        │
+  │Cause: Codex has no durable thread ID.  │
+  │Recovery: shell only; the application   │
+  │will not resume.                        │
+  │ Tab detail · ↑/↓ navigate · Enter expan│
+  └────────────────────────────────────────┘
   --- FOCUSED AFFECTED PANES DETAILS ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
   │NAVIGATION                                  ┃DETAIL · 1–19/151                                      │
@@ -399,7 +491,7 @@
   │  ▸ development  [attached]                 ┃development:0.0 · %1                                   │
   │▾ Status  [attention]                       ┃Application: codex                                     │
   │    Recovery                                ┃Cause: Cannot resume application in pane %1.           │
-  │    Affected panes  [30]                    ┃Recovery: shell only; the application will not resume. │
+  │  ▸ Affected panes  [30]                    ┃Recovery: shell only; the application will not resume. │
   │    Snapshots                               ┃                                                       │
   │    Automation                              ┃development:0.1 · %2                                   │
   │    Autonomous cleanup                      ┃Application: codex                                     │
@@ -424,7 +516,7 @@
   │  ▸ development  [attached]                 ┃Cause: Cannot resume application in pane %27.          │
   │▾ Status  [attention]                       ┃Recovery: shell only; the application will not resume. │
   │    Recovery                                ┃                                                       │
-  │    Affected panes  [30]                    ┃development:0.27 · %28                                 │
+  │  ▸ Affected panes  [30]                    ┃development:0.27 · %28                                 │
   │    Snapshots                               ┃Application: codex                                     │
   │    Automation                              ┃Cause: Cannot resume application in pane %28.          │
   │    Autonomous cleanup                      ┃Recovery: shell only; the application will not resume. │
@@ -444,7 +536,7 @@
   ┌────────────────────────────────────────┐
   │NAVIGATION                              │
   │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
-  │    Affected panes  [30]                │
+  │  ▸ Affected panes  [30]                │
   │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
   │DETAIL · 1–7/211                        │
   │━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│

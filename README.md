@@ -76,9 +76,12 @@ line range in the heading. **Status** is an expandable navigation branch, open b
 default, with **Recovery**, **Affected panes**, **Snapshots**, **Automation**,
 **Autonomous cleanup**, and **Recovery safety** underneath. Use Enter to open or
 close Status, then Up/Down to select a section. Its content appears in Detail;
-Tab into Detail and use Up/Down to scroll. Affected panes shows every affected
-pane's location, application, cause, and recovery consequence. Refresh preserves
-the selected section and keeps scrolling within its available content.
+Tab into Detail and use Up/Down to scroll. **Affected panes** has its own expandable
+list: Enter opens or closes it, and selecting an individual pane shows its
+location, application, cause, and recovery consequence. The arrow and label
+columns match the Sessions tree. The section itself still shows the full warning
+list. Refresh preserves the selected pane while it remains affected; otherwise
+selection returns to Affected panes.
 Use the CLI to save and restore workspaces or manage background services.
 
 | Key | Action |
