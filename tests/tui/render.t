@@ -323,20 +323,20 @@
   │▾ Sessions  [online]                        ┃Readiness: PASS · tmux-recovery manages save and login │
   │  ▸ development  [attached]                 ┃restore                                                │
   │▾ Status  [attention]                       ┃Periodic save: PASS · loaded · 600 seconds             │
-  │    Recovery                                ┃Save command: tmux-recovery snapshot --trigger timer   │
-  │  ▸ Affected panes  [1]                     ┃--quiet                                                │
-  │    Snapshots                               ┃Next snapshot: 2026-07-21 01:42:39.000000000Z ·        │
-  │    Automation                              ┃estimated from the last timer save                     │
-  │    Autonomous cleanup                      ┃Autonomy tick: PASS · loaded · 45 seconds              │
-  │    Recovery safety                         ┃Tick command: tmux-recovery autonomy tick --quiet      │
-  │                                            ┃Login restore: PASS · loaded · at login                │
-  │                                            ┃Restore command: tmux-recovery restore --if-empty      │
-  │                                            ┃--quiet                                                │
-  │                                            ┃Last restore run: 2026-07-21 01:30:00.000000000Z ·     │
-  │                                            ┃restored                                               │
+  │    Recovery                                ┃Next snapshot: 2026-07-21 01:42:39.000000000Z ·        │
+  │  ▸ Affected panes  [1]                     ┃estimated from the last timer save                     │
+  │    Snapshots                               ┃Cleanup checks: PASS · loaded · 45 seconds             │
+  │    Automation                              ┃Login restore: PASS · loaded · at login                │
+  │    Autonomous cleanup                      ┃Last restore run: 2026-07-21 01:30:00.000000000Z ·     │
+  │    Recovery safety                         ┃restored                                               │
   │                                            ┃tmux_recovery_1784597559000000000_0123abcd.snapshot    │
   │                                            ┃Runtime version: 0.3.0-dev.14                          │
   │                                            ┃Last result: launchctl exit status 0                   │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
+  │                                            ┃                                                       │
   │                                            ┃                                                       │
   │ Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -607,7 +607,7 @@
   │▾ Sessions  [online]                        ┃Readiness: WARN · absent; inspect conflicts below      │
   │  ▸ development  [attached]                 ┃Periodic save: WARN · not installed                    │
   │▾ Status  [attention]                       ┃Next snapshot: waiting for the first timer save        │
-  │    Recovery                                ┃Autonomy tick: WARN · not installed                    │
+  │    Recovery                                ┃Cleanup checks: WARN · not installed                   │
   │    Affected panes  [0]                     ┃Login restore: WARN · not installed                    │
   │    Snapshots                               ┃Last restore run: not recorded yet                     │
   │    Automation                              ┃Runtime version: unknown                               │
