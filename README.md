@@ -69,12 +69,13 @@ Tab switches focus between navigation and the read-only detail viewer. A heavy
 rule in the selected navigation row's blue marks focus; the inactive rule and
 dividers are gray. Both rules keep their space when focus moves. The footer
 shows `Tab detail · ↑/↓ navigate` when navigation has focus and
-`Tab navigation · ↑/↓ scroll` when detail has focus. Headings align with their
+`Tab navigation · ↑/↓ scroll` when detail has focus. Panel headings align with their
 pane's content, keeping the same position and color in both modes. On narrow terminals,
 details appear below the tree. Long details scroll as one view, with the visible
 line range in the heading. In **Status** details, **Affected panes** is an inline
-collapsible list, initially open. Tab into Detail and press Enter to collapse or
-expand it; Up/Down scrolls through the pane locations, applications, causes, and
+collapsible list, initially open. When Detail has focus, its heading uses the same
+blue selection highlight as navigation. Press Enter to collapse or expand it;
+Up/Down scrolls through the pane locations, applications, causes, and
 recovery consequences along with the rest of Status. Refresh preserves the list's
 open/closed state and keeps scrolling within the available content.
 Use the CLI to save and restore workspaces or manage background services.
