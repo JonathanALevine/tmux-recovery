@@ -1163,12 +1163,12 @@ let render model ({ Dimensions.width; height } as dimensions) =
   let help =
     View.text
       ~attrs:[ Attr.fg muted; Attr.bg terminal_background ]
-      (match model.focus with
-       | Navigation ->
-         " Tab detail · ↑/↓ navigate · Enter expand/collapse · r refresh · q quit · c \
-          cancel · p pause "
-       | Detail ->
-         " Tab navigation · ↑/↓ scroll · r refresh · q quit · c cancel · p pause ")
+      (sprintf
+         " Tab %-10s · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel \
+          · p pause "
+         (match model.focus with
+          | Navigation -> "detail"
+          | Detail -> "navigation"))
   in
   let body_height = Int.max 1 (height - 1) in
   let body =

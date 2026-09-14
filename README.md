@@ -67,9 +67,9 @@ Run `tmux-recovery` to open the TUI. Select an item in the tree to view its
 details or live pane output. The detail pane follows the selection automatically.
 Tab switches focus between navigation and the read-only detail viewer. A heavy
 rule in the selected navigation row's blue marks focus; the inactive rule and
-dividers are gray. Both rules keep their space when focus moves. The footer
-shows `Tab detail · ↑/↓ navigate` when navigation has focus and
-`Tab navigation · ↑/↓ scroll` when detail has focus. Panel headings align with their
+dividers are gray. Both rules keep their space when focus moves. The footer keeps
+every control in the same position; only `Tab detail` / `Tab navigation` changes
+in a fixed-width slot. `↑/↓ move` applies to both views. Panel headings align with their
 pane's content, keeping the same position and color in both modes. On narrow terminals,
 details appear below the tree. Long details scroll as one view, with the visible
 line range in the heading. **Status** is an expandable navigation branch, open by
