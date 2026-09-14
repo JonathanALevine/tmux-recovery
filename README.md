@@ -90,7 +90,6 @@ Use the CLI to save and restore workspaces or manage background services.
 | <kbd>↑</kbd> / <kbd>↓</kbd> | Move through the tree, or scroll the focused detail viewer |
 | <kbd>Enter</kbd> | Expand/collapse a navigation branch; no action on leaves or in Detail |
 | <kbd>r</kbd> | Refresh workspace, snapshot, service, and pane-preview data |
-| <kbd>c</kbd> | Cancel a pending autonomous cleanup action |
 | <kbd>p</kbd> | Pause/resume autonomous cleanup |
 | <kbd>q</kbd> | Quit |
 | <kbd>Ctrl</kbd>+<kbd>C</kbd> | Quit |
@@ -147,7 +146,7 @@ Observation failures cancel pending cleanup and restart the eligibility period.
 
 Use `autonomy status` to inspect the policy, `autonomy pause` / `autonomy resume`
 to suspend/resume it, or `autonomy configure --mode off` to disable it.
-The TUI's `c` and `p` keys control the same persisted pipeline; background services
+The TUI's `p` key pauses or resumes the same persisted pipeline; background services
 continue operating independently of the TUI.
 
 ## Upgrading existing installations
