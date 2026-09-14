@@ -21,7 +21,7 @@
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- MOVED ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -46,7 +46,7 @@
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- WINDOW SELECTED ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -71,7 +71,7 @@
   │                                            ┃older output 12                                        │
   │                                            ┃$ printf 'latest pane output\n'                        │
   │                                            ┃latest btop output                                     │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- PANE SELECTED ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -96,7 +96,7 @@
   │                                            ┃older output 12                                        │
   │                                            ┃$ printf 'latest pane output\n'                        │
   │                                            ┃latest btop output                                     │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- NARROW PANE ---
   ┌────────────────────────────────────────────────────────────┐
@@ -163,7 +163,7 @@
   │                                            ┃older output 12                                        │
   │                                            ┃$ printf 'latest pane output\n'                        │
   │                                            ┃latest btop output                                     │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- STATUS ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -188,7 +188,7 @@
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- STATUS COLLAPSED ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -213,7 +213,7 @@
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- STATUS WITH APPLICATION WARNING ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -238,7 +238,7 @@
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- RECOVERY SECTION ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -263,7 +263,7 @@
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- AFFECTED PANES SECTION ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -288,7 +288,7 @@
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- SNAPSHOTS SECTION ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -313,7 +313,7 @@
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- AUTOMATION SECTION ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -338,7 +338,7 @@
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- AUTONOMOUS CLEANUP SECTION ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -363,7 +363,7 @@
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- RECOVERY SAFETY SECTION ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -388,7 +388,7 @@
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- AFFECTED PANES DROPDOWN CLOSED ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -413,7 +413,7 @@
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- AFFECTED PANES DROPDOWN OPEN ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -438,7 +438,7 @@
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- AFFECTED PANE SELECTED ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -463,7 +463,7 @@
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- NARROW AFFECTED PANE ---
   ┌────────────────────────────────────────┐
@@ -505,7 +505,7 @@
   │                                            ┃                                                       │
   │                                            ┃development:0.3 · %4                                   │
   │                                            ┃Application: codex                                     │
-  │ Tab navigation · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab navigation · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- AFFECTED PANES SCROLLED TO END ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -530,7 +530,7 @@
   │                                            ┃Application: codex                                     │
   │                                            ┃Cause: Cannot resume application in pane %30.          │
   │                                            ┃Recovery: shell only; the application will not resume. │
-  │ Tab navigation · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab navigation · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- NARROW AFFECTED PANES ---
   ┌────────────────────────────────────────┐
@@ -572,7 +572,7 @@
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- EMPTY SNAPSHOTS ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -597,7 +597,7 @@
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- EMPTY AUTOMATION ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -622,7 +622,7 @@
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- UNAVAILABLE STATUS ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -647,7 +647,7 @@
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- UNAVAILABLE SNAPSHOTS ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -672,7 +672,7 @@
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘
   --- UNAVAILABLE AUTOMATION ---
   ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -697,5 +697,5 @@
   │                                            ┃                                                       │
   │                                            ┃                                                       │
   │                                            ┃                                                       │
-  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel · p pause        │
+  │ Tab detail     · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause                   │
   └────────────────────────────────────────────────────────────────────────────────────────────────────┘

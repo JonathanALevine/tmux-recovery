@@ -11,8 +11,8 @@ module Autonomy_runner = Tmux_recovery_application.Autonomy
     itself is service-owned and disk-persisted; the TUI is a viewer and controller over
     it. [autonomy_runner] is the application runner backed by the persistent store:
     refreshes reconcile the pipeline (one tick) and the view shows the persisted policy,
-    the eligibility funnel, pending actions, and the recent audit. [c] cancels a pending
-    action and [p] pauses or resumes the pipeline. *)
+    the eligibility funnel, pending actions, and the recent audit. [p] pauses or resumes
+    the pipeline. *)
 val app
   :  ?capture_pane:(pane_id:string -> string list Or_error.t Effect.t)
   -> ?reload:

@@ -752,7 +752,7 @@ let status_section_lines model = function
               ~color:amber
               [%string
                 "· %{pending_action.id} %{window_id} closes in \
-                 %{format_span                  remaining} · press c to cancel"])
+                 %{format_span                  remaining}"])
       in
       let funnel_lines =
         if List.is_empty info.candidates
@@ -1164,8 +1164,7 @@ let render model ({ Dimensions.width; height } as dimensions) =
     View.text
       ~attrs:[ Attr.fg muted; Attr.bg terminal_background ]
       (sprintf
-         " Tab %-10s · ↑/↓ move · Enter expand/collapse · r refresh · q quit · c cancel \
-          · p pause "
+         " Tab %-10s · ↑/↓ move · Enter expand/collapse · r refresh · q quit · p pause "
          (match model.focus with
           | Navigation -> "detail"
           | Detail -> "navigation"))
@@ -1321,22 +1320,6 @@ let app
     fun (event : Event.t) ->
       let viewport = detail_viewport model dimensions in
       let move delta = inject (Move (delta, viewport.maximum)) in
-      let cancel_oldest () =
-        match model.autonomy.active with
-        | [] -> Effect.Ignore
-        | oldest :: _ ->
-          Effect.of_deferred_thunk (fun () ->
-            Deferred.Or_error.bind
-              (Autonomy_runner.cancel autonomy_runner ~id:oldest.id)
-              ~f:(fun () -> Autonomy_runner.status autonomy_runner))
-          |> Effect.bind ~f:(function
-            | Ok status ->
-              inject (Autonomy_updated (status, Some ("cancelled " ^ oldest.id)))
-            | Error error ->
-              inject
-                (Autonomy_updated
-                   (model.autonomy, Some (Error.to_string_hum error |> String.strip))))
-      in
       let toggle_pause () =
         let paused = model.autonomy.paused in
         let action =
@@ -1369,7 +1352,6 @@ let app
           refreshing := true;
           refresh)
       | Key_press { key = ASCII 'q' | ASCII 'Q'; mods = [] } -> exit ()
-      | Key_press { key = ASCII 'c' | ASCII 'C'; mods = [] } -> cancel_oldest ()
       | Key_press { key = ASCII 'p' | ASCII 'P'; mods = [] } -> toggle_pause ()
       | Key_press { key = ASCII ('c' | 'C'); mods = [ Ctrl ] } -> exit ()
       | _ -> Effect.Ignore
